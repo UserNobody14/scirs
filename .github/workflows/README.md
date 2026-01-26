@@ -31,6 +31,16 @@ This directory contains comprehensive CI/CD workflows for the SciRS2 scientific 
   - External tool integration
   - Enhanced security auditing
 
+#### `pypi-publish.yml` - PyPI Publishing
+- **Triggers**: Manual workflow dispatch, release tags (`v*`)
+- **Features**:
+  - Cross-platform wheel building (Linux x86_64/aarch64, macOS x86_64/arm64, Windows x64)
+  - Source distribution (sdist) generation
+  - Automated publishing to TestPyPI or PyPI
+  - Trusted publishing with OIDC authentication
+  - Skip existing packages on republish
+  - Maturin-based build system for PyO3 bindings
+
 ### Module-Specific Workflows
 
 Individual modules have their own specialized workflows:
@@ -74,6 +84,29 @@ No secrets required for basic functionality. Optional secrets for enhanced featu
 
 - `CODECOV_TOKEN`: For coverage reporting
 - Custom tokens for notifications or external integrations
+
+#### PyPI Publishing Setup
+For PyPI publishing, configure **Trusted Publishing** (OIDC, no API tokens needed):
+
+1. **PyPI Trusted Publishing Configuration**:
+   - Go to https://pypi.org/manage/account/publishing/
+   - Add a new publisher for `scirs2`
+   - Repository: `cool-japan/scirs`
+   - Workflow: `pypi-publish.yml`
+   - Environment: `pypi`
+
+2. **TestPyPI Trusted Publishing Configuration** (for testing):
+   - Go to https://test.pypi.org/manage/account/publishing/
+   - Add a new publisher for `scirs2`
+   - Repository: `cool-japan/scirs`
+   - Workflow: `pypi-publish.yml`
+   - Environment: `testpypi`
+
+3. **GitHub Environment Configuration**:
+   - Go to repository Settings → Environments
+   - Create environment: `pypi` (production)
+   - Create environment: `testpypi` (testing)
+   - Recommended: Add protection rules for `pypi` environment
 
 ### Repository Settings
 
@@ -203,6 +236,57 @@ When updating Rust or tool versions:
 - Cache artifacts appropriately
 - Monitor workflow execution times
 
+## 🐍 PyPI Publishing Workflow
+
+### Publishing to TestPyPI (Testing)
+```bash
+# Manual trigger via GitHub Actions UI:
+# 1. Go to Actions → PyPI Publish → Run workflow
+# 2. Select publish_target: testpypi
+# 3. Click "Run workflow"
+
+# Or trigger via GitHub CLI:
+gh workflow run pypi-publish.yml -f publish_target=testpypi
+```
+
+### Publishing to PyPI (Production)
+```bash
+# Option 1: Tag-based automatic publishing
+git tag v0.1.3
+git push origin v0.1.3
+
+# Option 2: Manual workflow dispatch
+gh workflow run pypi-publish.yml -f publish_target=pypi -f version_tag=v0.1.3
+```
+
+### Build-Only (No Publishing)
+```bash
+# Test wheel building without publishing
+gh workflow run pypi-publish.yml -f publish_target=none
+```
+
+### Installation Testing
+```bash
+# Install from TestPyPI
+pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ scirs2
+
+# Install from PyPI
+pip install scirs2
+```
+
+### Pre-Release Checklist
+Before publishing to PyPI:
+- [ ] Update version in `scirs2-python/Cargo.toml`
+- [ ] Update version in `scirs2-python/pyproject.toml`
+- [ ] Update CHANGELOG.md with release notes
+- [ ] Run local tests: `cd scirs2-python && cargo test`
+- [ ] Test Python bindings: `cd scirs2-python && maturin develop && pytest`
+- [ ] Build locally: `cd scirs2-python && maturin build --release`
+- [ ] Test on TestPyPI first
+- [ ] Create and push version tag
+- [ ] Verify PyPI deployment
+- [ ] Update documentation with new version
+
 ## 🎯 Future Enhancements
 
 ### Planned Features
@@ -211,7 +295,7 @@ When updating Rust or tool versions:
 - [ ] Enhanced notification system
 - [ ] Performance regression alerts
 - [ ] Automated security scanning
-- [ ] Integration with package registries
+- [x] Integration with package registries (PyPI via Trusted Publishing)
 
 ### Contributing
 See the main [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines on:

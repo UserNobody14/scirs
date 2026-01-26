@@ -5,6 +5,78 @@ All notable changes to the SciRS2 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-01-25
+
+### 🔧 Maintenance & Enhancement Release
+
+This release focuses on interpolation improvements, Python bindings expansion, and build system enhancements.
+
+### Added
+
+#### Python Bindings (scirs2-python)
+- **Expanded Module Coverage**
+  - Added Python bindings for `autograd` module (automatic differentiation)
+  - Added Python bindings for `datasets` module (dataset loading utilities)
+  - Added Python bindings for `graph` module (graph algorithms)
+  - Added Python bindings for `io` module (input/output operations)
+  - Added Python bindings for `metrics` module (ML evaluation metrics)
+  - Added Python bindings for `ndimage` module (N-dimensional image processing)
+  - Added Python bindings for `neural` module (neural network components)
+  - Added Python bindings for `sparse` module (sparse matrix operations)
+  - Added Python bindings for `text` module (text processing and NLP)
+  - Added Python bindings for `transform` module (data transformation)
+  - Added Python bindings for `vision` module (computer vision utilities)
+
+#### Interpolation Enhancements (scirs2-interpolate)
+- **PCHIP Extrapolation Improvements** (Issue #96)
+  - Enhanced PCHIP (Piecewise Cubic Hermite Interpolating Polynomial) with linear extrapolation
+  - Added configurable extrapolation modes beyond data range
+  - Improved edge case handling for boundary conditions
+  - Added comprehensive regression tests for extrapolation behavior
+
+### Changed
+
+#### Build System (scirs2-python)
+- **PyO3 Configuration for Cross-Platform Builds**
+  - Removed automatic `pyo3/auto-initialize` feature for better manylinux compatibility
+  - Improved build configuration for Python wheel generation
+  - Enhanced compatibility with PyPI distribution requirements
+
+### Fixed
+
+#### Autograd Module (scirs2-autograd)
+- **Adam Optimizer Scalar/1×1 Parameter Handling** (Issue #98)
+  - Fixed panic in `AdamOp::compute` when handling scalar (shape []) and 1-element 1-D arrays (shape [1])
+  - Added helper functions `is_scalar()` and `extract_scalar()` for robust scalar array handling
+  - Enhanced `AdamOptimizer::update_parameter_adam` with proper implementation documentation
+  - Added comprehensive regression tests for scalar, 1-element, and 1×1 matrix parameters
+  - Ensures Adam optimizer works correctly with bias terms and other scalar parameters
+
+#### Code Quality
+- **Documentation Improvements**
+  - Added crate-level documentation to `scirs2-ndimage/src/lib.rs`
+  - Updated workspace policy compliance across subcrates
+
+#### Version Management
+- **Workspace Consistency**
+  - Synchronized all version references to 0.1.3
+  - Updated Python package versions (Cargo.toml and pyproject.toml)
+  - Updated publish script to 0.1.3
+
+### Technical Details
+
+#### Quality Metrics
+- **Tests**: All tests passing across workspace
+- **Warnings**: Zero compilation warnings, zero clippy warnings maintained
+- **Code Size**: 1.94M total lines (1.68M Rust code, 150K comments)
+- **Files**: 4,741 Rust files across 27 workspace crates
+
+#### Platform Support
+- ✅ **Linux (x86_64)**: Full support with all features
+- ✅ **macOS (ARM64/x86_64)**: Full support with Metal acceleration
+- ✅ **Windows (x86_64)**: Full support with optimizations
+- ✅ **manylinux**: Improved Python wheel compatibility
+
 ## [0.1.2] - 2026-01-15
 
 ### 🚀 Performance & Pure Rust Enhancement Release

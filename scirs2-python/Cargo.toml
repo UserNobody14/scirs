@@ -1,6 +1,6 @@
 [package]
 name = "scirs2-python"
-version = "0.1.0"
+version = "0.1.3"
 authors = ["COOLJAPAN OU (Team KitaSan) <contact@cooljapan.tech>"]
 edition = "2021"
 rust-version = "1.70"
@@ -34,6 +34,17 @@ scirs2-integrate = { path = "../scirs2-integrate" }
 scirs2-interpolate = { path = "../scirs2-interpolate" }
 scirs2-signal = { path = "../scirs2-signal" }
 scirs2-spatial = { path = "../scirs2-spatial" }
+scirs2-sparse = { path = "../scirs2-sparse" }
+scirs2-ndimage = { path = "../scirs2-ndimage" }
+scirs2-graph = { path = "../scirs2-graph" }
+scirs2-metrics = { path = "../scirs2-metrics" }
+scirs2-io = { path = "../scirs2-io" }
+scirs2-datasets = { path = "../scirs2-datasets", default-features = false }
+scirs2-transform = { path = "../scirs2-transform" }
+scirs2-text = { path = "../scirs2-text" }
+scirs2-vision = { path = "../scirs2-vision" }
+scirs2-autograd = { path = "../scirs2-autograd" }
+scirs2-neural = { path = "../scirs2-neural" }
 
 # Python bindings
 pyo3 = { version = "0.27.1", features = ["extension-module"] }
@@ -42,8 +53,11 @@ scirs2-numpy = { path = "../scirs2-numpy" }  # SciRS2 fork with ndarray 0.17 sup
 # Error handling
 thiserror = "2.0.16"
 
+# Image processing (needed for vision module)
+image = "0.25"
+
 [features]
-default = ["cluster", "series", "linalg", "stats", "fft", "optimize", "special", "integrate", "interpolate", "signal", "spatial", "oxifft"]
+default = ["cluster", "series", "linalg", "stats", "fft", "optimize", "special", "integrate", "interpolate", "signal", "spatial", "sparse", "ndimage", "graph", "metrics", "io", "datasets", "transform", "text", "vision", "autograd", "neural", "oxifft"]
 
 # Module features
 cluster = []
@@ -57,6 +71,17 @@ integrate = []
 interpolate = []
 signal = []
 spatial = []
+sparse = []
+ndimage = []
+graph = []
+metrics = []
+io = []
+datasets = []
+transform = []
+text = []
+vision = []
+autograd = []
+neural = []
 
 # Performance optimization features
 oxifft = ["scirs2-fft/oxifft"]  # Pure Rust high-performance FFT
@@ -67,4 +92,4 @@ parallel = ["scirs2-core/parallel"]
 gpu = ["scirs2-core/gpu"]
 
 # All modules
-full = ["cluster", "series", "linalg", "stats", "fft", "optimize", "special", "integrate", "interpolate", "signal", "oxifft"]
+full = ["cluster", "series", "linalg", "stats", "fft", "optimize", "special", "integrate", "interpolate", "signal", "spatial", "sparse", "ndimage", "graph", "metrics", "io", "datasets", "transform", "text", "vision", "autograd", "neural", "oxifft"]

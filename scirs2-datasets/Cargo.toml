@@ -38,10 +38,11 @@ zip = { workspace = true }
 blake3 = { workspace = true }
 sha2 = { workspace = true }
 lazy_static = { workspace = true }
-ureq = { workspace = true }
+ureq = { workspace = true, optional = true }
 tempfile = { workspace = true }
 
 [features]
-default = []
+default = ["download-sync"]
 download = ["reqwest", "futures-util", "tokio"]
+download-sync = ["ureq"]
 parallel = ["scirs2-core/parallel"]

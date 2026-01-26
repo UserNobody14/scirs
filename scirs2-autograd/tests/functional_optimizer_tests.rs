@@ -329,3 +329,97 @@ fn test_no_graph_accumulation() {
         max_count
     );
 }
+
+/// Regression test for GitHub Issue #98: Adam optimizer crashes on scalar/1×1 parameters
+/// Tests both 0-D scalars (shape []) and 1-element 1-D arrays (shape [1])
+#[test]
+fn test_adam_scalar_and_1x1_parameters() {
+    use scirs2_core::ndarray::arr0;
+
+    // Test 1: 0-D scalar parameter (shape [])
+    {
+        let mut env = ag::VariableEnvironment::<f64>::new();
+        env.name("scalar_param").set(arr0(1.0).into_dyn());
+
+        let mut opt = FunctionalAdam::new(0.01);
+
+        env.run(|ctx| {
+            let param = ctx.variable("scalar_param");
+
+            // Create a simple loss
+            let loss = param * 2.0;
+
+            // Compute gradient
+            let grads = T::grad(&[loss], &[param]);
+
+            // This should not panic (GitHub Issue #98)
+            let new_params = opt.step(&[param], &grads, ctx);
+            assert_eq!(new_params.len(), 1);
+            assert_eq!(opt.step_count(), 1);
+        });
+    }
+
+    // Test 2: 1-element 1-D array (shape [1])
+    {
+        let mut env = ag::VariableEnvironment::<f64>::new();
+        env.name("one_elem_param")
+            .set(scirs2_autograd::ndarray_ext::ones(&[1]));
+
+        let mut opt = FunctionalAdam::new(0.01);
+
+        env.run(|ctx| {
+            let param = ctx.variable("one_elem_param");
+
+            // Create a simple loss
+            let loss = T::sum_all(param * 3.0);
+
+            // Compute gradient
+            let grads = T::grad(&[loss], &[param]);
+
+            // This should not panic (GitHub Issue #98)
+            let new_params = opt.step(&[param], &grads, ctx);
+            assert_eq!(new_params.len(), 1);
+            assert_eq!(opt.step_count(), 1);
+        });
+    }
+
+    // Test 3: Multiple steps with scalar parameter
+    {
+        let mut env = ag::VariableEnvironment::<f64>::new();
+        env.name("scalar").set(arr0(5.0).into_dyn());
+
+        let mut opt = FunctionalAdam::new(0.001);
+
+        // Run multiple optimization steps
+        for step in 1..=5 {
+            env.run(|ctx| {
+                let param = ctx.variable("scalar");
+                let loss = param * param; // Simple quadratic loss
+
+                let grads = T::grad(&[loss], &[param]);
+                let _new_params = opt.step(&[param], &grads, ctx);
+                assert_eq!(opt.step_count(), step);
+            });
+        }
+    }
+
+    // Test 4: 1×1 matrix (shape [1, 1])
+    {
+        let mut env = ag::VariableEnvironment::<f64>::new();
+        env.name("matrix_1x1")
+            .set(scirs2_autograd::ndarray_ext::ones(&[1, 1]));
+
+        let mut opt = FunctionalAdam::new(0.01);
+
+        env.run(|ctx| {
+            let param = ctx.variable("matrix_1x1");
+            let loss = T::sum_all(param);
+
+            let grads = T::grad(&[loss], &[param]);
+
+            // Should handle 1×1 matrices correctly
+            let new_params = opt.step(&[param], &grads, ctx);
+            assert_eq!(new_params.len(), 1);
+        });
+    }
+}

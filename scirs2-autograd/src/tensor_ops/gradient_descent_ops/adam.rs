@@ -2,6 +2,32 @@ use crate::ndarray_ext::NdArray;
 use crate::op::OpError;
 use crate::Float;
 
+// GitHub Issue #98: Helper functions for scalar/1×1 parameter handling
+
+/// Check if an array is scalar-like (0-D or 1-element)
+fn is_scalar<F: Float>(arr: &NdArray<F>) -> bool {
+    arr.shape().is_empty() || (arr.len() == 1)
+}
+
+/// Extract scalar value from 0-D or 1-element arrays
+/// Handles both shape [] and shape [1] (GitHub Issue #98)
+fn extract_scalar<F: Float>(arr: &NdArray<F>) -> Result<F, OpError> {
+    if arr.shape().is_empty() {
+        // 0-D array: use IxDyn(&[])
+        Ok(arr[scirs2_core::ndarray::IxDyn(&[])])
+    } else if arr.len() == 1 {
+        // 1-element array: use iter().next()
+        arr.iter().next().copied().ok_or_else(|| {
+            OpError::IncompatibleShape("Failed to extract scalar from 1-element array".to_string())
+        })
+    } else {
+        Err(OpError::IncompatibleShape(format!(
+            "Expected scalar or 1-element array, got shape {:?}",
+            arr.shape()
+        )))
+    }
+}
+
 pub(crate) struct AdamOp<F: Float> {
     pub(crate) alpha: F,
     pub(crate) eps: F,
@@ -39,37 +65,42 @@ impl<F: Float> crate::op::Op<F> for AdamOp<F> {
         // We need to create arrays of matching shapes for operations to work
         let gradshape = grad.shape().to_vec();
 
-        // Get the current timestep value and increment it
-        let t_val = t_array[scirs2_core::ndarray::IxDyn(&[])];
+        // Get the current timestep value and increment it (GitHub Issue #98: handle 1-element arrays)
+        let t_val = extract_scalar(&t_array)?;
         let new_t = t_val + F::one();
-        let new_t_array = NdArray::from_elem(scirs2_core::ndarray::IxDyn(&[]), new_t);
+        let new_t_array = if is_scalar(&t_array) && t_array.shape().is_empty() {
+            NdArray::from_elem(scirs2_core::ndarray::IxDyn(&[]), new_t)
+        } else {
+            // Preserve original shape (e.g., [1])
+            NdArray::from_elem(scirs2_core::ndarray::IxDyn(&[1]), new_t)
+        };
 
         // Create new momentum and velocity arrays with the same shape as grad
         // If original arrays are scalar and grad is not, we need to broadcast
         let mut new_m: NdArray<F>;
         let mut new_v: NdArray<F>;
 
-        // Check if we need to broadcast scalar arrays to match grad shape
-        if m.shape().is_empty() && !gradshape.is_empty() {
+        // Check if we need to broadcast scalar arrays to match grad shape (GitHub Issue #98)
+        if is_scalar(&m) && !gradshape.is_empty() {
             // If m is scalar but grad is not, create a new array with m's value broadcast to grad's shape
-            let m_val = m[scirs2_core::ndarray::IxDyn(&[])];
+            let m_val = extract_scalar(&m)?;
             new_m = NdArray::from_elem(scirs2_core::ndarray::IxDyn(&gradshape), m_val);
         } else {
             new_m = m.to_owned();
         }
 
-        if v.shape().is_empty() && !gradshape.is_empty() {
+        if is_scalar(&v) && !gradshape.is_empty() {
             // If v is scalar but grad is not, create a new array with v's value broadcast to grad's shape
-            let v_val = v[scirs2_core::ndarray::IxDyn(&[])];
+            let v_val = extract_scalar(&v)?;
             new_v = NdArray::from_elem(scirs2_core::ndarray::IxDyn(&gradshape), v_val);
         } else {
             new_v = v.to_owned();
         }
 
-        // Also handle param broadcasting if needed
+        // Also handle param broadcasting if needed (GitHub Issue #98)
         let mut new_param: NdArray<F>;
-        if param.shape().is_empty() && !gradshape.is_empty() {
-            let param_val = param[scirs2_core::ndarray::IxDyn(&[])];
+        if is_scalar(&param) && !gradshape.is_empty() {
+            let param_val = extract_scalar(&param)?;
             new_param = NdArray::from_elem(scirs2_core::ndarray::IxDyn(&gradshape), param_val);
         } else {
             new_param = param.to_owned();

@@ -125,38 +125,42 @@ impl<F: Float + FromPrimitive + Debug> PchipInterpolator<F> {
     /// Returns an error if `xnew` is outside the interpolation range and
     /// extrapolation is disabled.
     pub fn evaluate(&self, xnew: F) -> InterpolateResult<F> {
+        let n = self.x.len();
+
         // Check if we're extrapolating
-        let is_extrapolating = xnew < self.x[0] || xnew > self.x[self.x.len() - 1];
+        let is_extrapolating = xnew < self.x[0] || xnew > self.x[n - 1];
         if is_extrapolating && !self.extrapolate {
             return Err(InterpolateError::OutOfBounds(
                 "xnew is outside the interpolation range".to_string(),
             ));
         }
 
-        // Find index of segment containing xnew
-        let mut idx = 0;
-        for i in 0..self.x.len() - 1 {
-            if xnew >= self.x[i] && xnew <= self.x[i + 1] {
-                idx = i;
-                break;
-            }
-        }
-
-        // Handle extrapolation case
+        // Handle extrapolation with linear extension using endpoint derivatives
         if is_extrapolating {
             if xnew < self.x[0] {
-                // Extrapolate below the data range using the first segment
-                idx = 0;
+                // Linear extrapolation below the data range
+                let dx = xnew - self.x[0];
+                return Ok(self.y[0] + self.derivatives[0] * dx);
             } else {
-                // Extrapolate above the data range using the last segment
-                idx = self.x.len() - 2;
+                // Linear extrapolation above the data range
+                let dx = xnew - self.x[n - 1];
+                return Ok(self.y[n - 1] + self.derivatives[n - 1] * dx);
             }
         }
 
         // Special case: xnew is exactly at a knot point
-        for i in 0..self.x.len() {
+        for i in 0..n {
             if xnew == self.x[i] {
                 return Ok(self.y[i]);
+            }
+        }
+
+        // Find index of segment containing xnew
+        let mut idx = 0;
+        for i in 0..n - 1 {
+            if xnew >= self.x[i] && xnew <= self.x[i + 1] {
+                idx = i;
+                break;
             }
         }
 
@@ -455,14 +459,101 @@ mod tests {
         // Test with extrapolation enabled
         let interp_extrap =
             PchipInterpolator::new(&x.view(), &y.view(), true).expect("Operation failed");
-        let _y_minus_1 = interp_extrap.evaluate(-1.0).expect("Operation failed");
-        let _y_plus_4 = interp_extrap.evaluate(4.0).expect("Operation failed");
+        let y_minus_1 = interp_extrap.evaluate(-1.0).expect("Operation failed");
+        let y_plus_4 = interp_extrap.evaluate(4.0).expect("Operation failed");
+
+        // For this data, PCHIP computes derivatives that preserve shape
+        // The extrapolation uses linear extension based on endpoint derivatives
+        // Verify that extrapolation above the range increases beyond the last point
+        assert!(
+            y_plus_4 > 9.0,
+            "Extrapolation above should be greater than last point"
+        );
+
+        // Verify that extrapolation is finite (not NaN or infinite)
+        assert!(
+            y_minus_1.is_finite(),
+            "Extrapolation should produce finite values"
+        );
+        assert!(
+            y_plus_4.is_finite(),
+            "Extrapolation should produce finite values"
+        );
 
         // Test with extrapolation disabled
         let interp_no_extrap =
             PchipInterpolator::new(&x.view(), &y.view(), false).expect("Operation failed");
         assert!(interp_no_extrap.evaluate(-1.0).is_err());
         assert!(interp_no_extrap.evaluate(4.0).is_err());
+    }
+
+    #[test]
+    fn test_pchip_extrapolation_far_beyond_range() {
+        // Regression test for issue #96
+        // PCHIP extrapolation should use linear extension, not cubic polynomial
+        let x = array![0.0, 1.0, 2.0, 3.0];
+        let y = array![0.0, 1.0, 4.0, 9.0];
+
+        let interp = PchipInterpolator::new(&x.view(), &y.view(), true).expect("Operation failed");
+
+        // Test far extrapolation (the bug case)
+        let y_50 = interp.evaluate(50.0).expect("Operation failed");
+
+        // THE KEY FIX: Before the fix, this returned -24008 (wrong!)
+        // After the fix with linear extrapolation, it should:
+        // 1. Be positive (not -24008 as in the bug)
+        // 2. Be greater than the last data point (9.0)
+        // 3. Be reasonable (linear extension, not explosive)
+        assert!(
+            y_50 > 9.0,
+            "Extrapolation at x=50 should be > 9.0, got {}",
+            y_50
+        );
+        assert!(
+            y_50 < 1000.0,
+            "Extrapolation should be reasonable (linear), got {}",
+            y_50
+        );
+        assert!(
+            y_50.is_finite(),
+            "Extrapolation should produce finite values"
+        );
+
+        // Test far extrapolation in the negative direction
+        // Should be finite and reasonable (not explosive)
+        let y_minus_50 = interp.evaluate(-50.0).expect("Operation failed");
+        assert!(
+            y_minus_50.is_finite(),
+            "Extrapolation should produce finite values"
+        );
+        assert!(
+            y_minus_50.abs() < 1000.0,
+            "Extrapolation should be reasonable (linear), got {}",
+            y_minus_50
+        );
+    }
+
+    #[test]
+    fn test_pchip_extrapolation_linear_behavior() {
+        // Verify that extrapolation uses linear extension (not cubic)
+        let x = array![0.0, 1.0, 2.0, 3.0];
+        let y = array![0.0, 1.0, 4.0, 9.0];
+
+        let interp = PchipInterpolator::new(&x.view(), &y.view(), true).expect("Operation failed");
+
+        // Get extrapolated values at two points beyond the range
+        let y_4 = interp.evaluate(4.0).expect("Operation failed");
+        let y_5 = interp.evaluate(5.0).expect("Operation failed");
+
+        // If using linear extrapolation, the slope should be constant
+        // slope = (y_5 - y_4) / (5.0 - 4.0) = y_5 - y_4
+        let extrap_slope = y_5 - y_4;
+
+        // The slope should be equal to the derivative at the last point
+        let last_derivative = interp.derivatives[interp.derivatives.len() - 1];
+
+        // Allow small numerical differences
+        assert_relative_eq!(extrap_slope, last_derivative, epsilon = 1e-10);
     }
 
     #[test]

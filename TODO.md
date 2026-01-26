@@ -42,7 +42,36 @@ This document outlines the development plan for the SciRS2 project, a scientific
 
 ---
 
-## 🎉 Current Release: 0.1.0 Stable (December 29, 2025)
+## 🎉 Current Release: 0.1.3 (January 25, 2026)
+
+### ✅ Recent Updates (v0.1.3)
+
+#### GitHub Issues Resolved
+- ✅ **Issue #96: PCHIP Extrapolation Bug** (scirs2-interpolate)
+  - Fixed cubic polynomial extrapolation producing -24008 at x=50
+  - Implemented linear extrapolation using endpoint derivatives
+  - Added comprehensive regression tests
+  - Commit: 49817afbd (2026-01-16)
+
+- ✅ **Issue #98: Adam Optimizer Scalar/1×1 Parameters** (scirs2-autograd)
+  - Fixed panic on scalar and 1-element array parameters
+  - Added `is_scalar()` and `extract_scalar()` helper functions
+  - Enhanced integration layer documentation
+  - Added comprehensive regression tests
+  - Fixed: 2026-01-25
+
+#### Python Bindings Expansion (scirs2-python)
+- ✅ Added 11 new Python binding modules: autograd, datasets, graph, io, metrics, ndimage, neural, sparse, text, transform, vision
+- ✅ PyO3 configuration improvements for manylinux compatibility
+- ✅ Version synchronized to 0.1.3
+
+#### Build System & Quality
+- ✅ Workspace policy compliance (version.workspace = true)
+- ✅ Version consistency across all 27 crates
+- ✅ CHANGELOG.md updated with v0.1.3 release notes
+- ✅ Zero warnings policy maintained
+
+## 🎉 Stable Release: 0.1.0 - 0.1.2 (December 29, 2025 - January 15, 2026)
 
 ### ✅ Major Achievements
 

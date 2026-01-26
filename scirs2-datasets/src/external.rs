@@ -152,6 +152,7 @@ impl ExternalClient {
 
     /// Download a dataset synchronously (blocking) - fallback when download feature is disabled
     #[cfg(not(feature = "download"))]
+    #[cfg(feature = "download-sync")]
     pub fn download_dataset_sync(
         &self,
         url: &str,
@@ -161,7 +162,21 @@ impl ExternalClient {
         self.download_with_ureq(url, progress)
     }
 
+    /// Stub for download_dataset_sync when download-sync feature is disabled
+    #[cfg(not(feature = "download"))]
+    #[cfg(not(feature = "download-sync"))]
+    pub fn download_dataset_sync(
+        &self,
+        _url: &str,
+        _progress: Option<ProgressCallback>,
+    ) -> Result<Dataset> {
+        Err(DatasetsError::FormatError(
+            "Synchronous download feature is disabled. Enable 'download-sync' feature or use async download.".to_string()
+        ))
+    }
+
     /// Download using ureq (synchronous HTTP client)
+    #[cfg(feature = "download-sync")]
     #[allow(dead_code)]
     fn download_with_ureq(&self, url: &str, progress: Option<ProgressCallback>) -> Result<Dataset> {
         // Check cache first

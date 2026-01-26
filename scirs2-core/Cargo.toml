@@ -128,6 +128,8 @@ cudarc = { workspace = true, optional = true }  # CUDA runtime
 approx = { workspace = true }
 criterion = { workspace = true }
 tempfile = { workspace = true }
+# Enable auto-initialize for tests only (not for production builds)
+pyo3 = { workspace = true, features = ["macros", "auto-initialize"] }
 
 [features]
 default = ["array", "serialization"]  # Enable array module by default

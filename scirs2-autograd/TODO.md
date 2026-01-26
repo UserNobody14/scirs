@@ -87,6 +87,23 @@ let mut env = VariableEnvironment::new();
 - **Integration Tests:** End-to-end workflow validation
 - **Performance Benchmarks:** Memory usage and computation time analysis
 
+## ✅ Recent Fixes (v0.1.3)
+
+### GitHub Issues Resolved
+- ✅ **Issue #98: Adam Optimizer Scalar/1×1 Parameter Handling** (Fixed 2026-01-25, Released v0.1.3)
+  - **Problem:** AdamOp::compute panicked with "index out of bounds" on scalar/1×1 parameters
+  - **Root Cause:** Code assumed scalars are 0-D arrays (shape `[]`), but some parameters are 1-element 1-D arrays (shape `[1]`)
+  - **Solution:** Added helper functions `is_scalar()` and `extract_scalar()` to handle both cases
+  - **Impact:** Adam optimizer now works with any parameter shape (scalars, vectors, matrices, bias terms)
+  - **Tests Added:**
+    - `test_adam_scalar_and_1x1_parameters()` - Tests 0-D, 1-element, and 1×1 cases
+    - Multiple optimization step validation
+  - **Files Modified:**
+    - `src/tensor_ops/gradient_descent_ops/adam.rs` (added helpers, fixed 4 locations)
+    - `src/integration/optim.rs` (enhanced documentation)
+    - `tests/functional_optimizer_tests.rs` (added regression test)
+  - **Reference:** https://github.com/cool-japan/scirs/issues/98
+
 ## 🔮 Future Roadmap (Post v1.0)
 
 ### Planned Enhancements

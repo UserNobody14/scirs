@@ -136,6 +136,7 @@ fn ensuredirectory_exists(dir: &Path) -> Result<()> {
 ///
 /// * `Ok(PathBuf)` - Path to the cached file
 /// * `Err(String)` - Error message if fetching fails
+#[cfg(feature = "download-sync")]
 #[allow(dead_code)]
 pub fn fetch_data(
     filename: &str,
@@ -198,6 +199,16 @@ pub fn fetch_data(
     fs::copy(&temp_file, &cachepath).map_err(|e| format!("Failed to copy to cache: {e}"))?;
 
     Ok(cachepath)
+}
+
+/// Stub for fetch_data when download-sync feature is disabled
+#[cfg(not(feature = "download-sync"))]
+#[allow(dead_code)]
+pub fn fetch_data(
+    _filename: &str,
+    _registry_entry: Option<&RegistryEntry>,
+) -> std::result::Result<PathBuf, String> {
+    Err("Synchronous download feature is disabled. Enable 'download-sync' feature.".to_string())
 }
 
 /// Cache key for dataset caching with configuration-aware hashing

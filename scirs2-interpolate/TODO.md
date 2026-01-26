@@ -95,6 +95,21 @@
 - [ ] Memory layout optimizations for cache performance
 - [ ] Parallel algorithm improvements for NUMA systems
 
+## ✅ Recent Fixes (v0.1.3)
+
+### GitHub Issues Resolved
+- ✅ **Issue #96: PCHIP Extrapolation Bug** (Fixed 2026-01-16, Released v0.1.3)
+  - **Problem:** PCHIP extrapolation returned -24008 for x=50 with monotonic data [0,1,4,9]
+  - **Root Cause:** Cubic polynomial extrapolation produced explosive values outside data range
+  - **Solution:** Implemented linear extrapolation using endpoint derivatives
+  - **Impact:** Stable, monotonicity-preserving extrapolation for all PCHIP use cases
+  - **Commit:** 49817afbd - "Enhance PCHIP extrapolation with linear extension"
+  - **Tests Added:**
+    - `test_pchip_extrapolation_far_beyond_range()` - Validates x=50 case
+    - `test_pchip_extrapolation_linear_behavior()` - Verifies linear slope
+  - **Files Modified:** `src/interp1d/pchip.rs` (lines 138-149, 491-556)
+  - **Reference:** https://github.com/cool-japan/scirs/issues/96
+
 ## ✅ 0.1.0 Implementation Status
 
 **Complete Implementation** (100% of planned features):

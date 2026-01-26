@@ -7,9 +7,26 @@
 //!
 //! - `cluster`: Clustering algorithms (K-Means, DBSCAN, Hierarchical, etc.)
 //! - `series`: Time series analysis and ARIMA models
-//! - `linalg`: Linear algebra operations (planned)
-//! - `stats`: Statistical distributions and tests (planned)
-//! - `fft`: Fast Fourier Transforms (planned)
+//! - `linalg`: Linear algebra operations
+//! - `stats`: Statistical distributions and tests
+//! - `fft`: Fast Fourier Transforms
+//! - `optimize`: Optimization algorithms
+//! - `special`: Special mathematical functions
+//! - `integrate`: Numerical integration
+//! - `interpolate`: Interpolation functions
+//! - `signal`: Signal processing
+//! - `spatial`: Spatial algorithms
+//! - `sparse`: Sparse matrix operations
+//! - `ndimage`: N-dimensional image processing
+//! - `graph`: Graph algorithms
+//! - `metrics`: ML evaluation metrics
+//! - `io`: File I/O operations
+//! - `datasets`: Dataset loading and generation
+//! - `transform`: Data transformation and preprocessing
+//! - `text`: Text processing and NLP
+//! - `vision`: Computer vision algorithms
+//! - `autograd`: Automatic differentiation (placeholder)
+//! - `neural`: Neural network layers (placeholder)
 //!
 //! # Architecture
 //!
@@ -58,6 +75,41 @@ pub mod signal;
 #[cfg(feature = "spatial")]
 pub mod spatial;
 
+#[cfg(feature = "sparse")]
+pub mod sparse;
+
+#[cfg(feature = "ndimage")]
+pub mod ndimage;
+
+#[cfg(feature = "graph")]
+#[allow(deprecated)] // For PyAnyMethods::downcast - will be updated in future pyo3 version
+#[allow(unused_must_use)] // For graph.add_edge() Result
+pub mod graph;
+
+#[cfg(feature = "metrics")]
+pub mod metrics;
+
+#[cfg(feature = "io")]
+pub mod io;
+
+#[cfg(feature = "datasets")]
+pub mod datasets;
+
+#[cfg(feature = "transform")]
+pub mod transform;
+
+#[cfg(feature = "text")]
+pub mod text;
+
+#[cfg(feature = "vision")]
+pub mod vision;
+
+#[cfg(feature = "autograd")]
+pub mod autograd;
+
+#[cfg(feature = "neural")]
+pub mod neural;
+
 /// SciRS2 Python module
 ///
 /// A comprehensive scientific computing library in Rust with Python bindings.
@@ -101,6 +153,39 @@ fn scirs2(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     #[cfg(feature = "spatial")]
     spatial::register_module(m)?;
+
+    #[cfg(feature = "sparse")]
+    sparse::register_module(m)?;
+
+    #[cfg(feature = "ndimage")]
+    ndimage::register_module(m)?;
+
+    #[cfg(feature = "graph")]
+    graph::register_module(m)?;
+
+    #[cfg(feature = "metrics")]
+    metrics::register_module(m)?;
+
+    #[cfg(feature = "io")]
+    io::register_module(m)?;
+
+    #[cfg(feature = "datasets")]
+    datasets::register_module(m)?;
+
+    #[cfg(feature = "transform")]
+    transform::register_module(m)?;
+
+    #[cfg(feature = "text")]
+    text::register_module(m)?;
+
+    #[cfg(feature = "vision")]
+    vision::register_module(m)?;
+
+    #[cfg(feature = "autograd")]
+    autograd::register_module(m)?;
+
+    #[cfg(feature = "neural")]
+    neural::register_module(m)?;
 
     Ok(())
 }
