@@ -326,6 +326,28 @@ fn conv2d_transpose_filter_grad_impl<F: Float>(
     let size_per_batch_cols = yh * yh * kh * kw * gyshape[1];
     let size_per_batch_x = xshape[1] * xshape[2] * xshape[3];
 
+    // SAFETY PROOF for raw slice creation:
+    // Preconditions:
+    //   1. Pointer from as_ptr() is valid and properly aligned (ndarray guarantees)
+    //   2. Length from len() matches actual allocated buffer size
+    //   3. Source arrays x and gy remain valid for the slice lifetime
+    // Guarantees:
+    //   - No out-of-bounds access (length from array's own len())
+    //   - Proper alignment (from ndarray allocation)
+    //   - Lifetime bounded correctly (slice lifetime ⊆ array lifetime)
+    // Verification:
+    //   - as_ptr() and len() are from same ndarray instance
+    //   - ndarray ensures buffer validity and alignment
+    debug_assert_eq!(
+        x.len(),
+        xshape.iter().product::<usize>(),
+        "x length mismatch"
+    );
+    debug_assert_eq!(
+        gy.len(),
+        gyshape.iter().product::<usize>(),
+        "gy length mismatch"
+    );
     let x = unsafe { slice::from_raw_parts(x.as_ptr(), x.len()) };
     let gy = unsafe { slice::from_raw_parts(gy.as_ptr(), gy.len()) };
 

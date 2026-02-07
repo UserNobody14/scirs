@@ -95,10 +95,10 @@
 - [ ] Memory layout optimizations for cache performance
 - [ ] Parallel algorithm improvements for NUMA systems
 
-## ✅ Recent Fixes (v0.1.3)
+## ✅ Recent Fixes (v0.1.4)
 
 ### GitHub Issues Resolved
-- ✅ **Issue #96: PCHIP Extrapolation Bug** (Fixed 2026-01-16, Released v0.1.3)
+- ✅ **Issue #96: PCHIP Extrapolation Bug** (Fixed 2026-01-16, Released v0.1.4)
   - **Problem:** PCHIP extrapolation returned -24008 for x=50 with monotonic data [0,1,4,9]
   - **Root Cause:** Cubic polynomial extrapolation produced explosive values outside data range
   - **Solution:** Implemented linear extrapolation using endpoint derivatives

@@ -252,11 +252,11 @@ gh workflow run pypi-publish.yml -f publish_target=testpypi
 ### Publishing to PyPI (Production)
 ```bash
 # Option 1: Tag-based automatic publishing
-git tag v0.1.3
-git push origin v0.1.3
+git tag v0.1.4
+git push origin v0.1.4
 
 # Option 2: Manual workflow dispatch
-gh workflow run pypi-publish.yml -f publish_target=pypi -f version_tag=v0.1.3
+gh workflow run pypi-publish.yml -f publish_target=pypi -f version_tag=v0.1.4
 ```
 
 ### Build-Only (No Publishing)

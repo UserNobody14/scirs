@@ -52,7 +52,7 @@ pub struct AccessPatternStats {
 pub enum AdvancedChunkingStrategy {
     /// Cache-line aligned chunking for optimal cache usage
     CacheLineAligned,
-    /// NUMA-aware chunking that considers node boundaries  
+    /// NUMA-aware chunking that considers node boundaries
     NumaAware,
     /// Bandwidth-optimized chunking for maximum throughput
     BandwidthOptimized,
@@ -62,6 +62,15 @@ pub enum AdvancedChunkingStrategy {
     Adaptive,
     /// Power-aware chunking for mobile/embedded systems
     PowerAware,
+    /// Large data chunking (256MB-2GB chunks) for GB-scale datasets
+    LargeData,
+    /// Huge data streaming with minimal memory footprint
+    HugeDataStreaming {
+        /// Maximum memory usage in MB
+        max_memory_mb: usize,
+    },
+    /// Adaptive large chunking that auto-adjusts based on available memory
+    AdaptiveLarge,
 }
 
 impl MemoryPatternOptimizer {
@@ -389,6 +398,31 @@ where
                     AdvancedChunkingStrategy::PowerAware => {
                         // Smaller chunks to reduce power consumption
                         opt.calculate_cache_aware_chunk_size::<A>(total_elements) / 4
+                    }
+                    AdvancedChunkingStrategy::LargeData => {
+                        // 256MB-2GB chunks for GB-scale datasets
+                        // Use 512MB as default for large data
+                        let target_bytes = 512 * 1024 * 1024;
+                        (target_bytes / elem_size).max(1).min(total_elements)
+                    }
+                    AdvancedChunkingStrategy::HugeDataStreaming { max_memory_mb } => {
+                        // Minimal memory footprint - use specified limit
+                        let target_bytes = max_memory_mb * 1024 * 1024;
+                        (target_bytes / elem_size).max(1).min(total_elements)
+                    }
+                    AdvancedChunkingStrategy::AdaptiveLarge => {
+                        // Auto-adjust based on available memory
+                        use super::platform_memory::PlatformMemoryInfo;
+
+                        let available_mem = PlatformMemoryInfo::detect()
+                            .map(|info| info.available_memory)
+                            .unwrap_or(512 * 1024 * 1024);
+
+                        // Use 25% of available memory for chunks
+                        let target_bytes =
+                            (available_mem / 4).clamp(256 * 1024 * 1024, 2 * 1024 * 1024 * 1024); // 256MB to 2GB
+
+                        (target_bytes / elem_size).max(1).min(total_elements)
                     }
                 };
                 let num_chunks = total_elements.div_ceil(chunk_size);

@@ -1,7 +1,7 @@
 # SciRS2 Sparse
 
 [![crates.io](https://img.shields.io/crates/v/scirs2-sparse.svg)](https://crates.io/crates/scirs2-sparse)
-[[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)]](../LICENSE)
+[[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)]](../LICENSE)
 [![Documentation](https://img.shields.io/docsrs/scirs2-sparse)](https://docs.rs/scirs2-sparse)
 
 **Production-ready sparse matrix library for Rust** - stable release (0.1.0) with SciRS2 POLICY implementation.
@@ -33,7 +33,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scirs2-sparse = "0.1.2"
+scirs2-sparse = "0.1.4"
 ```
 
 ### Optional Performance Features
@@ -42,7 +42,7 @@ For enhanced performance in production environments:
 
 ```toml
 [dependencies]
-scirs2-sparse = { version = "0.1.2", features = ["parallel", "simd"] }
+scirs2-sparse = { version = "0.1.4", features = ["parallel", "simd"] }
 ```
 
 **Available Features:**
@@ -307,9 +307,6 @@ See the [CONTRIBUTING.md](../CONTRIBUTING.md) file for contribution guidelines.
 
 ## License
 
-This project is dual-licensed under:
-
-- [MIT License](../LICENSE-MIT)
-- [Apache License Version 2.0](../LICENSE-APACHE)
+This project is Licensed under the Apache License 2.0. See LICENSE for details.
 
 You can choose to use either license. See the [LICENSE](../LICENSE) file for details.

@@ -1,7 +1,7 @@
 # SciRS2 Core
 
 [![crates.io](https://img.shields.io/crates/v/scirs2-core.svg)](https://crates.io/crates/scirs2-core)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](../LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../LICENSE)
 [![Documentation](https://img.shields.io/docsrs/scirs2-core)](https://docs.rs/scirs2-core)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Version](https://img.shields.io/badge/version-0.1.0--stable-orange.svg)]()
@@ -10,13 +10,13 @@
 
 **Production-Ready Scientific Computing Core for Rust**
 
-🎯 **SciRS2 Core v0.1.0** (Released December 29, 2025) - Production-ready foundation providing comprehensive abstractions for the entire SciRS2 ecosystem with ultra-performance SIMD, multi-backend GPU support, and advanced parallel processing.
+🎯 **SciRS2 Core v0.1.4** (Released December 29, 2025) - Production-ready foundation providing comprehensive abstractions for the entire SciRS2 ecosystem with ultra-performance SIMD, multi-backend GPU support, and advanced parallel processing.
 
 ## 🚀 Quick Start
 
 ```toml
 [dependencies]
-scirs2-core = { version = "0.1.2", features = ["validation", "simd", "parallel"] }
+scirs2-core = { version = "0.1.4", features = ["validation", "simd", "parallel"] }
 ```
 
 ```rust
@@ -116,7 +116,7 @@ let result = parallel_matrix_multiply(&normalized, &data.t())?;
 
 ## 🏗️ SciRS2 POLICY Framework
 
-**SciRS2 Core v0.1.0** provides the [SciRS2 Ecosystem Policy](SCIRS2_POLICY.md) that establishes architectural consistency:
+**SciRS2 Core v0.1.4** provides the [SciRS2 Ecosystem Policy](SCIRS2_POLICY.md) that establishes architectural consistency:
 
 ### 🎯 Core Principles
 - **Layered Architecture**: Only `scirs2-core` uses external dependencies directly
@@ -286,16 +286,16 @@ let processor = ChunkProcessor::new(&memory_mapped, ChunkSize::Adaptive);
 
 ```toml
 # Minimal scientific computing
-scirs2-core = { version = "0.1.2", features = ["validation"] }
+scirs2-core = { version = "0.1.4", features = ["validation"] }
 
 # High-performance CPU computing
-scirs2-core = { version = "0.1.2", features = ["validation", "simd", "parallel"] }
+scirs2-core = { version = "0.1.4", features = ["validation", "simd", "parallel"] }
 
 # GPU-accelerated computing
-scirs2-core = { version = "0.1.2", features = ["validation", "gpu", "cuda"] }
+scirs2-core = { version = "0.1.4", features = ["validation", "gpu", "cuda"] }
 
 # Full-featured development
-scirs2-core = { version = "0.1.2", features = ["all"] }
+scirs2-core = { version = "0.1.4", features = ["all"] }
 ```
 
 ### Available Features
@@ -391,9 +391,7 @@ cargo test --all-features
 
 ## ⚖️ License
 
-Dual-licensed under:
-- [MIT License](../LICENSE-MIT)
-- [Apache License Version 2.0](../LICENSE-APACHE)
+Licensed under the Apache License 2.0. See LICENSE for details.
 
 ---
 
@@ -411,7 +409,7 @@ SciRS2 Core is part of the SciRS2 ecosystem:
 
 ## 🎯 Production Readiness Statement
 
-**SciRS2 Core v0.1.0 is production-ready** for:
+**SciRS2 Core v0.1.4 is production-ready** for:
 
 - ✅ **Enterprise Development**: Established ecosystem architecture
 - ✅ **Research Projects**: Stable foundation with long-term maintainability
@@ -425,4 +423,4 @@ SciRS2 Core is part of the SciRS2 ecosystem:
 
 **Built with ❤️ for the scientific computing community**
 
-*Version: 0.1.0 | Released: December 29, 2025 | Next: 0.1.0*
+*Version: 0.1.4 | Released: December 29, 2025 | Next: 0.1.0*

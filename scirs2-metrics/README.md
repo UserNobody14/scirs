@@ -1,10 +1,10 @@
 # SciRS2 Metrics
 
 [![crates.io](https://img.shields.io/crates/v/scirs2-metrics.svg)](https://crates.io/crates/scirs2-metrics)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](../LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../LICENSE)
 [![Documentation](https://img.shields.io/docsrs/scirs2-metrics)](https://docs.rs/scirs2-metrics)
 
-Production-ready machine learning evaluation metrics library for the SciRS2 scientific computing ecosystem (v0.1.0). Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), this comprehensive module provides high-performance functions to evaluate prediction performance across classification, regression, clustering, and specialized ML domains with ecosystem consistency and enhanced performance optimizations.
+Production-ready machine learning evaluation metrics library for the SciRS2 scientific computing ecosystem (v0.1.4). Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), this comprehensive module provides high-performance functions to evaluate prediction performance across classification, regression, clustering, and specialized ML domains with ecosystem consistency and enhanced performance optimizations.
 
 ## Features
 
@@ -41,7 +41,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scirs2-metrics = "0.1.2"
+scirs2-metrics = "0.1.4"
 ```
 
 ### Feature Selection
@@ -51,13 +51,13 @@ Choose features based on your needs:
 ```toml
 [dependencies]
 # Default features (recommended for most users)
-scirs2-metrics = "0.1.2"
+scirs2-metrics = "0.1.4"
 
 # Minimal installation (core metrics only)
-scirs2-metrics = { version = "0.1.2", default-features = false }
+scirs2-metrics = { version = "0.1.4", default-features = false }
 
 # Full installation with all capabilities
-scirs2-metrics = { version = "0.1.2", features = ["neural_common", "optim_integration", "plotters_backend"] }
+scirs2-metrics = { version = "0.1.4", features = ["neural_common", "optim_integration", "plotters_backend"] }
 ```
 
 #### Available Features
@@ -697,9 +697,6 @@ See the [CONTRIBUTING.md](../CONTRIBUTING.md) file for contribution guidelines.
 
 ## License
 
-This project is dual-licensed under:
-
-- [MIT License](../LICENSE-MIT)
-- [Apache License Version 2.0](../LICENSE-APACHE)
+This project is Licensed under the Apache License 2.0. See LICENSE for details.
 
 You can choose to use either license. See the [LICENSE](../LICENSE) file for details.

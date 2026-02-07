@@ -334,16 +334,30 @@ macro_rules! impl_bin_op_forward {
                         #[cfg(feature = "simd")]
                         {
                             use crate::same_type;
+                            // SAFETY PROOF for all transmutes below:
+                            // Preconditions:
+                            //   1. Type T equals f32 or f64 (verified by same_type checks)
+                            //   2. Arrays are standard_layout (verified above)
+                            //   3. Dimensionality conversion succeeded (verified by Ok() pattern)
+                            // Guarantees:
+                            //   - Type transmutation only when T == target type (f32/f64)
+                            //   - Memory layout preserved (standard layout verified)
+                            //   - Dimension structure maintained through type system
+                            // Verification:
+                            //   - Runtime: same_type check + is_standard_layout check
+                            //   - size_of::<ArrayView1<T>>() == size_of::<ArrayView1<f32>>() when T=f32
                             if same_type::<T, f32>() {
                                 // SIMD acceleration for f32
                                 if let (Ok(x0_1d), Ok(x1_1d)) = (
                                     x0.clone().into_dimensionality::<scirs2_core::ndarray::Ix1>(),
                                     x1.clone().into_dimensionality::<scirs2_core::ndarray::Ix1>()
                                 ) {
+                                    // SAFETY: T=f32 verified above
                                     let x0_f32 = unsafe { std::mem::transmute::<scirs2_core::ndarray::ArrayView1<T>, scirs2_core::ndarray::ArrayView1<f32>>(x0_1d.view()) };
                                     let x1_f32 = unsafe { std::mem::transmute::<scirs2_core::ndarray::ArrayView1<T>, scirs2_core::ndarray::ArrayView1<f32>>(x1_1d.view()) };
                                     let result_f32 = $simd_f32(&x0_f32, &x1_f32);
                                     let result_dyn = result_f32.into_dyn();
+                                    // SAFETY: Transmuting back to T (which is f32)
                                     return unsafe { std::mem::transmute::<scirs2_core::ndarray::Array<f32, scirs2_core::ndarray::IxDyn>, NdArray<T>>(result_dyn) };
                                 }
                             } else if same_type::<T, f64>() {
@@ -352,10 +366,12 @@ macro_rules! impl_bin_op_forward {
                                     x0.clone().into_dimensionality::<scirs2_core::ndarray::Ix1>(),
                                     x1.clone().into_dimensionality::<scirs2_core::ndarray::Ix1>()
                                 ) {
+                                    // SAFETY: T=f64 verified above
                                     let x0_f64 = unsafe { std::mem::transmute::<scirs2_core::ndarray::ArrayView1<T>, scirs2_core::ndarray::ArrayView1<f64>>(x0_1d.view()) };
                                     let x1_f64 = unsafe { std::mem::transmute::<scirs2_core::ndarray::ArrayView1<T>, scirs2_core::ndarray::ArrayView1<f64>>(x1_1d.view()) };
                                     let result_f64 = $simd_f64(&x0_f64, &x1_f64);
                                     let result_dyn = result_f64.into_dyn();
+                                    // SAFETY: Transmuting back to T (which is f64)
                                     return unsafe { std::mem::transmute::<scirs2_core::ndarray::Array<f64, scirs2_core::ndarray::IxDyn>, NdArray<T>>(result_dyn) };
                                 }
                             }

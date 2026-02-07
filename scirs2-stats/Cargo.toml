@@ -66,4 +66,8 @@ harness = false
 name = "comprehensive_scipy_comparison"
 harness = false
 
+[[bench]]
+name = "simd_correlation_bench"
+harness = false
+
 

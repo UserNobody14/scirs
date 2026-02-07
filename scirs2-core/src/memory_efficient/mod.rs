@@ -8,7 +8,9 @@
 //! - Smart prefetching for improved performance with predictable access patterns
 
 mod adaptive_chunking;
+mod adaptive_feedback;
 mod adaptive_prefetch;
+mod chunk_format;
 mod chunked;
 #[cfg(feature = "memory_compression")]
 mod compressed_memmap;
@@ -16,13 +18,17 @@ mod compressed_memmap;
 mod cross_device;
 mod cross_file_prefetch;
 mod fusion;
+mod large_data;
 mod lazy_array;
 mod memmap;
 mod memmap_chunks;
 mod memmap_slice;
 mod memory_layout;
+mod numa_topology;
 mod out_of_core;
+mod out_of_core_v2;
 mod pattern_recognition;
+mod platform_memory;
 mod prefetch;
 mod resource_aware;
 #[cfg(feature = "parallel")]
@@ -41,9 +47,17 @@ pub use adaptive_chunking::{
     AdaptiveChunking, AdaptiveChunkingBuilder, AdaptiveChunkingParams, AdaptiveChunkingResult,
     WorkloadType,
 };
+pub use adaptive_feedback::{
+    create_shared_predictor, ChunkSizePredictor, PerformanceMetrics, SharedPredictor,
+};
 pub use adaptive_prefetch::{
     AdaptivePatternTracker, AdaptivePrefetchConfig, AdaptivePrefetchConfigBuilder,
     PatternTrackerFactory, PrefetchStrategy,
+};
+pub use chunk_format::{
+    detect_format_version, read_chunk_index, read_header, write_chunk_index, write_header,
+    ChunkIndex, ChunkIndexEntry, CompressionType, FormatVersion, OutOfCoreHeaderV2,
+    HEADER_FIXED_SIZE, MAGIC_BYTES_V2,
 };
 pub use chunked::{
     chunk_wise_binary_op, chunk_wise_op, chunk_wise_reduce, ChunkedArray, ChunkingStrategy,
@@ -65,6 +79,9 @@ pub use cross_file_prefetch::{
     CrossFilePrefetchRegistry, DataAccess, DatasetId, DatasetPrefetcher,
 };
 pub use fusion::{register_fusion, FusedOp, OpFusion};
+#[cfg(feature = "parallel")]
+pub use large_data::{create_parallel_processor, ParallelStreamingProcessor};
+pub use large_data::{create_streaming_iterator, StreamingChunkIterator};
 pub use lazy_array::{evaluate, LazyArray, LazyOp, LazyOpKind};
 pub use memmap::{create_mmap, create_temp_mmap, open_mmap, AccessMode, MemoryMappedArray};
 #[cfg(feature = "parallel")]
@@ -75,10 +92,13 @@ pub use memory_layout::{
     AccessPattern as MemoryAccessPattern, ArrayCreation, ArrayLayout, LayoutConverter, LayoutOrder,
     MemoryLayout,
 };
+pub use numa_topology::{NumaNode, NumaPolicy, NumaTopology};
 pub use out_of_core::{create_disk_array, load_chunks, DiskBackedArray, OutOfCoreArray};
+pub use out_of_core_v2::OutOfCoreArrayV2;
 pub use pattern_recognition::{
     ComplexPattern, Confidence, PatternRecognitionConfig, PatternRecognizer, RecognizedPattern,
 };
+pub use platform_memory::PlatformMemoryInfo;
 #[cfg(feature = "memory_compression")]
 pub use prefetch::PrefetchingCompressedArray;
 pub use prefetch::{
@@ -98,7 +118,7 @@ pub use views::{diagonal_view, transpose_view, view_as, view_mut_as, ArrayView, 
 #[cfg(feature = "parallel")]
 pub use work_stealing::{
     create_cpu_intensive_scheduler, create_io_intensive_scheduler, create_work_stealing_scheduler,
-    NumaNode, SchedulerStats, TaskPriority, WorkStealingConfig, WorkStealingConfigBuilder,
+    SchedulerStats, TaskPriority, WorkStealingConfig, WorkStealingConfigBuilder,
     WorkStealingScheduler, WorkStealingTask,
 };
 pub use zero_copy_interface::{
@@ -108,8 +128,8 @@ pub use zero_copy_interface::{
 };
 #[cfg(feature = "parallel")]
 pub use zero_copy_streaming::{
-    create_zero_copy_processor, BufferPool, BufferPoolStats, LockFreeQueue, NumaTopology,
-    ProcessingMode, WorkStealingScheduler as ZeroCopyWorkStealingScheduler,
+    create_zero_copy_processor, BufferPool, BufferPoolStats, LockFreeQueue, ProcessingMode,
+    WorkStealingScheduler as ZeroCopyWorkStealingScheduler,
     WorkStealingTask as ZeroCopyWorkStealingTask, ZeroCopyBuffer, ZeroCopyConfig, ZeroCopyStats,
     ZeroCopyStreamProcessor,
 };

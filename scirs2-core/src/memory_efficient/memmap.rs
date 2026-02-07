@@ -623,7 +623,15 @@ where
             .persist(&file_path)
             .map_err(|e| CoreError::IoError(ErrorContext::new(e.to_string())))?;
 
-        let mut result = Self::new(Some(data), &file_path, mode, offset)?;
+        // For ReadOnly mode, we need to pre-write the data to the temp file
+        // before creating a read-only mapping, since the file starts empty.
+        // Use ReadWrite mode to write data, then re-open as ReadOnly.
+        let effective_mode = match mode {
+            AccessMode::ReadOnly => AccessMode::ReadWrite,
+            other => other,
+        };
+
+        let mut result = Self::new(Some(data), &file_path, effective_mode, offset)?;
         result.is_temp = true;
 
         Ok(result)

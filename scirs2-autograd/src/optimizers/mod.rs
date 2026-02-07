@@ -88,7 +88,7 @@ pub trait Optimizer<F: Float> {
 
     /// Runs the graph and updates the variable arrays.
     ///
-    /// Updates `variables` destructively.
+    /// Updates `variables` destructively by writing computed updates back to VariableEnvironment.
     fn update<'g, A, B>(&self, variables: &[A], grads: &[B], g: &'g Context<F>, feeder: Feeder<F>)
     where
         A: AsRef<Tensor<'g, F>> + Copy,
@@ -96,18 +96,67 @@ pub trait Optimizer<F: Float> {
     {
         // get updates
         let update_ops = self.compute_updates(variables, grads, g);
-        // Create evaluator, set feeder, and run in a chain
-        g.evaluator()
-            .set_feeder(feeder)
-            .extend(&update_ops)
-            .run() // update runs
-            .into_iter()
-            .for_each(|r| {
-                r.expect("Operation failed");
-            });
+
+        // Evaluate updates
+        let results = g.evaluator().set_feeder(feeder).extend(&update_ops).run();
+
+        // Write results back to variables
+        for (var_tensor, result) in variables.iter().zip(results.iter()) {
+            let var_tensor_ref = var_tensor.as_ref();
+            if let Some(var_id) = var_tensor_ref.get_variable_id() {
+                if let Ok(new_value) = result {
+                    if let Some(var_cell) = g.env().get_array_by_id(var_id) {
+                        *var_cell.borrow_mut() = new_value.clone();
+                    }
+                }
+            }
+        }
+    }
+
+    /// Returns update tensors for the given parameters.
+    ///
+    /// Unlike `get_update_op`, this returns individual tensors for each parameter.
+    /// Use `apply_update_tensors` to apply them to the VariableEnvironment.
+    ///
+    /// Note that `variables` will not be updated until you call `apply_update_tensors`.
+    fn get_update_tensors<'g, A, B>(
+        &self,
+        variables: &[A],
+        grads: &[B],
+        g: &'g Context<F>,
+    ) -> Vec<Tensor<'g, F>>
+    where
+        A: AsRef<Tensor<'g, F>> + Copy,
+        B: AsRef<Tensor<'g, F>> + Copy,
+    {
+        self.compute_updates(variables, grads, g)
+    }
+
+    /// Applies evaluated update tensors to the VariableEnvironment.
+    ///
+    /// This is a helper method for when you evaluate updates manually
+    /// rather than using the `update` method.
+    fn apply_update_tensors<'g, A>(
+        variables: &[A],
+        evaluated_updates: &[NdArray<F>],
+        env: &crate::VariableEnvironment<F>,
+    ) where
+        A: AsRef<Tensor<'g, F>> + Copy,
+    {
+        for (var_tensor, new_value) in variables.iter().zip(evaluated_updates.iter()) {
+            let var_tensor_ref = var_tensor.as_ref();
+            if let Some(var_id) = var_tensor_ref.get_variable_id() {
+                if let Some(var_cell) = env.get_array_by_id(var_id) {
+                    *var_cell.borrow_mut() = new_value.clone();
+                }
+            }
+        }
     }
 
     /// Returns a tensor to update the given parameters
+    ///
+    /// DEPRECATED: Use `get_update_tensors` + `apply_update_tensors` instead,
+    /// or just use the `update` method directly.
     ///
     /// Note that `variables` will not be updated until the return value is evaluated.
     fn get_update_op<'g, A, B>(
@@ -155,12 +204,12 @@ pub trait Optimizer<F: Float> {
 ///             .extend(&new_params)
 ///             .run()
 ///             .into_iter()
-///             .map(|r| r.unwrap())
+///             .map(|r| r.expect("Evaluation failed"))
 ///             .collect();
 ///
 ///         // Update parameter arrays in environment
 ///         for (param, value) in params.iter().zip(new_values) {
-///             ctx.env().set_array_by_id(param.get_variable_id().unwrap(), value);
+///             ctx.env().set_array_by_id(param.get_variable_id().expect("Variable ID not found"), value);
 ///         }
 ///     });
 /// }

@@ -123,6 +123,7 @@ pub mod model_registry;
 pub mod multilingual;
 pub mod neural_architectures;
 pub mod parallel;
+pub mod paraphrasing;
 pub mod performance;
 pub mod pos_tagging;
 pub mod preprocess;
@@ -204,6 +205,7 @@ pub use neural_architectures::{
 pub use parallel::{
     ParallelCorpusProcessor, ParallelTextProcessor, ParallelTokenizer, ParallelVectorizer,
 };
+pub use paraphrasing::{ParaphraseConfig, ParaphraseResult, ParaphraseStrategy, Paraphraser};
 pub use performance::{
     AdvancedPerformanceMonitor, DetailedPerformanceReport, OptimizationRecommendation,
     PerformanceSummary, PerformanceThresholds,

@@ -5,6 +5,7 @@
 //! and data distribution patterns. Adaptive chunking can significantly
 //! improve performance by balancing memory usage with processing efficiency.
 
+use super::adaptive_feedback::SharedPredictor;
 use super::chunked::ChunkingStrategy;
 use super::memmap::MemoryMappedArray;
 use super::memmap_chunks::MemoryMappedChunks;
@@ -26,7 +27,7 @@ pub enum WorkloadType {
 }
 
 /// Parameters for configuring adaptive chunking behavior.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AdaptiveChunkingParams {
     /// Target memory usage per chunk (in bytes)
     pub target_memory_usage: usize,
@@ -48,6 +49,27 @@ pub struct AdaptiveChunkingParams {
 
     /// Number of worker threads to optimize for (when parallel is enabled)
     pub numworkers: Option<usize>,
+
+    /// Optional chunk size predictor for adaptive feedback
+    pub predictor: Option<SharedPredictor>,
+}
+
+impl std::fmt::Debug for AdaptiveChunkingParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AdaptiveChunkingParams")
+            .field("target_memory_usage", &self.target_memory_usage)
+            .field("max_chunksize", &self.max_chunksize)
+            .field("min_chunksize", &self.min_chunksize)
+            .field("target_chunk_duration", &self.target_chunk_duration)
+            .field("consider_distribution", &self.consider_distribution)
+            .field("optimize_for_parallel", &self.optimize_for_parallel)
+            .field("numworkers", &self.numworkers)
+            .field(
+                "predictor",
+                &self.predictor.as_ref().map(|_| "Some(SharedPredictor)"),
+            )
+            .finish()
+    }
 }
 
 impl Default for AdaptiveChunkingParams {
@@ -73,31 +95,17 @@ impl Default for AdaptiveChunkingParams {
             consider_distribution: true,                             // Beta 2: Enable by default
             optimize_for_parallel: cpu_cores > 1,                    // Beta 2: Auto-detect
             numworkers: Some(cpu_cores),
+            predictor: None, // No predictor by default - user can add if desired
         }
     }
 }
 
 impl AdaptiveChunkingParams {
-    /// Beta 2: Detect available system memory
+    /// Beta 2: Detect available system memory using cross-platform detection
     fn detect_available_memory() -> Option<usize> {
-        // Simplified memory detection - in a real implementation this would be more robust
-        #[cfg(unix)]
-        {
-            if let Ok(output) = std::process::Command::new("sh")
-                .args([
-                    "-c",
-                    "cat /proc/meminfo | grep MemAvailable | awk '{print $2}'",
-                ])
-                .output()
-            {
-                if let Ok(mem_str) = String::from_utf8(output.stdout) {
-                    if let Ok(mem_kb) = mem_str.trim().parse::<usize>() {
-                        return Some(mem_kb * 1024); // Convert from KB to bytes
-                    }
-                }
-            }
-        }
-        None
+        use super::platform_memory::PlatformMemoryInfo;
+
+        PlatformMemoryInfo::detect().map(|info| info.available_memory)
     }
 
     /// Beta 2: Create optimized parameters for specific workload types

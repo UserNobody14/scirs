@@ -1,3 +1,4 @@
+#![allow(rustdoc::broken_intra_doc_links)]
 //! # SciRS2 Neural Networks
 //!
 //! **scirs2-neural** provides PyTorch-style neural network building blocks for Rust,
@@ -311,9 +312,10 @@ pub mod activations_minimal;
 pub mod autograd;
 pub mod error;
 // pub mod gpu; // Disabled in minimal version - has syntax errors
-// pub mod linalg; // Disabled - has syntax errors in attention.rs
 pub mod layers;
+pub mod linalg; // Re-enabled - fixing errors
 pub mod losses;
+pub mod tensor_ops;
 pub mod training;
 pub mod utils;
 

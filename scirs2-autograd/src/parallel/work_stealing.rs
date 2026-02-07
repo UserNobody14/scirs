@@ -3,6 +3,8 @@
 //! This module provides a work-stealing deque that allows threads to steal
 //! work from each other, improving load balancing and overall throughput.
 
+use crate::error::OpResult;
+use crate::error_helpers::try_lock;
 use std::collections::VecDeque;
 use std::ptr;
 use std::sync::Mutex;
@@ -211,6 +213,26 @@ impl<T> WorkStealingArray<T> {
     /// Put a task at the given index
     fn put(&self, index: usize, task: T) {
         let pos = index & self.mask;
+        // SAFETY PROOF:
+        // Preconditions:
+        //   1. Position is within allocated capacity (guaranteed by mask operation)
+        //      - mask = capacity - 1, so pos = index & mask is always < capacity
+        //      - capacity is power of 2 (verified in new())
+        //   2. Pointer alignment is maintained (MaybeUninit has same alignment as T)
+        //   3. No concurrent writes to same position (enforced by atomic indices)
+        // Guarantees:
+        //   - No out-of-bounds access (pos < capacity by construction)
+        //   - Proper initialization of MaybeUninit<T>
+        //   - No data races (lock-free algorithm ensures single writer per slot)
+        // Verification:
+        //   - pos = index & (capacity - 1) ensures 0 <= pos < capacity
+        //   - capacity is power of 2 (checked in new())
+        debug_assert!(
+            pos < self.capacity,
+            "Position {} out of bounds (capacity: {})",
+            pos,
+            self.capacity
+        );
         unsafe {
             let ptr = self.data.as_ptr().add(pos) as *mut std::mem::MaybeUninit<T>;
             ptr::write(ptr, std::mem::MaybeUninit::new(task));
@@ -220,6 +242,24 @@ impl<T> WorkStealingArray<T> {
     /// Get a task from the given index
     fn get(&self, index: usize) -> T {
         let pos = index & self.mask;
+        // SAFETY PROOF:
+        // Preconditions:
+        //   1. Position is within allocated capacity (guaranteed by mask operation)
+        //   2. Slot at position has been initialized (caller responsibility - enforced by protocol)
+        //   3. No concurrent access to same slot (enforced by atomic indices)
+        // Guarantees:
+        //   - No out-of-bounds access (pos < capacity by construction)
+        //   - Value is initialized (work-stealing protocol ensures get() only on valid slots)
+        //   - No use-after-free (value moved out, slot becomes invalid)
+        // Verification:
+        //   - pos = index & (capacity - 1) ensures 0 <= pos < capacity
+        //   - Work-stealing algorithm ensures get() only called on initialized slots
+        debug_assert!(
+            pos < self.capacity,
+            "Position {} out of bounds (capacity: {})",
+            pos,
+            self.capacity
+        );
         unsafe {
             let ptr = self.data.as_ptr().add(pos);
             ptr::read(ptr).assume_init()
@@ -459,33 +499,34 @@ impl<T> LockFreeWorkStealingDeque<T> {
     }
 
     /// Push to bottom (owner thread)
-    pub fn push(&self, item: T) {
-        let mut deque = self.inner.lock().expect("Operation failed");
+    pub fn push(&self, item: T) -> OpResult<()> {
+        let mut deque = try_lock(&self.inner, "work stealing deque push")?;
         deque.push_back(item);
+        Ok(())
     }
 
     /// Pop from bottom (owner thread)
-    pub fn pop(&self) -> Option<T> {
-        let mut deque = self.inner.lock().expect("Operation failed");
-        deque.pop_back()
+    pub fn pop(&self) -> OpResult<Option<T>> {
+        let mut deque = try_lock(&self.inner, "work stealing deque pop")?;
+        Ok(deque.pop_back())
     }
 
     /// Steal from top (stealer threads)
-    pub fn steal(&self) -> Option<T> {
-        let mut deque = self.inner.lock().expect("Operation failed");
-        deque.pop_front()
+    pub fn steal(&self) -> OpResult<Option<T>> {
+        let mut deque = try_lock(&self.inner, "work stealing deque steal")?;
+        Ok(deque.pop_front())
     }
 
     /// Check if empty
-    pub fn is_empty(&self) -> bool {
-        let deque = self.inner.lock().expect("Operation failed");
-        deque.is_empty()
+    pub fn is_empty(&self) -> OpResult<bool> {
+        let deque = try_lock(&self.inner, "work stealing deque is_empty")?;
+        Ok(deque.is_empty())
     }
 
     /// Get size
-    pub fn len(&self) -> usize {
-        let deque = self.inner.lock().expect("Operation failed");
-        deque.len()
+    pub fn len(&self) -> OpResult<usize> {
+        let deque = try_lock(&self.inner, "work stealing deque len")?;
+        Ok(deque.len())
     }
 }
 
@@ -610,22 +651,22 @@ mod tests {
     fn test_lock_free_deque() {
         let deque = LockFreeWorkStealingDeque::new();
 
-        assert!(deque.is_empty());
-        assert_eq!(deque.len(), 0);
+        assert!(deque.is_empty().expect("Test: operation failed"));
+        assert_eq!(deque.len().expect("Test: operation failed"), 0);
 
-        deque.push(1);
-        deque.push(2);
-        deque.push(3);
+        deque.push(1).expect("Test: operation failed");
+        deque.push(2).expect("Test: operation failed");
+        deque.push(3).expect("Test: operation failed");
 
-        assert_eq!(deque.len(), 3);
-        assert!(!deque.is_empty());
+        assert_eq!(deque.len().expect("Test: operation failed"), 3);
+        assert!(!deque.is_empty().expect("Test: operation failed"));
 
-        assert_eq!(deque.steal(), Some(1)); // Steal from front
-        assert_eq!(deque.pop(), Some(3)); // Pop from back
-        assert_eq!(deque.pop(), Some(2)); // Pop from back
-        assert_eq!(deque.pop(), None);
+        assert_eq!(deque.steal().expect("Test: operation failed"), Some(1)); // Steal from front
+        assert_eq!(deque.pop().expect("Test: operation failed"), Some(3)); // Pop from back
+        assert_eq!(deque.pop().expect("Test: operation failed"), Some(2)); // Pop from back
+        assert_eq!(deque.pop().expect("Test: operation failed"), None);
 
-        assert!(deque.is_empty());
+        assert!(deque.is_empty().expect("Test: operation failed"));
     }
 
     #[test]

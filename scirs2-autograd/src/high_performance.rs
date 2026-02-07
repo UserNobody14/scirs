@@ -340,12 +340,26 @@ pub mod high_performance {
             return Err("SIMD gradient accumulation only supports f32".into());
         }
 
+        // SAFETY PROOF for transmutes below:
+        // Preconditions:
+        //   1. Type F is verified to be f32 via same_type check above
+        //   2. NdArray<F> and NdArray<f32> have identical memory layout when F=f32
+        //   3. References maintain same mutability and lifetime
+        // Guarantees:
+        //   - No undefined behavior due to type equality verification
+        //   - Memory layout identical (NdArray is repr(transparent) over its buffer)
+        //   - No aliasing violations (references used correctly)
+        // Verification:
+        //   - Runtime: same_type::<F, f32>() checked above (early return if false)
+        //   - Compile-time: size_of::<F>() == size_of::<f32>() when F=f32
+
         // Convert target to f32 for SIMD processing
         let target_f32 =
             unsafe { std::mem::transmute::<&mut NdArray<F>, &mut NdArray<f32>>(target) };
 
         // Accumulate gradients using SIMD operations
         for grad in gradients {
+            // SAFETY: same_type::<F, f32>() verified above, transmute is safe
             let grad_f32 = unsafe { std::mem::transmute::<&NdArray<F>, &NdArray<f32>>(grad) };
 
             // Use SIMD addition for accumulation

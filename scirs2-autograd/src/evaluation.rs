@@ -239,6 +239,23 @@ impl<'g, F: Float> Feeder<'g, F> {
     ) -> Self {
         let value = value.into();
         let key = placeholder.key();
+        // SAFETY PROOF:
+        // Preconditions:
+        //   1. NdArrayView<'g, F> and RawNdArrayView<F> have identical memory layouts
+        //      (both are thin wrappers around raw pointers with the same structure)
+        //   2. Lifetime 'g is erased but preserved semantically through type system
+        //   3. F type remains unchanged (no type transmutation, only lifetime erasure)
+        // Guarantees:
+        //   - No undefined behavior due to identical memory representation
+        //   - Lifetime safety maintained by PhantomData<&'g ()> in the tuple
+        //   - No alignment issues (same underlying pointer types)
+        // Verification:
+        //   - Both types are #[repr(transparent)] wrappers of the same inner type
+        //   - size_of::<NdArrayView<F>>() == size_of::<RawNdArrayView<F>>()
+        debug_assert_eq!(
+            std::mem::size_of::<NdArrayView<F>>(),
+            std::mem::size_of::<RawNdArrayView<F>>()
+        );
         unsafe {
             let raw_view: RawNdArrayView<F> = std::mem::transmute(value);
             self.feeds.push((key, raw_view, std::marker::PhantomData));

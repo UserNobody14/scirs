@@ -250,7 +250,7 @@ impl HfModelAdapter {
         Ok(buffer)
     }
 
-    /// Serialize Array2<f64> to binary buffer
+    /// Serialize `Array2<f64>` to binary buffer
     fn serialize_array2(&self, array: &Array2<f64>, buffer: &mut Vec<u8>) {
         let shape = array.shape();
         buffer.extend_from_slice(&(shape[0] as u32).to_le_bytes());

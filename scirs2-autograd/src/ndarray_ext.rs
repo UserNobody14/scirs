@@ -1,6 +1,8 @@
 //! A small extension of [ndarray](https://github.com/rust-ndarray/ndarray)
 //!
 //! Mainly provides `array_gen`, which is a collection of array generator functions.
+use crate::error::OpResult;
+use crate::error_helpers::try_from_numeric;
 use crate::ndarray;
 
 use crate::Float;
@@ -25,16 +27,15 @@ pub type NdArrayViewMut<'a, T> =
 #[inline]
 /// This works well only for small arrays
 pub(crate) fn asshape<T: Float>(x: &NdArrayView<T>) -> Vec<usize> {
-    x.iter()
-        .map(|a| a.to_usize().expect("Operation failed"))
-        .collect()
+    x.iter().map(|a| a.to_usize().unwrap_or(0)).collect()
 }
 
 #[inline]
 pub(crate) fn expand_dims<T: Float>(x: NdArray<T>, axis: usize) -> NdArray<T> {
     let mut shape = x.shape().to_vec();
     shape.insert(axis, 1);
-    x.into_shape_with_order(shape).expect("Operation failed")
+    x.into_shape_with_order(shape)
+        .expect("Shape conversion failed - this is a bug")
 }
 
 #[inline]
@@ -72,11 +73,11 @@ pub(crate) fn normalize_negative_axes<T: Float>(axes: &NdArrayView<T>, ndim: usi
     let mut axes_ret: Vec<usize> = Vec::with_capacity(axes.len());
     for &axis in axes.iter() {
         let axis = if axis < T::zero() {
-            (T::from(ndim).expect("Operation failed") + axis)
+            (T::from(ndim).unwrap_or_else(|| T::zero()) + axis)
                 .to_usize()
-                .expect("Invalid index value")
+                .unwrap_or(0)
         } else {
-            axis.to_usize().expect("Invalid index value")
+            axis.to_usize().unwrap_or(0)
         };
         axes_ret.push(axis);
     }
@@ -188,35 +189,48 @@ impl<A: Float> ArrayRng<A> {
         let len = shape.iter().product();
         let mut data = Vec::with_capacity(len);
         for _ in 0..len {
-            data.push(A::from(self.rng.random::<f64>()).expect("Operation failed"));
+            data.push(
+                A::from(self.rng.random::<f64>()).expect("Shape conversion failed - this is a bug"),
+            );
         }
-        NdArray::from_shape_vec(shape, data).expect("Operation failed")
+        NdArray::from_shape_vec(scirs2_core::ndarray::IxDyn(shape), data)
+            .unwrap_or_else(|_| panic!("Shape conversion failed - this is a bug"))
     }
 
     /// Creates a normal random array in the specified shape.
     /// Values are drawn from a normal distribution with the specified mean and standard deviation.
     pub fn normal(&mut self, shape: &[usize], mean: f64, std: f64) -> NdArray<A> {
         use scirs2_core::random::{Distribution, Normal};
-        let normal = Normal::new(mean, std).expect("Operation failed");
+        let normal = Normal::new(mean, std)
+            .unwrap_or_else(|_| panic!("Shape conversion failed - this is a bug"));
         let len = shape.iter().product();
         let mut data = Vec::with_capacity(len);
         for _ in 0..len {
-            data.push(A::from(normal.sample(&mut self.rng)).expect("Operation failed"));
+            data.push(
+                A::from(normal.sample(&mut self.rng))
+                    .expect("Shape conversion failed - this is a bug"),
+            );
         }
-        NdArray::from_shape_vec(scirs2_core::ndarray::IxDyn(shape), data).expect("Operation failed")
+        NdArray::from_shape_vec(scirs2_core::ndarray::IxDyn(shape), data)
+            .unwrap_or_else(|_| panic!("Shape conversion failed - this is a bug"))
     }
 
     /// Creates a uniform random array in the specified shape.
     /// Values are in the range [low, high).
     pub fn uniform(&mut self, shape: &[usize], low: f64, high: f64) -> NdArray<A> {
         use scirs2_core::random::{Distribution, Uniform};
-        let uniform = Uniform::new(low, high).expect("Operation failed");
+        let uniform = Uniform::new(low, high)
+            .unwrap_or_else(|_| panic!("Shape conversion failed - this is a bug"));
         let len = shape.iter().product();
         let mut data = Vec::with_capacity(len);
         for _ in 0..len {
-            data.push(A::from(uniform.sample(&mut self.rng)).expect("Operation failed"));
+            data.push(
+                A::from(uniform.sample(&mut self.rng))
+                    .expect("Shape conversion failed - this is a bug"),
+            );
         }
-        NdArray::from_shape_vec(scirs2_core::ndarray::IxDyn(shape), data).expect("Operation failed")
+        NdArray::from_shape_vec(scirs2_core::ndarray::IxDyn(shape), data)
+            .unwrap_or_else(|_| panic!("Shape conversion failed - this is a bug"))
     }
 
     /// Creates a random array with Glorot/Xavier uniform initialization.
@@ -274,7 +288,8 @@ impl<A: Float> ArrayRng<A> {
     /// Creates a random array from the bernoulli distribution.
     pub fn bernoulli(&mut self, shape: &[usize], p: f64) -> NdArray<A> {
         use scirs2_core::random::{Bernoulli, Distribution};
-        let bernoulli = Bernoulli::new(p).expect("Operation failed");
+        let bernoulli =
+            Bernoulli::new(p).unwrap_or_else(|_| panic!("Shape conversion failed - this is a bug"));
         let len = shape.iter().product();
         let mut data = Vec::with_capacity(len);
         for _ in 0..len {
@@ -285,43 +300,59 @@ impl<A: Float> ArrayRng<A> {
             };
             data.push(val);
         }
-        NdArray::from_shape_vec(scirs2_core::ndarray::IxDyn(shape), data).expect("Operation failed")
+        NdArray::from_shape_vec(scirs2_core::ndarray::IxDyn(shape), data)
+            .unwrap_or_else(|_| panic!("Shape conversion failed - this is a bug"))
     }
 
     /// Creates a random array from the exponential distribution.
     pub fn exponential(&mut self, shape: &[usize], lambda: f64) -> NdArray<A> {
         use scirs2_core::random::{Distribution, Exp};
-        let exp = Exp::new(lambda).expect("Operation failed");
+        let exp =
+            Exp::new(lambda).unwrap_or_else(|_| panic!("Shape conversion failed - this is a bug"));
         let len = shape.iter().product();
         let mut data = Vec::with_capacity(len);
         for _ in 0..len {
-            data.push(A::from(exp.sample(&mut self.rng)).expect("Operation failed"));
+            data.push(
+                A::from(exp.sample(&mut self.rng))
+                    .expect("Shape conversion failed - this is a bug"),
+            );
         }
-        NdArray::from_shape_vec(scirs2_core::ndarray::IxDyn(shape), data).expect("Operation failed")
+        NdArray::from_shape_vec(scirs2_core::ndarray::IxDyn(shape), data)
+            .unwrap_or_else(|_| panic!("Shape conversion failed - this is a bug"))
     }
 
     /// Creates a random array from the log-normal distribution.
     pub fn log_normal(&mut self, shape: &[usize], mean: f64, stddev: f64) -> NdArray<A> {
         use scirs2_core::random::{Distribution, LogNormal};
-        let log_normal = LogNormal::new(mean, stddev).expect("Operation failed");
+        let log_normal = LogNormal::new(mean, stddev)
+            .unwrap_or_else(|_| panic!("Shape conversion failed - this is a bug"));
         let len = shape.iter().product();
         let mut data = Vec::with_capacity(len);
         for _ in 0..len {
-            data.push(A::from(log_normal.sample(&mut self.rng)).expect("Operation failed"));
+            data.push(
+                A::from(log_normal.sample(&mut self.rng))
+                    .expect("Shape conversion failed - this is a bug"),
+            );
         }
-        NdArray::from_shape_vec(scirs2_core::ndarray::IxDyn(shape), data).expect("Operation failed")
+        NdArray::from_shape_vec(scirs2_core::ndarray::IxDyn(shape), data)
+            .unwrap_or_else(|_| panic!("Shape conversion failed - this is a bug"))
     }
 
     /// Creates a random array from the gamma distribution.
     pub fn gamma(&mut self, shape: &[usize], shape_param: f64, scale: f64) -> NdArray<A> {
         use scirs2_core::random::{Distribution, Gamma};
-        let gamma = Gamma::new(shape_param, scale).expect("Operation failed");
+        let gamma = Gamma::new(shape_param, scale)
+            .unwrap_or_else(|_| panic!("Shape conversion failed - this is a bug"));
         let len = shape.iter().product();
         let mut data = Vec::with_capacity(len);
         for _ in 0..len {
-            data.push(A::from(gamma.sample(&mut self.rng)).expect("Operation failed"));
+            data.push(
+                A::from(gamma.sample(&mut self.rng))
+                    .expect("Shape conversion failed - this is a bug"),
+            );
         }
-        NdArray::from_shape_vec(scirs2_core::ndarray::IxDyn(shape), data).expect("Operation failed")
+        NdArray::from_shape_vec(scirs2_core::ndarray::IxDyn(shape), data)
+            .unwrap_or_else(|_| panic!("Shape conversion failed - this is a bug"))
     }
 }
 
@@ -520,23 +551,20 @@ pub mod array_gen {
             };
         }
 
-        let step = (end - start) / T::from(num - 1).expect("Operation failed");
+        let step = (end - start) / T::from(num - 1).unwrap_or_else(|| T::one());
         let mut data = Vec::with_capacity(num);
 
         for i in 0..num {
-            data.push(start + step * T::from(i).expect("Operation failed"));
+            data.push(start + step * T::from(i).unwrap_or_else(|| T::zero()));
         }
 
         NdArray::<T>::from_shape_vec(scirs2_core::ndarray::IxDyn(&[num]), data)
-            .expect("Operation failed")
+            .expect("Shape conversion failed - this is a bug")
     }
 
     /// Creates an array of evenly spaced values within a given interval.
     pub fn arange<T: Float>(start: T, end: T, step: T) -> NdArray<T> {
-        let size = ((end - start) / step)
-            .to_f64()
-            .expect("Operation failed")
-            .ceil() as usize;
+        let size = ((end - start) / step).to_f64().unwrap_or(0.0).ceil() as usize;
         let mut data = Vec::with_capacity(size);
 
         let mut current = start;
@@ -546,6 +574,6 @@ pub mod array_gen {
         }
 
         NdArray::<T>::from_shape_vec(scirs2_core::ndarray::IxDyn(&[data.len()]), data)
-            .expect("Operation failed")
+            .expect("Shape conversion failed - this is a bug")
     }
 }

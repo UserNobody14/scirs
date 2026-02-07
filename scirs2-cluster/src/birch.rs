@@ -104,7 +104,7 @@ struct CFNode<F: Float> {
     cfs: Vec<ClusteringFeature<F>>,
     /// Child nodes (only for non-leaf nodes)
     children: Vec<CFNode<F>>,
-    /// Parent node reference (would need Rc<RefCell> in real implementation)
+    /// Parent node reference (would need `Rc<RefCell>` in real implementation)
     parent_index: Option<usize>,
 }
 

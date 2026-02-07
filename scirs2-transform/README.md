@@ -1,13 +1,13 @@
 # SciRS2 Transform
 
 [![crates.io](https://img.shields.io/crates/v/scirs2-transform.svg)](https://crates.io/crates/scirs2-transform)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](#license)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](#license)
 [![Documentation](https://img.shields.io/docsrs/scirs2-transform)](https://docs.rs/scirs2-transform)
 [![Tests](https://img.shields.io/badge/tests-100%20passing-brightgreen.svg)](#testing)
 
-**Production-ready data transformation library for machine learning in Rust (v0.1.0)**
+**Production-ready data transformation library for machine learning in Rust (v0.1.4)**
 
-This crate provides comprehensive data transformation utilities for the SciRS2 ecosystem (v0.1.0). Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), this module is designed to match and exceed the functionality of scikit-learn's preprocessing module while leveraging Rust's performance and safety guarantees with enhanced distributed processing capabilities.
+This crate provides comprehensive data transformation utilities for the SciRS2 ecosystem (v0.1.4). Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), this module is designed to match and exceed the functionality of scikit-learn's preprocessing module while leveraging Rust's performance and safety guarantees with enhanced distributed processing capabilities.
 
 ## 🚀 Features
 
@@ -53,14 +53,14 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scirs2-transform = "0.1.2"
+scirs2-transform = "0.1.4"
 ```
 
 For parallel processing and enhanced performance:
 
 ```toml
 [dependencies]
-scirs2-transform = { version = "0.1.2", features = ["parallel"] }
+scirs2-transform = { version = "0.1.4", features = ["parallel"] }
 ```
 
 ## 🎯 Quick Start
@@ -320,8 +320,6 @@ cargo build --release
 
 This project is dual-licensed under either:
 
-- [MIT License](LICENSE-MIT)
-- [Apache License Version 2.0](LICENSE-APACHE)
 
 You may choose to use either license.
 
@@ -333,4 +331,4 @@ You may choose to use either license.
 
 ---
 
-**Ready for Production**: SciRS2 Transform v0.1.0 provides production-ready data transformation capabilities with performance that meets or exceeds established Python libraries while offering Rust's safety and performance guarantees.
+**Ready for Production**: SciRS2 Transform v0.1.4 provides production-ready data transformation capabilities with performance that meets or exceeds established Python libraries while offering Rust's safety and performance guarantees.

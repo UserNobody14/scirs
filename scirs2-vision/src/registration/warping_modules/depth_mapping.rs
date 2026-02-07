@@ -244,7 +244,7 @@ pub fn compute_depth_map(
     })
 }
 
-/// Convert GrayImage to Array2<f32>
+/// Convert GrayImage to `Array2<f32>`
 #[allow(dead_code)]
 fn image_to_array2(image: &GrayImage) -> Array2<f32> {
     let (width, height) = image.dimensions();

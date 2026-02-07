@@ -35,7 +35,7 @@ num_cpus = { workspace = true }
 # Optional serialization formats
 serde_yaml = { workspace = true, optional = true }
 rmp-serde = { workspace = true, optional = true }
-serde_cbor = { workspace = true, optional = true }
+ciborium = { workspace = true, optional = true }
 
 # Optional compression algorithms
 lz4 = { workspace = true, optional = true }
@@ -70,7 +70,7 @@ json = []
 binary = []
 yaml = ["serde_yaml"]
 msgpack = ["rmp-serde"]
-cbor = ["serde_cbor"]
+cbor = ["ciborium"]
 all_formats = ["yaml", "msgpack", "cbor"]
 
 # Compression features

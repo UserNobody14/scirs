@@ -1,13 +1,13 @@
 # scirs2-text
 
 [![crates.io](https://img.shields.io/crates/v/scirs2-text.svg)](https://crates.io/crates/scirs2-text)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)]
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)]
 [![Documentation](https://img.shields.io/docsrs/scirs2-text)](https://docs.rs/scirs2-text)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]
 [![Tests](https://img.shields.io/badge/tests-160%20passing-brightgreen.svg)]
 [![Production Ready](https://img.shields.io/badge/status-production%20ready-green.svg)]
 
-**Production-ready text processing module** for SciRS2 (Scientific Computing in Rust - Next Generation) v0.1.0. Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), this crate provides comprehensive, high-performance text processing, natural language processing, and machine learning text utilities optimized for scientific and industrial applications with ecosystem consistency.
+**Production-ready text processing module** for SciRS2 (Scientific Computing in Rust - Next Generation) v0.1.4. Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), this crate provides comprehensive, high-performance text processing, natural language processing, and machine learning text utilities optimized for scientific and industrial applications with ecosystem consistency.
 
 > **🚀 Production Status**: Version 0.1.0 (SciRS2 POLICY & Enhanced Performance) is **production-ready** with stable APIs, comprehensive test coverage, proven performance, and ecosystem consistency through scirs2-core abstractions.
 
@@ -85,7 +85,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scirs2-text = "0.1.2"
+scirs2-text = "0.1.4"
 ```
 
 ## Quick Start
@@ -352,7 +352,7 @@ let similar = word2vec.most_similar("hello", 5)?;
 
 ## License
 
-This project is dual-licensed under MIT OR Apache-2.0 license.
+Licensed under the Apache License 2.0. See LICENSE for details.
 
 ## Contributing
 

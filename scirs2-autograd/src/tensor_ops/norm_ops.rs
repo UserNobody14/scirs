@@ -53,13 +53,15 @@ impl<F: Float> Op<F> for FrobeniusNormOp {
         for &elem in input_array.iter() {
             sum_squared += elem * elem;
         }
-        let norm = sum_squared.sqrt();
 
-        // Avoid division by zero
-        if norm < F::epsilon() * F::from(10.0).expect("Failed to convert constant to float") {
+        // Avoid division by zero - check BEFORE sqrt for better numerical stability
+        if sum_squared < F::epsilon() * F::from(10.0).expect("Failed to convert constant to float")
+        {
             ctx.append_input_grad(0, None);
             return;
         }
+
+        let norm = sum_squared.sqrt();
 
         // Compute gradient: input / norm * grad_output
         let grad_scalar = grad_output_array[[]];

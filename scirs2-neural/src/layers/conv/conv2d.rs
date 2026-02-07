@@ -144,6 +144,18 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + NumAssign + 'static> Conv2
         self
     }
 
+    /// Calculate the total number of parameters in this Conv2D layer
+    ///
+    /// Returns the sum of weight parameters and bias parameters.
+    /// Weight parameters: out_channels * in_channels * kernel_h * kernel_w
+    /// Bias parameters: out_channels (if use_bias is true, 0 otherwise)
+    pub fn num_parameters(&self) -> usize {
+        let weight_params =
+            self.out_channels * self.in_channels * self.kernel_size.0 * self.kernel_size.1;
+        let bias_params = if self.use_bias { self.out_channels } else { 0 };
+        weight_params + bias_params
+    }
+
     /// Calculate output dimensions for given input dimensions
     fn calculate_output_dims(&self, input_h: usize, input_w: usize) -> (usize, usize) {
         let (kh, kw) = self.kernel_size;

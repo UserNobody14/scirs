@@ -5,6 +5,73 @@ All notable changes to the SciRS2 project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-02-07
+
+### 🐛 Bug Fix Release
+
+This release addresses critical autograd optimizer issues reported in GitHub issue #100.
+
+### Fixed
+
+#### Autograd Module (scirs2-autograd)
+- **Optimizer Update Mechanism** (Issue #100)
+  - Fixed `Optimizer::update()` to actually update variables in `VariableEnvironment`
+  - Previously, `update()` computed new parameter values but never wrote them back
+  - Users no longer need to manually mutate variables after optimizer steps
+  - All optimizers (Adam, SGD, AdaGrad, etc.) now work correctly out of the box
+
+- **ComputeContext Input Access Warnings** (Issue #100)
+  - Eliminated "Index out of bounds in ComputeContext::input" warning spam
+  - Modified `ComputeContext::input()` to gracefully handle missing inputs
+  - Returns dummy scalar array instead of printing unhelpful warnings
+  - Fixes console spam during gradient computation with reshape operations
+
+### Added
+
+#### Autograd Optimizer API Enhancements
+- **New Methods in `Optimizer` Trait**
+  - Added `get_update_tensors()` for manual control over update application
+  - Added `apply_update_tensors()` helper for explicit update application
+  - Provides fine-grained control for advanced optimization scenarios
+
+- **Improved Documentation**
+  - Updated Adam optimizer documentation with working examples
+  - Added examples showing both automatic and manual update APIs
+  - Clarified optimizer usage patterns for training loops
+
+### Changed
+
+#### Dependency Cleanup
+- **Removed Unused Dependencies**
+  - Removed `plotters` from benches/Cargo.toml (unused, criterion handles all benchmarking)
+  - Removed `oxicode` from scirs2-graph/Cargo.toml (only mentioned in comments, not used)
+  - Removed `flate2` from scirs2-datasets/Cargo.toml (already available via transitive dependencies from zip and ureq)
+  - Benefits: Faster build times, reduced dependency tree complexity, better maintainability
+
+#### Autograd Optimizer Behavior
+- **`Optimizer::update()` now actually updates variables** (Breaking fix)
+  - Previous no-op behavior was a bug, not a feature
+  - Existing code relying on manual mutation will now have duplicate updates
+  - Migration: Remove manual variable mutation code after `optimizer.update()` calls
+
+#### API Deprecations
+- **`get_update_op()` deprecated** in favor of `get_update_tensors()` + `apply_update_tensors()`
+  - Old method still works but new API provides better control
+  - See documentation for migration examples
+
+### Technical Details
+
+#### Test Coverage
+- Added comprehensive regression tests for issue #100
+- `test_issue_100_no_warnings_and_optimizer_works`: Verifies no warning spam and working updates
+- `test_issue_100_get_update_tensors_api`: Tests new manual update API
+- All 121 autograd tests passing with zero warnings
+
+#### Files Modified
+- `scirs2-autograd/src/op.rs`: ComputeContext input handling
+- `scirs2-autograd/src/optimizers/mod.rs`: Optimizer trait implementation
+- `scirs2-autograd/src/optimizers/adam.rs`: Documentation updates
+
 ## [0.1.3] - 2026-01-25
 
 ### 🔧 Maintenance & Enhancement Release

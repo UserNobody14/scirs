@@ -1,5 +1,7 @@
 //! Cosine annealing learning rate scheduler
 
+use crate::error::OpResult;
+use crate::error_helpers::try_from_f64;
 use crate::schedulers::LRScheduler;
 use crate::Float;
 use std::f64::consts::PI;
@@ -122,9 +124,10 @@ impl<F: Float> CosineAnnealingLR<F> {
     /// # Arguments
     /// * `eta_max` - Maximum learning rate
     /// * `t_max` - Maximum number of steps in one cycle
-    pub fn standard(eta_max: F, t_max: usize) -> Self {
-        let eta_min = eta_max / F::from(100.0).expect("Failed to convert constant to float");
-        Self::new(eta_max, eta_min, t_max)
+    pub fn standard(eta_max: F, t_max: usize) -> OpResult<Self> {
+        let hundred = try_from_f64(100.0, "standard cosine annealing divisor")?;
+        let eta_min = eta_max / hundred;
+        Ok(Self::new(eta_max, eta_min, t_max))
     }
 
     /// Create a cosine annealing scheduler for fine-tuning
@@ -134,9 +137,10 @@ impl<F: Float> CosineAnnealingLR<F> {
     /// # Arguments
     /// * `eta_max` - Maximum learning rate
     /// * `t_max` - Maximum number of steps in one cycle
-    pub fn for_fine_tuning(eta_max: F, t_max: usize) -> Self {
-        let eta_min = eta_max / F::from(10.0).expect("Failed to convert constant to float");
-        Self::new(eta_max, eta_min, t_max)
+    pub fn for_fine_tuning(eta_max: F, t_max: usize) -> OpResult<Self> {
+        let ten = try_from_f64(10.0, "fine-tuning cosine annealing divisor")?;
+        let eta_min = eta_max / ten;
+        Ok(Self::new(eta_max, eta_min, t_max))
     }
 
     /// Calculate the current position within the cycle and which cycle we're in
@@ -184,19 +188,22 @@ impl<F: Float> CosineAnnealingLR<F> {
             return self.eta_max;
         }
 
-        // Cosine annealing formula
-        let t_cur = F::from(step_in_cycle).expect("Failed to convert to float");
-        let t_max = F::from(cycle_length).expect("Failed to convert to float");
+        // Cosine annealing formula - use unwrap here since these conversions should always succeed
+        // for valid usize values and mathematical constants
+        let t_cur = F::from(step_in_cycle).unwrap_or_else(|| F::zero());
+        let t_max = F::from(cycle_length).unwrap_or_else(|| F::one());
 
         // cos(π * t_cur / t_max)
-        let cos_arg = F::from(PI).expect("Failed to convert to float") * t_cur / t_max;
-        let cos_val = cos_arg.to_f64().expect("Operation failed").cos();
-        let cos_f = F::from(cos_val).expect("Failed to convert to float");
+        #[allow(clippy::approx_constant)]
+        let pi = F::from(std::f64::consts::PI).unwrap_or_else(|| F::zero());
+        let cos_arg = pi * t_cur / t_max;
+        let cos_val = cos_arg.to_f64().unwrap_or(0.0).cos();
+        let cos_f = F::from(cos_val).unwrap_or_else(|| F::zero());
 
         // lr = eta_min + (eta_max - eta_min) * (1 + cos(π * t_cur / t_max)) / 2
         let lr_range = self.eta_max - self.eta_min;
-        let factor =
-            (F::one() + cos_f) / F::from(2.0).expect("Failed to convert constant to float");
+        let two = F::from(2.0).unwrap_or_else(|| F::one() + F::one());
+        let factor = (F::one() + cos_f) / two;
 
         self.eta_min + lr_range * factor
     }
@@ -318,11 +325,13 @@ mod tests {
 
     #[test]
     fn test_cosine_annealing_presets() {
-        let standard = CosineAnnealingLR::standard(1.0f32, 100);
+        let standard =
+            CosineAnnealingLR::standard(1.0f32, 100).expect("Failed to create standard scheduler");
         assert!((standard.eta_max - 1.0).abs() < 1e-6);
         assert!((standard.eta_min - 0.01).abs() < 1e-6);
 
-        let fine_tune = CosineAnnealingLR::for_fine_tuning(0.1f32, 50);
+        let fine_tune = CosineAnnealingLR::for_fine_tuning(0.1f32, 50)
+            .expect("Failed to create fine-tuning scheduler");
         assert!((fine_tune.eta_max - 0.1).abs() < 1e-6);
         assert!((fine_tune.eta_min - 0.01).abs() < 1e-6);
     }

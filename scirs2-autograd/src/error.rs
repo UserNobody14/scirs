@@ -35,6 +35,38 @@ pub enum OpError {
     /// Other error
     #[error("Error: {0}")]
     Other(String),
+
+    /// Type conversion error
+    #[error("Type conversion failed: {context} (from {from_type} to {to_type})")]
+    ConversionError {
+        context: String,
+        from_type: String,
+        to_type: String,
+    },
+
+    /// Numeric value out of range error
+    #[error("Numeric value out of range: {context} (value: {value}, target: {target_type})")]
+    NumericRangeError {
+        context: String,
+        value: String,
+        target_type: String,
+    },
+
+    /// Lock poisoned error
+    #[error("Lock poisoned: {context} - {details}")]
+    LockPoisonError { context: String, details: String },
+
+    /// Thread join failed error
+    #[error("Thread join failed: {context}")]
+    ThreadJoinError { context: String },
+
+    /// Invalid slice or index error
+    #[error("Invalid slice or index: {context}")]
+    SliceError { context: String },
+
+    /// Value error for invalid input values
+    #[error("Value error: {0}")]
+    ValueError(String),
 }
 
 /// Error during tensor's evaluation.

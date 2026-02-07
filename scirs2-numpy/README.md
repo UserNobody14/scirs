@@ -17,4 +17,4 @@ This crate is primarily used internally by the scirs2-python bindings. For direc
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file in the root directory for details.
+Licensed under the Apache License 2.0. See LICENSE for details.

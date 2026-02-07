@@ -82,12 +82,12 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scirs2_optimize = "0.1.0"
+scirs2_optimize = "0.1.4"
 ndarray = "0.16"
 
 # Optional features
 scirs2_optimize = { 
-    version = "0.1.0", 
+    version = "0.1.4", 
     features = ["parallel", "simd", "async"] 
 }
 ```
@@ -251,7 +251,7 @@ We welcome contributions! Areas where help is appreciated:
 
 ## License
 
-This project is dual-licensed under MIT and Apache 2.0 licenses. See [LICENSE](../LICENSE) for details.
+Licensed under the Apache License 2.0. See LICENSE for details.
 
 ---
 

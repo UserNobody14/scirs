@@ -1,14 +1,35 @@
+use super::chunk_format::{detect_format_version, CompressionType, FormatVersion};
 use super::chunked::{ChunkedArray, ChunkingStrategy, OPTIMAL_CHUNK_SIZE};
+use super::out_of_core_v2::OutOfCoreArrayV2;
 use super::validation;
 use crate::error::{CoreError, ErrorContext, ErrorLocation};
 use ::ndarray::{Array, ArrayBase, Data, Dimension};
 use ::serde::{Deserialize, Serialize};
 use oxicode::{config, serde as oxicode_serde};
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::{BufReader, Read, Write};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
+
+/// Internal implementation storage for out-of-core arrays
+#[derive(Debug)]
+enum OutOfCoreImpl<A, D>
+where
+    A: Clone + Serialize + for<'de> Deserialize<'de>,
+    D: Dimension + Serialize + for<'de> Deserialize<'de>,
+{
+    /// V1 format: Full serialization (legacy)
+    V1 {
+        shape: Vec<usize>,
+        file_path: PathBuf,
+        strategy: ChunkingStrategy,
+        size: usize,
+        is_temp: bool,
+    },
+    /// V2 format: Chunked serialization with efficient seeking
+    V2(OutOfCoreArrayV2<A, D>),
+}
 
 /// An array that stores data on disk to reduce memory usage
 #[derive(Debug)]
@@ -17,16 +38,8 @@ where
     A: Clone + Serialize + for<'de> Deserialize<'de>,
     D: Dimension + Serialize + for<'de> Deserialize<'de>,
 {
-    /// The shape of the array
-    pub shape: Vec<usize>,
-    /// The path to the file containing the data
-    pub file_path: PathBuf,
-    /// The chunking strategy used for reading/writing
-    pub strategy: ChunkingStrategy,
-    /// The total number of elements
-    pub size: usize,
-    /// Whether the file is temporary and should be deleted on drop
-    is_temp: bool,
+    /// Internal implementation (V1 or V2)
+    implementation: OutOfCoreImpl<A, D>,
     /// Phantom data for type parameters
     phantom: PhantomData<(A, D)>,
 }
@@ -36,8 +49,71 @@ where
     A: Clone + Serialize + for<'de> Deserialize<'de>,
     D: Dimension + Serialize + for<'de> Deserialize<'de>,
 {
+    /// Get the shape of the array
+    pub fn shape(&self) -> &[usize] {
+        match &self.implementation {
+            OutOfCoreImpl::V1 { shape, .. } => shape,
+            OutOfCoreImpl::V2(v2) => &v2.header.shape,
+        }
+    }
+
+    /// Get the file path
+    pub fn file_path(&self) -> &Path {
+        match &self.implementation {
+            OutOfCoreImpl::V1 { file_path, .. } => file_path,
+            OutOfCoreImpl::V2(v2) => &v2.file_path,
+        }
+    }
+
+    /// Get the chunking strategy
+    pub fn strategy(&self) -> ChunkingStrategy {
+        match &self.implementation {
+            OutOfCoreImpl::V1 { strategy, .. } => *strategy,
+            OutOfCoreImpl::V2(_) => ChunkingStrategy::Auto, // V2 handles its own chunking
+        }
+    }
+
+    /// Get the total size in elements
+    pub fn size(&self) -> usize {
+        match &self.implementation {
+            OutOfCoreImpl::V1 { size, .. } => *size,
+            OutOfCoreImpl::V2(v2) => v2.header.total_elements,
+        }
+    }
+}
+
+impl<A, D> OutOfCoreArray<A, D>
+where
+    A: Clone + Serialize + for<'de> Deserialize<'de>,
+    D: Dimension + Serialize + for<'de> Deserialize<'de>,
+{
     /// Create a new out-of-core array with the given data and file path
+    ///
+    /// This uses the V2 format by default for efficient chunk-based access.
+    /// Use `new_v1()` if you need backward compatibility with the V1 format.
     pub fn new<S>(
+        data: &ArrayBase<S, D>,
+        file_path: &Path,
+        strategy: ChunkingStrategy,
+    ) -> Result<Self, CoreError>
+    where
+        S: Data<Elem = A>,
+    {
+        validation::check_not_empty(data)?;
+
+        // Use V2 format by default with no compression
+        let v2 = OutOfCoreArrayV2::new_streaming(data, file_path, strategy, CompressionType::None)?;
+
+        Ok(Self {
+            implementation: OutOfCoreImpl::V2(v2),
+            phantom: PhantomData,
+        })
+    }
+
+    /// Create a new out-of-core array using V1 format (legacy)
+    ///
+    /// This method is provided for backward compatibility. New code should use `new()` instead.
+    pub fn new_v1<S>(
         data: &ArrayBase<S, D>,
         file_path: &Path,
         strategy: ChunkingStrategy,
@@ -76,16 +152,103 @@ where
             .map_err(|e| CoreError::IoError(ErrorContext::new(e.to_string())))?;
 
         Ok(Self {
-            shape,
-            file_path: file_path.to_path_buf(),
-            strategy,
-            size,
-            is_temp: false,
+            implementation: OutOfCoreImpl::V1 {
+                shape,
+                file_path: file_path.to_path_buf(),
+                strategy,
+                size,
+                is_temp: false,
+            },
+            phantom: PhantomData,
+        })
+    }
+
+    /// Open an existing out-of-core array file with automatic version detection
+    ///
+    /// This method detects whether the file is in V1 or V2 format and loads it accordingly.
+    pub fn open(file_path: &Path) -> Result<Self, CoreError> {
+        let file = File::open(file_path)
+            .map_err(|e| CoreError::IoError(ErrorContext::new(e.to_string())))?;
+
+        let mut reader = BufReader::new(file);
+
+        // Detect format version
+        let version = detect_format_version(&mut reader)?;
+
+        match version {
+            FormatVersion::V2 => {
+                // Use V2 implementation
+                let v2 = OutOfCoreArrayV2::open(file_path)?;
+                Ok(Self {
+                    implementation: OutOfCoreImpl::V2(v2),
+                    phantom: PhantomData,
+                })
+            }
+            FormatVersion::V1 => {
+                // Load V1 format - we need to read the entire array to get metadata
+                drop(reader);
+                let mut file = File::open(file_path)
+                    .map_err(|e| CoreError::IoError(ErrorContext::new(e.to_string())))?;
+
+                let mut buffer = Vec::new();
+                file.read_to_end(&mut buffer)
+                    .map_err(|e| CoreError::IoError(ErrorContext::new(e.to_string())))?;
+
+                let cfg = config::standard();
+                let (array, _len): (Array<A, D>, usize) =
+                    oxicode_serde::decode_owned_from_slice(&buffer, cfg).map_err(|e| {
+                        CoreError::ValidationError(
+                            ErrorContext::new(format!("{e}"))
+                                .with_location(ErrorLocation::new(file!(), line!())),
+                        )
+                    })?;
+
+                let shape = array.shape().to_vec();
+                let size = array.len();
+
+                Ok(Self {
+                    implementation: OutOfCoreImpl::V1 {
+                        shape,
+                        file_path: file_path.to_path_buf(),
+                        strategy: ChunkingStrategy::Auto,
+                        size,
+                        is_temp: false,
+                    },
+                    phantom: PhantomData,
+                })
+            }
+        }
+    }
+
+    /// Migrate a V1 format file to V2 format
+    ///
+    /// This creates a new V2 file at the specified path with the data from this array.
+    /// Returns a new `OutOfCoreArray` using the V2 format.
+    pub fn migrate_to_v2(
+        &self,
+        new_file_path: &Path,
+        compression: CompressionType,
+    ) -> Result<Self, CoreError> {
+        // Load the entire array
+        let data = self.load()?;
+
+        // Create a new V2 array with the data
+        let v2 = OutOfCoreArrayV2::new_streaming(
+            &data,
+            new_file_path,
+            ChunkingStrategy::Auto,
+            compression,
+        )?;
+
+        Ok(Self {
+            implementation: OutOfCoreImpl::V2(v2),
             phantom: PhantomData,
         })
     }
 
     /// Create a new out-of-core array with a temporary file
+    ///
+    /// Uses V2 format by default for efficient chunk-based access.
     pub fn new_temp<S>(
         data: &ArrayBase<S, D>,
         strategy: ChunkingStrategy,
@@ -102,39 +265,58 @@ where
             .persist(&file_path)
             .map_err(|e| CoreError::IoError(ErrorContext::new(e.to_string())))?;
 
-        let mut result = Self::new(data, &file_path, strategy)?;
-        result.is_temp = true;
+        // Create V2 array
+        let mut v2 =
+            OutOfCoreArrayV2::new_streaming(data, &file_path, strategy, CompressionType::None)?;
 
-        Ok(result)
+        // Mark as temporary
+        v2.set_temp(true);
+
+        Ok(Self {
+            implementation: OutOfCoreImpl::V2(v2),
+            phantom: PhantomData,
+        })
     }
 
     /// Load the entire array into memory
     pub fn load(&self) -> Result<Array<A, D>, CoreError> {
-        let mut file = File::open(&self.file_path)
-            .map_err(|e| CoreError::IoError(ErrorContext::new(e.to_string())))?;
+        match &self.implementation {
+            OutOfCoreImpl::V2(v2) => {
+                // Use efficient V2 loading
+                v2.load()
+            }
+            OutOfCoreImpl::V1 { file_path, .. } => {
+                // V1 format: load entire file
+                let mut file = File::open(file_path)
+                    .map_err(|e| CoreError::IoError(ErrorContext::new(e.to_string())))?;
 
-        let mut buffer = Vec::new();
-        file.read_to_end(&mut buffer)
-            .map_err(|e| CoreError::IoError(ErrorContext::new(e.to_string())))?;
+                let mut buffer = Vec::new();
+                file.read_to_end(&mut buffer)
+                    .map_err(|e| CoreError::IoError(ErrorContext::new(e.to_string())))?;
 
-        let cfg = config::standard();
-        let (array, _len): (Array<A, D>, usize) =
-            oxicode_serde::decode_owned_from_slice(&buffer, cfg).map_err(|e| {
-                CoreError::ValidationError(
-                    ErrorContext::new(format!("{e}"))
-                        .with_location(ErrorLocation::new(file!(), line!())),
-                )
-            })?;
+                let cfg = config::standard();
+                let (array, _len): (Array<A, D>, usize) =
+                    oxicode_serde::decode_owned_from_slice(&buffer, cfg).map_err(|e| {
+                        CoreError::ValidationError(
+                            ErrorContext::new(format!("{e}"))
+                                .with_location(ErrorLocation::new(file!(), line!())),
+                        )
+                    })?;
 
-        Ok(array)
+                Ok(array)
+            }
+        }
     }
 
     /// Load a chunk of the array into memory
+    ///
+    /// For V2 format, this efficiently seeks to and loads only the requested chunk.
+    /// For V1 format (legacy), this loads the entire array and extracts the chunk.
     pub fn load_chunk(&self, chunkindex: usize) -> Result<Array<A, D>, CoreError> {
         if chunkindex >= self.num_chunks() {
             return Err(CoreError::IndexError(
                 ErrorContext::new(format!(
-                    "Chunk _index out of bounds: {} >= {}",
+                    "Chunk index out of bounds: {} >= {}",
                     chunkindex,
                     self.num_chunks()
                 ))
@@ -142,73 +324,123 @@ where
             ));
         }
 
-        // Calculate chunk size and offsets
-        let chunk_size = self.get_chunk_size();
-        let total_size = self.size;
+        match &self.implementation {
+            OutOfCoreImpl::V2(v2) => {
+                // Use efficient V2 chunk loading - only reads the requested chunk!
+                let chunk_data = v2.load_chunk_v2(chunkindex)?;
 
-        // Calculate start and end indices for this chunk
-        let start_idx = chunkindex * chunk_size;
-        let end_idx = std::cmp::min((chunkindex + 1) * chunk_size, total_size);
-        let actual_chunk_size = end_idx - start_idx;
+                // Convert Vec<A> to Array<A, D>
+                // We need to determine the chunk shape
+                let chunk_shape = self.calculate_chunk_shape(chunkindex, chunk_data.len())?;
 
-        // Open the file
-        let mut file = File::open(&self.file_path)
-            .map_err(|e| CoreError::IoError(ErrorContext::new(e.to_string())))?;
+                // Create array from data
+                let dyn_array =
+                    Array::from_shape_vec(crate::ndarray::IxDyn(&chunk_shape), chunk_data)
+                        .map_err(|e| {
+                            CoreError::DimensionError(
+                                ErrorContext::new(format!("Failed to create chunk array: {e}"))
+                                    .with_location(ErrorLocation::new(file!(), line!())),
+                            )
+                        })?;
 
-        // Read the header to get overall structure
-        let mut header_buf = Vec::new();
-        // Read the first 1KB to extract metadata (adjust if needed)
-        file.read_to_end(&mut header_buf)
-            .map_err(|e| CoreError::IoError(ErrorContext::new(e.to_string())))?;
+                // Convert to target dimension type
+                dyn_array.into_dimensionality::<D>().map_err(|e| {
+                    CoreError::DimensionError(
+                        ErrorContext::new(format!("Failed to convert chunk dimension: {e}"))
+                            .with_location(ErrorLocation::new(file!(), line!())),
+                    )
+                })
+            }
+            OutOfCoreImpl::V1 {
+                file_path,
+                strategy,
+                size,
+                ..
+            } => {
+                // V1 format: inefficient - must load entire array
+                // This is the old behavior kept for backward compatibility
 
-        // Deserialize the whole array for now
-        // Note: In a more efficient implementation, we would:
-        // 1. Store metadata separately in the file header
-        // 2. Use custom serialization to write chunks sequentially
-        // 3. Keep track of chunk offsets in the file
-        let cfg = config::standard();
-        let (fullarray, _len): (Array<A, D>, usize) =
-            oxicode_serde::decode_owned_from_slice(&header_buf, cfg).map_err(|e| {
-                CoreError::ValidationError(
-                    ErrorContext::new(format!("{e}"))
-                        .with_location(ErrorLocation::new(file!(), line!())),
+                // Calculate chunk size and offsets
+                let chunk_size = self.get_chunk_size();
+                let total_size = *size;
+
+                // Calculate start and end indices for this chunk
+                let start_idx = chunkindex * chunk_size;
+                let end_idx = std::cmp::min((chunkindex + 1) * chunk_size, total_size);
+                let actual_chunk_size = end_idx - start_idx;
+
+                // Open the file
+                let mut file = File::open(file_path)
+                    .map_err(|e| CoreError::IoError(ErrorContext::new(e.to_string())))?;
+
+                // Read entire file
+                let mut header_buf = Vec::new();
+                file.read_to_end(&mut header_buf)
+                    .map_err(|e| CoreError::IoError(ErrorContext::new(e.to_string())))?;
+
+                // Deserialize the whole array
+                let cfg = config::standard();
+                let (fullarray, _len): (Array<A, D>, usize) =
+                    oxicode_serde::decode_owned_from_slice(&header_buf, cfg).map_err(|e| {
+                        CoreError::ValidationError(
+                            ErrorContext::new(format!("{e}"))
+                                .with_location(ErrorLocation::new(file!(), line!())),
+                        )
+                    })?;
+
+                // Extract chunk from full array
+                let shape = self.shape();
+                let mut chunkshape = shape.to_vec();
+
+                // Adjust the first dimension for this chunk
+                if !chunkshape.is_empty() {
+                    let first_dim_size =
+                        total_size / chunkshape.iter().skip(1).product::<usize>().max(1);
+                    let first_dim_chunk_size =
+                        actual_chunk_size / chunkshape.iter().skip(1).product::<usize>().max(1);
+                    chunkshape[0] = first_dim_chunk_size.min(first_dim_size);
+                }
+
+                // Extract chunk data
+                let cloned_array = fullarray.clone();
+                let chunk_dynamic = cloned_array.to_shape(chunkshape).map_err(|e| {
+                    CoreError::DimensionError(
+                        ErrorContext::new(format!("{e}"))
+                            .with_location(ErrorLocation::new(file!(), line!())),
+                    )
+                })?;
+
+                // Convert to target dimension type
+                Self::safe_dimensionality_conversion(chunk_dynamic.to_owned(), "chunk").map_err(
+                    |e| {
+                        CoreError::DimensionError(
+                            ErrorContext::new(format!("{e}"))
+                                .with_location(ErrorLocation::new(file!(), line!())),
+                        )
+                    },
                 )
-            })?;
+            }
+        }
+    }
 
-        // For now, extract the chunk from the full array
-        // In a real implementation, we would seek to the correct position and read only the chunk
+    /// Calculate the shape of a chunk given its index and element count
+    fn calculate_chunk_shape(
+        &self,
+        _chunk_index: usize,
+        chunk_elements: usize,
+    ) -> Result<Vec<usize>, CoreError> {
+        let shape = self.shape();
+        let mut chunk_shape = shape.to_vec();
 
-        // Create a new array with the proper shape for this chunk
-        let mut chunkshape = self.shape.clone();
-
-        // Adjust the first dimension for this chunk
-        if !chunkshape.is_empty() {
-            let first_dim_size = self.size / chunkshape.iter().skip(1).product::<usize>().max(1);
-            let first_dim_chunk_size =
-                actual_chunk_size / chunkshape.iter().skip(1).product::<usize>().max(1);
-            chunkshape[0] = first_dim_chunk_size.min(first_dim_size);
+        if chunk_shape.is_empty() {
+            return Ok(vec![chunk_elements]);
         }
 
-        // Extract just this chunk's data from the full array
-        // This is inefficient; a better implementation would read directly from disk
-        let cloned_array = fullarray.clone();
-        let chunk_dynamic = cloned_array.to_shape(chunkshape).map_err(|e| {
-            CoreError::DimensionError(
-                ErrorContext::new(format!("{e}"))
-                    .with_location(ErrorLocation::new(file!(), line!())),
-            )
-        })?;
+        // Adjust first dimension based on chunk size
+        let other_dims_product: usize = chunk_shape.iter().skip(1).product::<usize>().max(1);
+        chunk_shape[0] = chunk_elements / other_dims_product;
 
-        // Convert back to the original dimension type with proper validation
-        let chunk = Self::safe_dimensionality_conversion(chunk_dynamic.to_owned(), "chunk")
-            .map_err(|e| {
-                CoreError::DimensionError(
-                    ErrorContext::new(format!("{e}"))
-                        .with_location(ErrorLocation::new(file!(), line!())),
-                )
-            })?;
-
-        Ok(chunk)
+        Ok(chunk_shape)
     }
 
     /// Safely convert an array to the target dimension type with detailed error reporting.
@@ -396,31 +628,52 @@ where
 
     /// Get the chunk size based on the chunking strategy
     fn get_chunk_size(&self) -> usize {
-        match self.strategy {
-            ChunkingStrategy::Auto => OPTIMAL_CHUNK_SIZE / std::mem::size_of::<A>(),
-            ChunkingStrategy::Fixed(size) => size,
-            ChunkingStrategy::FixedBytes(bytes) => bytes / std::mem::size_of::<A>(),
-            ChunkingStrategy::NumChunks(n) => self.size.div_ceil(n),
-            ChunkingStrategy::Advanced(_) => OPTIMAL_CHUNK_SIZE / std::mem::size_of::<A>(),
+        match &self.implementation {
+            OutOfCoreImpl::V2(v2) => {
+                // V2 manages its own chunks
+                if v2.chunk_index.is_empty() {
+                    0
+                } else {
+                    v2.chunk_index
+                        .get_entry(0)
+                        .map(|entry| entry.num_elements)
+                        .unwrap_or(0)
+                }
+            }
+            OutOfCoreImpl::V1 { strategy, size, .. } => {
+                let total_size = *size;
+                match strategy {
+                    ChunkingStrategy::Auto => OPTIMAL_CHUNK_SIZE / std::mem::size_of::<A>(),
+                    ChunkingStrategy::Fixed(chunk_size) => *chunk_size,
+                    ChunkingStrategy::FixedBytes(bytes) => bytes / std::mem::size_of::<A>(),
+                    ChunkingStrategy::NumChunks(n) => total_size.div_ceil(*n),
+                    ChunkingStrategy::Advanced(_) => OPTIMAL_CHUNK_SIZE / std::mem::size_of::<A>(),
+                }
+            }
         }
     }
 
     /// Get the number of chunks
     pub fn num_chunks(&self) -> usize {
-        let chunk_size = match self.strategy {
-            ChunkingStrategy::Auto => OPTIMAL_CHUNK_SIZE / std::mem::size_of::<A>(),
-            ChunkingStrategy::Fixed(size) => size,
-            ChunkingStrategy::FixedBytes(bytes) => bytes / std::mem::size_of::<A>(),
-            ChunkingStrategy::NumChunks(n) => self.size.div_ceil(n),
-            ChunkingStrategy::Advanced(_) => OPTIMAL_CHUNK_SIZE / std::mem::size_of::<A>(),
-        };
-
-        self.size.div_ceil(chunk_size)
+        match &self.implementation {
+            OutOfCoreImpl::V2(v2) => v2.num_chunks(),
+            OutOfCoreImpl::V1 { size, .. } => {
+                let chunk_size = self.get_chunk_size();
+                if chunk_size == 0 {
+                    0
+                } else {
+                    size.div_ceil(chunk_size)
+                }
+            }
+        }
     }
 
     /// Check if the array is temporary
     pub fn is_temp(&self) -> bool {
-        self.is_temp
+        match &self.implementation {
+            OutOfCoreImpl::V2(v2) => v2.is_temp(),
+            OutOfCoreImpl::V1 { is_temp, .. } => *is_temp,
+        }
     }
 
     /// Apply a function to each chunk of the array
@@ -502,9 +755,13 @@ where
     D: Dimension + Serialize + for<'de> Deserialize<'de>,
 {
     fn drop(&mut self) {
-        if self.is_temp {
+        // Check if temporary using the accessor method
+        let is_temp = self.is_temp();
+        let file_path = self.file_path().to_path_buf();
+
+        if is_temp {
             // Attempt to remove the temporary file
-            let _ = std::fs::remove_file(&self.file_path);
+            let _ = std::fs::remove_file(&file_path);
         }
     }
 }

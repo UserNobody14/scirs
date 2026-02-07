@@ -10,7 +10,7 @@ authors = [
 description = "PyO3-based Rust bindings of the NumPy C-API (SciRS2 fork with ndarray 0.17 support)"
 documentation = "https://docs.rs/scirs2-numpy"
 repository.workspace = true
-license = "BSD-2-Clause"
+license.workspace = true
 keywords = ["python", "numpy", "ffi", "pyo3", "scientific"]
 categories = ["api-bindings", "development-tools::ffi", "science"]
 

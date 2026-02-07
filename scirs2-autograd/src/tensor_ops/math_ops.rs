@@ -598,7 +598,16 @@ impl<T: Float> op::Op<T> for Pow<T> {
 
 impl<T: Float> op::Op<T> for Sqrt {
     fn compute(&self, ctx: &mut op::ComputeContext<T>) -> Result<(), op::OpError> {
-        let ret = ctx.input(0).map(|a| a.sqrt());
+        let input = ctx.input(0);
+
+        // Validate domain in debug mode
+        #[cfg(debug_assertions)]
+        {
+            use crate::validation::validate_sqrt_domain;
+            validate_sqrt_domain(&input, "sqrt input")?;
+        }
+
+        let ret = input.map(|a| a.sqrt());
         ctx.append_output(ret);
         Ok(())
     }
@@ -613,7 +622,16 @@ impl<T: Float> op::Op<T> for Sqrt {
 
 impl<T: Float> op::Op<T> for Log10 {
     fn compute(&self, ctx: &mut op::ComputeContext<T>) -> Result<(), op::OpError> {
-        let ret = ctx.input(0).map(|a| a.log10());
+        let input = ctx.input(0);
+
+        // Validate domain in debug mode
+        #[cfg(debug_assertions)]
+        {
+            use crate::validation::validate_log_domain;
+            validate_log_domain(&input, "log10 input")?;
+        }
+
+        let ret = input.map(|a| a.log10());
         ctx.append_output(ret);
         Ok(())
     }
@@ -626,7 +644,16 @@ impl<T: Float> op::Op<T> for Log10 {
 
 impl<T: Float> op::Op<T> for Log2 {
     fn compute(&self, ctx: &mut op::ComputeContext<T>) -> Result<(), op::OpError> {
-        let ret = ctx.input(0).map(|a| a.log2());
+        let input = ctx.input(0);
+
+        // Validate domain in debug mode
+        #[cfg(debug_assertions)]
+        {
+            use crate::validation::validate_log_domain;
+            validate_log_domain(&input, "log2 input")?;
+        }
+
+        let ret = input.map(|a| a.log2());
         ctx.append_output(ret);
         Ok(())
     }
@@ -639,7 +666,16 @@ impl<T: Float> op::Op<T> for Log2 {
 
 impl<T: Float> op::Op<T> for Ln {
     fn compute(&self, ctx: &mut op::ComputeContext<T>) -> Result<(), op::OpError> {
-        let ret = ctx.input(0).map(|a| a.ln());
+        let input = ctx.input(0);
+
+        // Validate domain in debug mode
+        #[cfg(debug_assertions)]
+        {
+            use crate::validation::validate_log_domain;
+            validate_log_domain(&input, "ln input")?;
+        }
+
+        let ret = input.map(|a| a.ln());
         ctx.append_output(ret);
         Ok(())
     }
@@ -794,7 +830,16 @@ impl<T: Float> op::Op<T> for Atan {
 
 impl<T: Float> op::Op<T> for Acos {
     fn compute(&self, ctx: &mut op::ComputeContext<T>) -> Result<(), op::OpError> {
-        let ret = ctx.input(0).map(|a| a.acos());
+        let input = ctx.input(0);
+
+        // Validate domain in debug mode
+        #[cfg(debug_assertions)]
+        {
+            use crate::validation::validate_arcfunc_domain;
+            validate_arcfunc_domain(&input, "acos input", "acos")?;
+        }
+
+        let ret = input.map(|a| a.acos());
         ctx.append_output(ret);
         Ok(())
     }
@@ -808,7 +853,16 @@ impl<T: Float> op::Op<T> for Acos {
 
 impl<T: Float> op::Op<T> for Asin {
     fn compute(&self, ctx: &mut op::ComputeContext<T>) -> Result<(), op::OpError> {
-        let ret = ctx.input(0).map(|a| a.asin());
+        let input = ctx.input(0);
+
+        // Validate domain in debug mode
+        #[cfg(debug_assertions)]
+        {
+            use crate::validation::validate_arcfunc_domain;
+            validate_arcfunc_domain(&input, "asin input", "asin")?;
+        }
+
+        let ret = input.map(|a| a.asin());
         ctx.append_output(ret);
         Ok(())
     }

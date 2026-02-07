@@ -45,6 +45,9 @@ blas = ["scirs2-core/linalg"]  # BLAS/LAPACK via OxiBLAS (pure Rust)
 simd = ["scirs2-core/simd"]
 parallel = [] # Parallel processing support
 
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
 [[example]]
 name = "basic_autograd"
 path = "examples/basic_autograd.rs"
@@ -54,5 +57,34 @@ name = "simd_acceleration_test"
 path = "examples/simd_acceleration_test.rs"
 required-features = ["simd"]
 
+# Benchmark declarations
+[[bench]]
+name = "gradient_computation_bench"
+harness = false
+
+[[bench]]
+name = "high_performance_bench"
+harness = false
+
+[[bench]]
+name = "iterative_solvers_bench"
+harness = false
+
+[[bench]]
+name = "matmul_bench"
+harness = false
+
+[[bench]]
+name = "activation_bench"
+harness = false
+
+[[bench]]
+name = "optimizer_bench"
+harness = false
+
+[[bench]]
+name = "memory_efficiency_bench"
+harness = false
+
 [lib]
-doctest = false
+doctest = true

@@ -483,6 +483,29 @@ impl<'graph, 'env, F: Float> Context<'env, F> {
             .set_knownshape(shape)
             .build(T::basic_source_ops::Placeholder)
     }
+
+    /// Creates a constant tensor from an ndarray.
+    ///
+    /// This is a convenience method that wraps `tensor_ops::convert_to_tensor`.
+    /// Accepts arrays of any dimension and automatically converts them to dynamic dimensions.
+    ///
+    /// # Example
+    /// ```
+    /// use scirs2_autograd as ag;
+    /// use scirs2_core::ndarray::array;
+    ///
+    /// ag::run(|ctx| {
+    ///     let c = ctx.constant(array![[1., 2.], [3., 4.]]);
+    ///     // Use c in computations...
+    /// });
+    /// ```
+    #[inline]
+    pub fn constant<D>(&'graph self, arr: scirs2_core::ndarray::Array<F, D>) -> Tensor<'graph, F>
+    where
+        D: scirs2_core::ndarray::Dimension,
+    {
+        crate::tensor_ops::convert_to_tensor(arr, self)
+    }
 }
 
 #[allow(clippy::needless_lifetimes)]

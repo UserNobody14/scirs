@@ -1,13 +1,13 @@
 # scirs2-linalg
 
 [![crates.io](https://img.shields.io/crates/v/scirs2-linalg.svg)](https://crates.io/crates/scirs2-linalg)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](../LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../LICENSE)
 [![Documentation](https://img.shields.io/docsrs/scirs2-linalg)](https://docs.rs/scirs2-linalg)
 [![Production Ready](https://img.shields.io/badge/status-production--ready-green.svg)]()
 
 ## 🚀 Production-Ready Linear Algebra for Rust
 
-**v0.1.0** - SciRS2 POLICY & Enhanced Performance
+**v0.1.4** - SciRS2 POLICY & Enhanced Performance
 
 `scirs2-linalg` delivers comprehensive linear algebra functionality comparable to NumPy/SciPy's linalg module, providing a robust mathematical foundation for scientific computing, machine learning, and data analysis in Rust. Following the new [SciRS2 POLICY](../SCIRS2_POLICY.md), this release ensures ecosystem consistency through scirs2-core abstractions. With 549 passing tests and comprehensive feature coverage, this library is production-ready for demanding applications.
 
@@ -71,7 +71,7 @@ Add scirs2-linalg to your Cargo.toml:
 
 ```toml
 [dependencies]
-scirs2-linalg = "0.1.2"
+scirs2-linalg = "0.1.4"
 ndarray = "0.16.1"
 ```
 
@@ -79,13 +79,13 @@ For accelerated performance with OxiBLAS (Pure Rust BLAS/LAPACK):
 
 ```toml
 [dependencies]
-scirs2-linalg = { version = "0.1.2", features = ["linalg"] }
+scirs2-linalg = { version = "0.1.4", features = ["linalg"] }
 # OxiBLAS is automatically enabled with linalg feature (Pure Rust, no system dependencies)
 # SIMD acceleration available with simd feature
-scirs2-linalg = { version = "0.1.2", features = ["linalg", "simd"] }
+scirs2-linalg = { version = "0.1.4", features = ["linalg", "simd"] }
 ```
 
-**Note:** v0.1.0+ uses OxiBLAS (Pure Rust) instead of system BLAS libraries (OpenBLAS/MKL/Accelerate). No C/Fortran compiler or system libraries required.
+**Note:** v0.1.4+ uses OxiBLAS (Pure Rust) instead of system BLAS libraries (OpenBLAS/MKL/Accelerate). No C/Fortran compiler or system libraries required.
 
 ## Quick Start
 
@@ -135,7 +135,7 @@ let det = a.det()?;
 let inv = a.inv()?;
 ```
 
-**Note:** v0.1.0 used SciPy-style parameters (e.g., `det(&a, false, true)`), but these were simplified in v0.2.0 as most parameters were ignored in the Rust implementation.
+**Note:** v0.1.4 used SciPy-style parameters (e.g., `det(&a, false, true)`), but these were simplified in v0.2.0 as most parameters were ignored in the Rust implementation.
 
 ### Matrix Decompositions
 
@@ -293,17 +293,17 @@ println!("Memory Reduction: {:.1}%", (1.0 - 8.0/32.0) * 100.0);
 
 ### Backend Selection
 
-**v0.1.0+ uses OxiBLAS (Pure Rust BLAS/LAPACK):**
+**v0.1.4+ uses OxiBLAS (Pure Rust BLAS/LAPACK):**
 
 ```toml
 # OxiBLAS - Pure Rust implementation (default, all platforms)
-scirs2-linalg = { version = "0.1.2", features = ["linalg"] }
+scirs2-linalg = { version = "0.1.4", features = ["linalg"] }
 
 # With SIMD acceleration
-scirs2-linalg = { version = "0.1.2", features = ["linalg", "simd"] }
+scirs2-linalg = { version = "0.1.4", features = ["linalg", "simd"] }
 ```
 
-**Legacy backends (removed in v0.1.0):**
+**Legacy backends (removed in v0.1.4):**
 - ~~`openblas`~~ - Removed, use OxiBLAS
 - ~~`mkl`~~ - Removed, use OxiBLAS
 - ~~`netlib`~~ - Removed, use OxiBLAS
@@ -318,7 +318,7 @@ scirs2-linalg = { version = "0.1.2", features = ["linalg", "simd"] }
 
 ### 📈 Production Performance Benchmarks
 
-**Production-validated performance** (1000×1000 matrices, optimized builds, v0.1.0+):
+**Production-validated performance** (1000×1000 matrices, optimized builds, v0.1.4+):
 
 | Operation | OxiBLAS (Pure Rust) | OxiBLAS + SIMD | Status |
 |-----------|---------------------|----------------|--------|
@@ -327,7 +327,7 @@ scirs2-linalg = { version = "0.1.2", features = ["linalg", "simd"] }
 | SVD | 892ms | 820ms | ✅ Production |
 | Eigenvalues | 1.2s | 1.1s | ✅ Production |
 
-**Note:** OpenBLAS/MKL backends were removed in v0.1.0. OxiBLAS provides competitive performance with zero system dependencies.
+**Note:** OpenBLAS/MKL backends were removed in v0.1.4. OxiBLAS provides competitive performance with zero system dependencies.
 
 **Performance is competitive with industry-standard libraries and ready for production deployment.**
 
@@ -361,23 +361,20 @@ For detailed feature status, see [TODO.md](TODO.md).
 
 Contributions are welcome! Please see our [contributing guidelines](https://github.com/cool-japan/scirs/blob/master/CONTRIBUTING.md).
 
-**Current priorities for v0.1.0 stable:**
+**Current priorities for v0.1.4 stable:**
 - Performance benchmarking and optimization
 - Additional documentation and examples  
 - Integration testing with downstream applications
 - Community feedback and API refinement
 
-**Future enhancements (post-v0.1.0):**
+**Future enhancements (post-v0.1.4):**
 - GPU acceleration support
 - Additional specialized algorithms
 - Distributed computing integration
 
 ## License
 
-This project is dual-licensed under:
-
-- [MIT License](../LICENSE-MIT)
-- [Apache License Version 2.0](../LICENSE-APACHE)
+This project is Licensed under the Apache License 2.0. See LICENSE for details.
 
 You can choose to use either license. See the [LICENSE](../LICENSE) file for details.
 

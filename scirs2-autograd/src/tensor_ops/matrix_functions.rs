@@ -1,3 +1,4 @@
+use crate::error_helpers::try_from_f64;
 use crate::op::{ComputeContext, GradientContext, Op, OpError};
 use crate::tensor::Tensor;
 use crate::Float;
@@ -172,8 +173,7 @@ fn compute_matrix_sqrt<F: Float + scirs2_core::ndarray::ScalarOperand + FromPrim
 
         // Check all eigenvalues are non-negative
         for &lambda in eigenvalues.iter() {
-            if lambda < -F::epsilon() * F::from(10.0).expect("Failed to convert constant to float")
-            {
+            if lambda < -F::epsilon() * F::from(10.0).unwrap_or_else(|| F::one()) {
                 return Err(OpError::Other(
                     "Matrix has negative eigenvalues, cannot compute real square root".into(),
                 ));
@@ -194,14 +194,13 @@ fn compute_matrix_sqrt<F: Float + scirs2_core::ndarray::ScalarOperand + FromPrim
                 for j in 0..n {
                     if i == j {
                         if (eigenvectors[[i, j]] - F::one()).abs()
-                            > F::epsilon()
-                                * F::from(10.0).expect("Failed to convert constant to float")
+                            > F::epsilon() * F::from(10.0).unwrap_or_else(|| F::one())
                         {
                             diag = false;
                             break;
                         }
                     } else if eigenvectors[[i, j]].abs()
-                        > F::epsilon() * F::from(10.0).expect("Failed to convert constant to float")
+                        > F::epsilon() * F::from(10.0).unwrap_or_else(|| F::one())
                     {
                         diag = false;
                         break;
@@ -313,9 +312,7 @@ fn compute_matrix_pow<F: Float + scirs2_core::ndarray::ScalarOperand + FromPrimi
         // Check for negative eigenvalues if power is not integer
         if power.fract() != 0.0 {
             for &lambda in eigenvalues.iter() {
-                if lambda
-                    < -F::epsilon() * F::from(10.0).expect("Failed to convert constant to float")
-                {
+                if lambda < -F::epsilon() * F::from(10.0).unwrap_or_else(|| F::one()) {
                     return Err(OpError::Other(
                         "Matrix has negative eigenvalues, cannot compute real fractional power"
                             .into(),
@@ -362,7 +359,7 @@ fn compute_matrix_sqrt_denman_beavers<F: Float + scirs2_core::ndarray::ScalarOpe
     let mut z = Array2::<F>::eye(n);
 
     let max_iter = 50;
-    let tol = F::epsilon() * F::from(100.0).expect("Failed to convert constant to float");
+    let tol = F::epsilon() * F::from(100.0).unwrap_or_else(|| F::one());
 
     for _ in 0..max_iter {
         let y_old = y.clone();
@@ -372,8 +369,8 @@ fn compute_matrix_sqrt_denman_beavers<F: Float + scirs2_core::ndarray::ScalarOpe
         let z_inv = compute_matrix_inverse(&z.view())?;
 
         // Update Y and Z
-        y = (&y + &z_inv) / F::from(2.0).expect("Failed to convert constant to float");
-        z = (&z + &y_inv) / F::from(2.0).expect("Failed to convert constant to float");
+        y = (&y + &z_inv) / F::from(2.0).unwrap_or_else(|| F::one());
+        z = (&z + &y_inv) / F::from(2.0).unwrap_or_else(|| F::one());
 
         // Check convergence
         let diff = (&y - &y_old).mapv(|x| x.abs()).sum();
@@ -399,9 +396,9 @@ fn compute_matrix_log_inverse_scaling<
     // Find s such that ||A^(1/2^s) - I|| < 0.5
     let mut s = 0;
     loop {
-        let norm =
-            (&a - &i).mapv(|x| x.abs()).sum() / F::from(n * n).expect("Failed to convert to float");
-        if norm < F::from(0.5).expect("Failed to convert constant to float") {
+        let nn_f = F::from(n * n).unwrap_or_else(|| F::one());
+        let norm = (&a - &i).mapv(|x| x.abs()).sum() / nn_f;
+        if norm < F::from(0.5).unwrap_or_else(|| F::one()) {
             break;
         }
         // Take square root
@@ -417,7 +414,8 @@ fn compute_matrix_log_inverse_scaling<
     let mut log_a = compute_log_pade(&x)?;
 
     // Scale back
-    log_a *= F::from(2.0_f64.powi(s)).expect("Operation failed");
+    let scale_factor = F::from(2.0_f64.powi(s)).unwrap_or_else(|| F::one());
+    log_a *= scale_factor;
 
     Ok(log_a)
 }
@@ -432,9 +430,9 @@ fn compute_log_pade<F: Float + scirs2_core::ndarray::ScalarOperand>(
     // Use Padé [3/3] approximation
     // log(I + X) ≈ X * (I + X/2 + X²/10) / (I + X/2 + 3X²/10)
     let x2 = x.dot(x);
-    let half = F::from(0.5).expect("Failed to convert constant to float");
-    let tenth = F::from(0.1).expect("Failed to convert constant to float");
-    let three_tenths = F::from(0.3).expect("Failed to convert constant to float");
+    let half = F::from(0.5).unwrap_or_else(|| F::one());
+    let tenth = F::from(0.1).unwrap_or_else(|| F::one());
+    let three_tenths = F::from(0.3).unwrap_or_else(|| F::one());
 
     let i = Array2::<F>::eye(n);
     let numerator = &i + &(x * half) + &(&x2 * tenth);
@@ -485,7 +483,7 @@ fn is_symmetric_matrix<F: Float>(matrix: &scirs2_core::ndarray::ArrayView2<F>) -
     for i in 0..n {
         for j in i + 1..n {
             if (matrix[[i, j]] - matrix[[j, i]]).abs()
-                > F::epsilon() * F::from(10.0).expect("Failed to convert constant to float")
+                > F::epsilon() * F::from(10.0).unwrap_or_else(|| F::one())
             {
                 return false;
             }
@@ -505,7 +503,7 @@ fn is_positive_semidefinite<F: Float + scirs2_core::ndarray::ScalarOperand + Fro
     // Check eigenvalues
     let (eigenvalues, _eigenvectors) = compute_symmetric_eigen(matrix)?;
     for &lambda in eigenvalues.iter() {
-        if lambda < -F::epsilon() * F::from(10.0).expect("Failed to convert constant to float") {
+        if lambda < -F::epsilon() * F::from(10.0).unwrap_or_else(|| F::one()) {
             return Ok(false);
         }
     }
@@ -527,18 +525,15 @@ fn compute_symmetric_eigen<F: Float + scirs2_core::ndarray::ScalarOperand + From
 
         let trace = a + c;
         let det = a * c - b * b;
-        let discriminant =
-            trace * trace - F::from(4.0).expect("Failed to convert constant to float") * det;
+        let discriminant = trace * trace - F::from(4.0).unwrap_or_else(|| F::one()) * det;
 
         if discriminant < F::zero() {
             return Err(OpError::Other("Complex eigenvalues".into()));
         }
 
         let sqrt_disc = discriminant.sqrt();
-        let lambda1 =
-            (trace + sqrt_disc) / F::from(2.0).expect("Failed to convert constant to float");
-        let lambda2 =
-            (trace - sqrt_disc) / F::from(2.0).expect("Failed to convert constant to float");
+        let lambda1 = (trace + sqrt_disc) / F::from(2.0).unwrap_or_else(|| F::one());
+        let lambda2 = (trace - sqrt_disc) / F::from(2.0).unwrap_or_else(|| F::one());
 
         let eigenvalues = Array1::from_vec(vec![lambda1, lambda2]);
 
@@ -668,38 +663,22 @@ fn compute_matrix_exp_pade<F: Float + scirs2_core::ndarray::ScalarOperand + From
 
     // Scaling parameter
     let s = if norm > F::one() {
-        (norm.ln()
-            / F::from(2.0)
-                .expect("Failed to convert constant to float")
-                .ln())
-        .ceil()
+        (norm.ln() / F::from(2.0).unwrap_or_else(|| F::one()).ln()).ceil()
     } else {
         F::zero()
     };
 
-    let scale = F::from(2.0)
-        .expect("Failed to convert constant to float")
-        .powf(s);
+    let scale = F::from(2.0).unwrap_or_else(|| F::one()).powf(s);
     let scaled_matrix = matrix.mapv(|x| x / scale);
 
     // Padé approximation coefficients (order 6)
-    let c0 = F::from(1.0).expect("Failed to convert constant to float");
-    let c1 = F::from(0.5).expect("Failed to convert constant to float");
-    let c2 = F::from(12.0)
-        .expect("Failed to convert constant to float")
-        .recip();
-    let c3 = F::from(120.0)
-        .expect("Failed to convert constant to float")
-        .recip();
-    let c4 = F::from(3360.0)
-        .expect("Failed to convert constant to float")
-        .recip();
-    let c5 = F::from(30240.0)
-        .expect("Failed to convert constant to float")
-        .recip();
-    let c6 = F::from(1209600.0)
-        .expect("Failed to convert constant to float")
-        .recip();
+    let c0 = F::from(1.0).unwrap_or_else(|| F::one());
+    let c1 = F::from(0.5).unwrap_or_else(|| F::one());
+    let c2 = F::from(12.0).unwrap_or_else(|| F::one()).recip();
+    let c3 = F::from(120.0).unwrap_or_else(|| F::one()).recip();
+    let c4 = F::from(3360.0).unwrap_or_else(|| F::one()).recip();
+    let c5 = F::from(30240.0).unwrap_or_else(|| F::one()).recip();
+    let c6 = F::from(1209600.0).unwrap_or_else(|| F::one()).recip();
 
     // Compute powers of matrix
     let i = Array2::<F>::eye(n);

@@ -1,12 +1,12 @@
 # SciRS2: Scientific Computing in Rust
 
 [![crates.io](https://img.shields.io/crates/v/scirs2.svg)](https://crates.io/crates/scirs2)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](../LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../LICENSE)
 [![Documentation](https://img.shields.io/docsrs/scirs2)](https://docs.rs/scirs2)
 
 SciRS2 is a comprehensive scientific computing library for Rust, inspired by SciPy and designed to provide a complete ecosystem for numerical computation, statistical analysis, and scientific algorithms.
 
-**Important**: From v0.1.0, SciRS2 follows the [SciRS2 POLICY](../scirs2-core/SCIRS2_POLICY.md) for consistent ecosystem architecture with layered abstractions.
+**Important**: From v0.1.4, SciRS2 follows the [SciRS2 POLICY](../scirs2-core/SCIRS2_POLICY.md) for consistent ecosystem architecture with layered abstractions.
 
 ## Overview
 
@@ -38,23 +38,23 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scirs2 = "0.1.2"  # Main package with default features
+scirs2 = "0.1.4"  # Main package with default features
 ```
 
 You can enable only the features you need:
 
 ```toml
 [dependencies]
-scirs2 = { version = "0.1.2", features = ["linalg", "stats", "optimize"] }
+scirs2 = { version = "0.1.4", features = ["linalg", "stats", "optimize"] }
 ```
 
 Or use specific modules directly:
 
 ```toml
 [dependencies]
-scirs2-core = "0.1.2"
-scirs2-linalg = "0.1.2"
-scirs2-stats = "0.1.2"
+scirs2-core = "0.1.4"
+scirs2-linalg = "0.1.4"
+scirs2-stats = "0.1.4"
 ```
 
 Basic usage examples:
@@ -134,7 +134,7 @@ SciRS2 follows a modular architecture where each domain of scientific computing 
 
 ### SciRS2 POLICY
 
-Starting with v0.1.0, SciRS2 follows a strict layered architecture:
+Starting with v0.1.4, SciRS2 follows a strict layered architecture:
 
 - **Core-Only Dependencies**: Only `scirs2-core` uses external dependencies directly
 - **Unified Abstractions**: All other crates use scirs2-core abstractions for `rand`, `ndarray`, etc.
@@ -186,9 +186,6 @@ See the [CONTRIBUTING.md](../CONTRIBUTING.md) file for contribution guidelines.
 
 ## License
 
-This project is dual-licensed under:
-
-- [MIT License](../LICENSE-MIT)
-- [Apache License Version 2.0](../LICENSE-APACHE)
+This project is Licensed under the Apache License 2.0. See LICENSE for details.
 
 You can choose to use either license. See the [LICENSE](../LICENSE) file for details.

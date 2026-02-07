@@ -24,9 +24,9 @@ mod tests {
         let array = result.expect("Test: operation failed");
 
         // Check properties
-        assert_eq!(array.shape, data.shape());
-        assert_eq!(array.size, data.len());
-        assert_eq!(array.file_path, file_path);
+        assert_eq!(array.shape(), data.shape());
+        assert_eq!(array.size(), data.len());
+        assert_eq!(array.file_path(), file_path);
         assert!(!array.is_temp()); // Should not be marked as temporary
     }
 
@@ -43,15 +43,15 @@ mod tests {
         let array = result.expect("Test: operation failed");
 
         // Check properties
-        assert_eq!(array.shape, data.shape());
-        assert_eq!(array.size, data.len());
+        assert_eq!(array.shape(), data.shape());
+        assert_eq!(array.size(), data.len());
         assert!(array.is_temp()); // Should be marked as temporary
 
         // Verify the file exists
-        assert!(array.file_path.exists());
+        assert!(array.file_path().exists());
 
         // The file should be deleted when the array is dropped
-        let file_path = array.file_path.clone();
+        let file_path = array.file_path().to_path_buf();
         drop(array);
         assert!(!file_path.exists());
     }
@@ -104,7 +104,7 @@ mod tests {
         let array = result.expect("Test: operation failed");
 
         // Check properties
-        assert_eq!(array.array.shape, data.shape());
+        assert_eq!(array.array.shape(), data.shape());
         assert!(array.read_only);
 
         // Load the data back
@@ -137,12 +137,12 @@ mod tests {
         let array = result.expect("Test: operation failed");
 
         // Check properties
-        assert_eq!(array.array.shape, data.shape());
+        assert_eq!(array.array.shape(), data.shape());
         assert!(!array.read_only);
         assert!(array.is_temp());
 
         // The file should be deleted when the array is dropped
-        let file_path = array.array.file_path.clone();
+        let file_path = array.array.file_path().to_path_buf();
         assert!(file_path.exists());
         drop(array);
         assert!(!file_path.exists());

@@ -13,11 +13,13 @@ use std::fmt::Debug;
 mod augmentation;
 mod dataloader;
 mod dataset;
+mod memory_pool;
 mod transforms;
 mod utils;
 pub use augmentation::*;
 pub use dataloader::*;
 pub use dataset::*;
+pub use memory_pool::*;
 pub use transforms::*;
 pub use utils::*;
 /// Dataset trait for accessing data

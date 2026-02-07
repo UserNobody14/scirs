@@ -314,4 +314,4 @@ The benchmark suite is designed for integration with CI/CD systems:
 
 ## License
 
-This benchmarking suite is part of SciRS2 and is licensed under the same terms (MIT OR Apache-2.0).
+This benchmarking suite is part of SciRS2 and is licensed under Apache-2.0.

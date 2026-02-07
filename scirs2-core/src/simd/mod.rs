@@ -62,6 +62,7 @@ pub mod arithmetic;
 pub mod basic;
 pub mod basic_optimized; // Ultra-optimized versions with aggressive compiler hints
 pub mod dot;
+pub mod gemm; // Blocked GEMM (General Matrix Multiply) for high-performance matrix operations
 
 // Layer 3: Reductions & statistics
 pub mod reductions;
@@ -88,6 +89,9 @@ pub mod unary_powi; // Phase 25: Integer exponentiation // Phase 36: Cache-optim
 // - advanced (fused_multiply_add, gemv)
 // - additional variants (add_adaptive, add_cache_optimized, add_auto, fma_advanced)
 // - miscellaneous helper functions and optimized variants
+
+// Re-export GEMM operations
+pub use gemm::{blocked_gemm_f32, should_use_blocked, MatMulConfig};
 
 // Re-export core traits and detection
 pub use detect::{detect_simd_capabilities, get_cpu_features, CpuFeatures, SimdCapabilities};

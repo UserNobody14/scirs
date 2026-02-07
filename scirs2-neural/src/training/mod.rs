@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 
 // Re-export submodules
+pub mod backprop_efficient;
 pub mod gradient_accumulation;
 pub mod gradient_checkpointing;
 pub mod mixed_precision;
@@ -17,6 +18,7 @@ pub mod progress_monitor;
 pub mod quantization_aware;
 pub mod sparse_training;
 
+pub use backprop_efficient::*;
 pub use gradient_accumulation::*;
 pub use gradient_checkpointing::*;
 pub use mixed_precision::*;

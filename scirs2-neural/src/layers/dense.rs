@@ -155,6 +155,15 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Dense<F> {
         self.output_dim
     }
 
+    /// Calculate the total number of parameters in this Dense layer
+    ///
+    /// Returns the sum of weight parameters and bias parameters.
+    /// Weight parameters: input_dim * output_dim
+    /// Bias parameters: output_dim
+    pub fn num_parameters(&self) -> usize {
+        (self.input_dim * self.output_dim) + self.output_dim
+    }
+
     /// SIMD-accelerated matrix multiplication for forward pass (Phase 32)
     ///
     /// Uses BLAS-accelerated GEMM for 3-5x speedup over naive implementation.

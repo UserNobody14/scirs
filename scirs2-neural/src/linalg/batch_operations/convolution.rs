@@ -611,7 +611,8 @@ where
                     }
 
                     // Divide by kernel size
-                    output[[b, c, oh, ow]] = sum / F::from(kernel_h * kernel_w).expect("Failed to convert to float");
+                    output[[b, c, oh, ow]] =
+                        sum / F::from(kernel_h * kernel_w).expect("Failed to convert to float");
                 }
             }
         }
@@ -1017,7 +1018,8 @@ where
                     let kernel_w = w_end - w_start;
 
                     // Calculate gradient factor
-                    let grad_factor = dout[[b, c, oh, ow]] / F::from(kernel_h * kernel_w).expect("Failed to convert to float");
+                    let grad_factor = dout[[b, c, oh, ow]]
+                        / F::from(kernel_h * kernel_w).expect("Failed to convert to float");
 
                     // Distribute gradient evenly to all inputs in the region
                     for h in h_start..h_end {

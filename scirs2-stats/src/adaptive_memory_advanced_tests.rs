@@ -45,7 +45,7 @@ fn test_config_update() {
 
     manager.update_config(new_config);
     assert!(matches!(
-        manager.config.allocation_strategy,
+        manager.get_config().allocation_strategy,
         AllocationStrategy::NumaAware
     ));
 }

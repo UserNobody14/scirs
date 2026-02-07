@@ -3,7 +3,7 @@
 **SciRS2**: Type-safe scientific computing in Rust with Python bindings - Specialized for complex statistical analysis with exceptional performance for higher-order statistics.
 
 [![PyPI](https://img.shields.io/pypi/v/scirs2)](https://pypi.org/project/scirs2/)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Python](https://img.shields.io/pypi/pyversions/scirs2)](https://pypi.org/project/scirs2/)
 
 ## Overview
@@ -432,4 +432,4 @@ scirs2-python/
 
 ## License
 
-Dual-licensed under MIT OR Apache-2.0
+Licensed under the Apache License 2.0. See LICENSE for details.

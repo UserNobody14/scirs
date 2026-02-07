@@ -35,7 +35,7 @@
 //!         // Optimizer update
 //!         optimizer.update(&params, &grads, ctx);
 //!
-//!         loss.eval(ctx).unwrap()
+//!         loss.eval(ctx).expect("Loss evaluation failed")
 //!     });
 //! }
 //! ```

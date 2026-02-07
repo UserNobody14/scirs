@@ -43,7 +43,6 @@ scirs2-integrate = { workspace = true }
 
 # Benchmarking framework
 criterion = { workspace = true, features = ["html_reports"] }
-plotters = { workspace = true }
 
 # Array operations
 ndarray = { workspace = true }
@@ -56,9 +55,6 @@ rand_chacha = { workspace = true }
 # Scientific computing utilities
 num-traits = { workspace = true }
 approx = { workspace = true }
-
-# Profiling and timing
-instant = { workspace = true }
 
 # Serialization for results
 serde = { workspace = true }

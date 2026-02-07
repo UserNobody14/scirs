@@ -153,7 +153,8 @@ where
         + Sync
         + std::iter::Sum<F>
         + std::fmt::Debug
-        + std::fmt::Display,
+        + std::fmt::Display
+        + 'static,
 {
     let start_time = std::time::Instant::now();
 
@@ -973,7 +974,8 @@ where
         + std::fmt::Display
         + Send
         + Sync
-        + scirs2_core::simd_ops::SimdUnifiedOps,
+        + scirs2_core::simd_ops::SimdUnifiedOps
+        + 'static,
 {
     // Use existing corrcoef implementation
     crate::corrcoef(data, method)
@@ -994,7 +996,8 @@ where
         + std::iter::Sum<F>
         + std::fmt::Debug
         + std::fmt::Display
-        + scirs2_core::simd_ops::SimdUnifiedOps,
+        + scirs2_core::simd_ops::SimdUnifiedOps
+        + 'static,
 {
     let (_, n_vars) = data.dim();
     let mut corr_matrix = Array2::<F>::zeros((n_vars, n_vars));

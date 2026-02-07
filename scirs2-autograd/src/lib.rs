@@ -333,6 +333,7 @@ extern crate special;
 extern crate uuid;
 
 pub mod error;
+pub mod error_helpers;
 pub mod evaluation;
 mod gradient;
 pub mod gradient_clipping;
@@ -352,6 +353,7 @@ pub mod tensor_ops;
 pub mod test_helper;
 pub mod testing;
 pub mod tracing;
+pub mod validation;
 pub mod variable;
 pub mod visualization;
 

@@ -9,40 +9,70 @@ use crate::{Context, Float, VariableEnvironment};
 /// Adam optimizer
 ///
 /// This implementation is based on <https://arxiv.org/abs/1412.6980v8>.
-///    ```
+///
+/// # Example
+///
+/// ```no_run
 /// use scirs2_autograd as ag;
-///
 /// use ag::prelude::*;
-/// use ag::optimizers::Adam;
+/// use ag::optimizers::{Adam, Optimizer};
 /// use ag::variable::NamespaceTrait;
+/// use ag::tensor_ops as T;
 ///
-/// // Define parameters to optimize.
+/// // Define parameters to optimize
 /// let mut env = ag::VariableEnvironment::new();
 /// let mut rng = ag::ndarray_ext::ArrayRng::<f32>::default();
 ///
 /// let w = env.slot().set(rng.glorot_uniform(&[28 * 28, 10]));
 /// let b = env.slot().set(ag::ndarray_ext::zeros(&[1, 10]));
 ///
-/// // Adam optimizer with default params.
-/// // State arrays are created in the "my_adam" namespace.
+/// // Create Adam optimizer with default parameters
+/// // State arrays (momentum buffers) are stored in the "my_adam" namespace
 /// let adam = Adam::default("my_adam", env.default_namespace().current_var_ids(), &mut env);
 ///
-/// env.run(|g| {
-///     let w = g.variable(w);
-///     let b = g.variable(b);
+/// // Training loop
+/// for epoch in 0..100 {
+///     env.run(|ctx| {
+///         let w = ctx.variable(w);
+///         let b = ctx.variable(b);
 ///
-///     // some operations using w and b
-///     // let y = ...
-///     // let grads = g.grad(&[y], &[w, b]);
+///         // Forward pass (example)
+///         // let predictions = ...;
+///         // let loss = ...;
 ///
-///     // Getting update ops of `params` using its gradients and adam.
-///     // let updates: &[ag::Tensor<f32>] = &adam.update(&[w, b], &grads, &g);
+///         // Compute gradients
+///         // let grads = T::grad(&[loss], &[w, b]);
 ///
-///     // for result in &g.eval(updates, &[]) {
-///     //     println!("updates: {:?}", result.unwrap());
-///     // }
+///         // Update parameters (this now actually updates variables!)
+///         // adam.update(&[w, b], &grads, ctx, ag::Feeder::new());
+///     });
+/// }
+/// ```
+///
+/// # Manual Update Control
+///
+/// For advanced use cases where you need explicit control over when updates are applied:
+///
+/// ```no_run
+/// # use scirs2_autograd as ag;
+/// # use ag::optimizers::{Adam, Optimizer};
+/// # let mut env = ag::VariableEnvironment::new();
+/// # let w = env.slot().set(ag::ndarray_ext::zeros::<f32>(&[10]));
+/// # let adam = Adam::default("my_adam", vec![w], &mut env);
+/// env.run(|ctx| {
+///     # let w_tensor = ctx.variable(w);
+///     # let grads = vec![w_tensor]; // Dummy gradient
+///     // Get update tensors without applying them
+///     let update_tensors = adam.get_update_tensors(&[w_tensor], &grads, ctx);
+///
+///     // Evaluate updates
+///     let results = ctx.evaluator().extend(&update_tensors).run();
+///     let values: Vec<_> = results.into_iter().map(|r| r.expect("Evaluation failed")).collect();
+///
+///     // Apply updates manually
+///     Adam::apply_update_tensors(&[w_tensor], &values, ctx.env());
 /// });
-///    ```
+/// ```
 ///
 /// See also <https://github.com/raskr/rust-autograd/blob/master/examples/>
 pub struct Adam<F: Float> {

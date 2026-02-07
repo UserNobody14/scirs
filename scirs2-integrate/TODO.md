@@ -262,4 +262,4 @@ These ultrathink mode enhancements provide:
 
 ---
 
-*Generated for scirs2-integrate v0.1.0 - Stable Release with SIMD ODE Enhancements*
+*Generated for scirs2-integrate v0.1.4 - Stable Release with SIMD ODE Enhancements*

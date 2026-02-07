@@ -605,5 +605,5 @@ For the most up-to-date performance benchmarks and optimization guides, consult 
 ---
 
 *Last Updated: 2025-09-29*  
-*Version: 0.1.0*  
+*Version: 0.1.4*  
 *Next Update: Beta 4 release*

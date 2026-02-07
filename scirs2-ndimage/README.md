@@ -1,11 +1,11 @@
 # SciRS2 NDImage - Production Ready Image Processing
 
 [![crates.io](https://img.shields.io/crates/v/scirs2-ndimage.svg)](https://crates.io/crates/scirs2-ndimage)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](../LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../LICENSE)
 [![Documentation](https://img.shields.io/docsrs/scirs2-ndimage)](https://docs.rs/scirs2-ndimage)
 [![Tests](https://img.shields.io/badge/tests-142%20passing-brightgreen.svg)]()
 
-**Production-ready multidimensional image processing** for the SciRS2 scientific computing ecosystem (v0.1.0). Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), this module delivers a comprehensive, high-performance toolkit for n-dimensional image processing with full SciPy ndimage API compatibility, ecosystem consistency, and optimization for enterprise and research applications.
+**Production-ready multidimensional image processing** for the SciRS2 scientific computing ecosystem (v0.1.4). Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), this module delivers a comprehensive, high-performance toolkit for n-dimensional image processing with full SciPy ndimage API compatibility, ecosystem consistency, and optimization for enterprise and research applications.
 
 ## 🚀 Production Status
 
@@ -43,7 +43,7 @@
 ### Basic Installation
 ```toml
 [dependencies]
-scirs2-ndimage = "0.1.2"
+scirs2-ndimage = "0.1.4"
 ```
 
 ### Production Configuration (Recommended)
@@ -51,7 +51,7 @@ For maximum performance in production environments:
 
 ```toml
 [dependencies]
-scirs2-ndimage = { version = "0.1.2", features = ["parallel", "simd"] }
+scirs2-ndimage = { version = "0.1.4", features = ["parallel", "simd"] }
 ndarray = "0.16"  # Required for array operations
 ```
 
@@ -341,9 +341,6 @@ See the [CONTRIBUTING.md](../CONTRIBUTING.md) file for contribution guidelines.
 
 ## License
 
-This project is dual-licensed under:
-
-- [MIT License](../LICENSE-MIT)
-- [Apache License Version 2.0](../LICENSE-APACHE)
+This project is Licensed under the Apache License 2.0. See LICENSE for details.
 
 You can choose to use either license. See the [LICENSE](../LICENSE) file for details.

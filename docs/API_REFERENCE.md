@@ -691,4 +691,4 @@ use scirs2_neural::prelude::*;
 
 **This API reference is actively maintained and updated with each release. For the latest information, see the individual module documentation and the [SciRS2 main repository](https://github.com/cool-japan/scirs).**
 
-*Generated for SciRS2 v0.1.0 | Last updated: 2025-09-29*
+*Generated for SciRS2 v0.1.4 | Last updated: 2025-09-29*

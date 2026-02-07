@@ -1,7 +1,7 @@
 # SciRS2 Interpolation Module
 
 [![crates.io](https://img.shields.io/crates/v/scirs2-interpolate.svg)](https://crates.io/crates/scirs2-interpolate)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](../LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../LICENSE)
 [![Documentation](https://img.shields.io/docsrs/scirs2-interpolate)](https://docs.rs/scirs2-interpolate)
 [![Build Status](https://img.shields.io/github/workflow/status/cool-japan/scirs/CI)](https://github.com/cool-japan/scirs/actions)
 
@@ -17,10 +17,10 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scirs2-interpolate = "0.1.2"
+scirs2-interpolate = "0.1.4"
 
 # Optional: Enable high-performance features
-scirs2-interpolate = { version = "0.1.2", features = ["simd", "linalg"] }
+scirs2-interpolate = { version = "0.1.4", features = ["simd", "linalg"] }
 ```
 
 ### Feature Flags
@@ -502,9 +502,6 @@ We welcome contributions! This crate follows the SciRS2 project guidelines:
 
 ## License
 
-This project is dual-licensed under:
-
-- [MIT License](../LICENSE-MIT)
-- [Apache License Version 2.0](../LICENSE-APACHE)
+This project is Licensed under the Apache License 2.0. See LICENSE for details.
 
 You can choose to use either license. See the [LICENSE](../LICENSE) file for details.

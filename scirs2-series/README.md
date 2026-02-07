@@ -1,10 +1,10 @@
 # SciRS2 Series
 
 [![crates.io](https://img.shields.io/crates/v/scirs2-series.svg)](https://crates.io/crates/scirs2-series)
-[[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)]](../LICENSE)
+[[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)]](../LICENSE)
 [![Documentation](https://img.shields.io/docsrs/scirs2-series)](https://docs.rs/scirs2-series)
 
-**Production-ready** time series analysis module for the SciRS2 scientific computing library (v0.1.0). Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), this **Stable Release** provides comprehensive, tested, and optimized tools for analyzing, decomposing, and forecasting time series data with feature parity to leading Python libraries, zero-warning code quality, and ecosystem consistency through scirs2-core abstractions.
+**Production-ready** time series analysis module for the SciRS2 scientific computing library (v0.1.4). Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), this **Stable Release** provides comprehensive, tested, and optimized tools for analyzing, decomposing, and forecasting time series data with feature parity to leading Python libraries, zero-warning code quality, and ecosystem consistency through scirs2-core abstractions.
 
 ## Features
 
@@ -34,15 +34,15 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scirs2-series = "0.1.2"
+scirs2-series = "0.1.4"
 ```
 
 **Recommended for Production**: Enable performance optimizations:
 
 ```toml
 [dependencies]
-scirs2-series = { version = "0.1.2", features = ["parallel", "simd"] }
-scirs2-core = { version = "0.1.2", features = ["parallel", "simd"] }
+scirs2-series = { version = "0.1.4", features = ["parallel", "simd"] }
+scirs2-core = { version = "0.1.4", features = ["parallel", "simd"] }
 ```
 
 **Available Features:**
@@ -247,9 +247,6 @@ See the [CONTRIBUTING.md](../CONTRIBUTING.md) file for contribution guidelines.
 
 ## License
 
-This project is dual-licensed under:
-
-- [MIT License](../LICENSE-MIT)
-- [Apache License Version 2.0](../LICENSE-APACHE)
+This project is Licensed under the Apache License 2.0. See LICENSE for details.
 
 You can choose to use either license. See the [LICENSE](../LICENSE) file for details.

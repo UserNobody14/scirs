@@ -87,7 +87,8 @@ where
         + Sync
         + std::iter::Sum<F>
         + std::fmt::Debug
-        + std::fmt::Display,
+        + std::fmt::Display
+        + 'static,
 {
     // Validate inputs
     checkarray_finite_2d(data, "data")?;
@@ -344,7 +345,8 @@ where
         + Sync
         + std::iter::Sum<F>
         + std::fmt::Debug
-        + std::fmt::Display,
+        + std::fmt::Display
+        + 'static,
 {
     if pairs.is_empty() {
         return Ok(Vec::new());
@@ -466,7 +468,8 @@ where
         + Sync
         + std::iter::Sum<F>
         + std::fmt::Debug
-        + std::fmt::Display,
+        + std::fmt::Display
+        + 'static,
 {
     if x.len() != y.len() {
         return Err(StatsError::DimensionMismatch(format!(

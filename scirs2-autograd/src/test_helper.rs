@@ -64,6 +64,24 @@ pub fn check_theoretical_grads<'g, 't, 'v, F: Float, A>(
         for i in 0..v_len as isize {
             let evacuated;
             // +
+            // SAFETY PROOF:
+            // Preconditions:
+            //   1. Index i is within bounds: 0 <= i < v_len (verified by loop bounds)
+            //   2. guard_mut holds valid exclusive reference to array
+            //   3. Array length matches v_len (verified earlier)
+            // Guarantees:
+            //   - No out-of-bounds access (i < v_len ensured by loop)
+            //   - No data races (exclusive &mut via borrow_mut)
+            //   - Pointer arithmetic is valid (offset within allocated array)
+            // Verification:
+            //   - Loop bound: i in 0..v_len ensures valid index
+            //   - Array length verified by earlier borrow().len() == v_len
+            debug_assert!(
+                i >= 0 && i < v_len as isize,
+                "Index {} out of bounds (len: {})",
+                i,
+                v_len
+            );
             unsafe {
                 let mut guard_mut = g
                     .env()
@@ -76,6 +94,7 @@ pub fn check_theoretical_grads<'g, 't, 'v, F: Float, A>(
                     .expect("variable array not found")
                     .borrow_mut();
                 let head = guard_mut.as_mut_ptr();
+                // SAFETY: i < v_len verified by loop and assertion above
                 evacuated = *head.offset(i);
                 *head.offset(i) = evacuated + eps;
             }
@@ -94,6 +113,7 @@ pub fn check_theoretical_grads<'g, 't, 'v, F: Float, A>(
                 ndarray_ext::deep_copy(&obj_pos_orig.view())
             };
 
+            // SAFETY: i < v_len verified by loop bounds and assertion above
             unsafe {
                 let mut guard_mut = g
                     .env()
@@ -107,6 +127,7 @@ pub fn check_theoretical_grads<'g, 't, 'v, F: Float, A>(
                     .borrow_mut();
 
                 let head = guard_mut.as_mut_ptr();
+                // SAFETY: i < v_len verified by loop bounds
                 *head.offset(i) = evacuated - eps;
             }
 
@@ -125,6 +146,7 @@ pub fn check_theoretical_grads<'g, 't, 'v, F: Float, A>(
             };
 
             // restore
+            // SAFETY: i < v_len verified by loop bounds
             unsafe {
                 let mut guard_mut = g
                     .env()
@@ -137,11 +159,13 @@ pub fn check_theoretical_grads<'g, 't, 'v, F: Float, A>(
                     .expect("variable array not found")
                     .borrow_mut();
                 let head = guard_mut.as_mut_ptr();
+                // SAFETY: i < v_len verified by loop bounds
                 *head.offset(i) = evacuated;
             }
 
             let two = F::one() + F::one();
             let g_num = (obj_pos - obj_neg).sum() / (two * eps);
+            // SAFETY: i < theoretical_grad.len() verified by loop (v_len == theoretical_grad.len())
             let g_th = unsafe { *th_ptr.offset(i) };
 
             // compare

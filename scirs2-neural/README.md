@@ -1,7 +1,7 @@
 # SciRS2 Neural
 
 [![crates.io](https://img.shields.io/crates/v/scirs2-neural.svg)](https://crates.io/crates/scirs2-neural)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](../LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../LICENSE)
 [![Documentation](https://img.shields.io/docsrs/scirs2-neural)](https://docs.rs/scirs2-neural)
 [![Build Status](https://img.shields.io/badge/build-passing-green.svg)]()
 [![Version](https://img.shields.io/badge/version-0.1.0--stable-orange.svg)]()
@@ -9,7 +9,7 @@
 [![Quality](https://img.shields.io/badge/clippy-clean-green.svg)]()
 [![Status](https://img.shields.io/badge/status-production%20ready-green.svg)]()
 
-**🚀 Production-Ready Neural Network Module (v0.1.0)** for the SciRS2 scientific computing library. Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), this module provides comprehensive, battle-tested tools for building, training, and evaluating neural networks with state-of-the-art performance optimizations and ecosystem consistency.
+**🚀 Production-Ready Neural Network Module (v0.1.4)** for the SciRS2 scientific computing library. Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), this module provides comprehensive, battle-tested tools for building, training, and evaluating neural networks with state-of-the-art performance optimizations and ecosystem consistency.
 
 ## ✅ Production Status
 
@@ -65,20 +65,20 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scirs2-neural = "0.1.2"
+scirs2-neural = "0.1.4"
 ```
 
 To enable optimizations and optional features:
 
 ```toml
 [dependencies]
-scirs2-neural = { version = "0.1.2", features = ["simd", "parallel"] }
+scirs2-neural = { version = "0.1.4", features = ["simd", "parallel"] }
 
 # For performance optimization
-scirs2-neural = { version = "0.1.2", features = ["jit", "cuda"] }
+scirs2-neural = { version = "0.1.4", features = ["jit", "cuda"] }
 
 # For integration with scirs2-metrics
-scirs2-neural = { version = "0.1.2", features = ["metrics_integration"] }
+scirs2-neural = { version = "0.1.4", features = ["metrics_integration"] }
 ```
 
 ## Quick Start
@@ -413,9 +413,6 @@ See the [CONTRIBUTING.md](../CONTRIBUTING.md) file for contribution guidelines.
 
 ## License
 
-This project is dual-licensed under:
-
-- [MIT License](../LICENSE-MIT)
-- [Apache License Version 2.0](../LICENSE-APACHE)
+This project is Licensed under the Apache License 2.0. See LICENSE for details.
 
 You can choose to use either license. See the [LICENSE](../LICENSE) file for details.

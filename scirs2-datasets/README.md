@@ -1,10 +1,10 @@
 # SciRS2 Datasets
 
 [![crates.io](https://img.shields.io/crates/v/scirs2-datasets.svg)](https://crates.io/crates/scirs2-datasets)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](../LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../LICENSE)
 [![Documentation](https://img.shields.io/docsrs/scirs2-datasets)](https://docs.rs/scirs2-datasets)
 
-A production-ready collection of dataset utilities for the SciRS2 scientific computing library (v0.1.0). Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), this module provides comprehensive functionality for loading, generating, and working with datasets commonly used in scientific computing, machine learning, and statistical analysis with enhanced random generation capabilities.
+A production-ready collection of dataset utilities for the SciRS2 scientific computing library (v0.1.4). Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), this module provides comprehensive functionality for loading, generating, and working with datasets commonly used in scientific computing, machine learning, and statistical analysis with enhanced random generation capabilities.
 
 ## 🚀 Production Status - stable (0.1.0)
 
@@ -25,14 +25,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scirs2-datasets = "0.1.2"
+scirs2-datasets = "0.1.4"
 ```
 
 For remote dataset downloading capabilities:
 
 ```toml
 [dependencies]
-scirs2-datasets = { version = "0.1.2", features = ["download"] }
+scirs2-datasets = { version = "0.1.4", features = ["download"] }
 ```
 
 ## Quick Start
@@ -183,4 +183,4 @@ See the [project CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines. Focus area
 
 ## License
 
-Dual-licensed under [MIT](../LICENSE-MIT) or [Apache License 2.0](../LICENSE-APACHE).
+Licensed under the Apache License 2.0. See LICENSE for details.

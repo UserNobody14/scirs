@@ -1324,8 +1324,12 @@ fn explore_topics(session: &mut AdaptiveLearningSession) -> Result<(), Box<dyn s
     topics.sort();
 
     for (i, topic) in topics.iter().enumerate() {
-        if let Some(node) = session.knowledge_graph.get(*topic) {
-            let skill_level = session.profile.skill_levels.get(*topic).unwrap_or(&0.0);
+        if let Some(node) = session.knowledge_graph.get(topic.as_str()) {
+            let skill_level = session
+                .profile
+                .skill_levels
+                .get(topic.as_str())
+                .unwrap_or(&0.0);
             let status = if *skill_level >= 0.8 {
                 "✅"
             } else if *skill_level >= 0.3 {

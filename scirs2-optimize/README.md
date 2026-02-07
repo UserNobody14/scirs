@@ -1,10 +1,10 @@
 # SciRS2 Optimization Module
 
 [![crates.io](https://img.shields.io/crates/v/scirs2-optimize.svg)](https://crates.io/crates/scirs2-optimize)
-[[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)]](../LICENSE)
+[[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)]](../LICENSE)
 [![Documentation](https://img.shields.io/docsrs/scirs2-optimize)](https://docs.rs/scirs2-optimize)
 
-`scirs2-optimize` (v0.1.2) is a production-ready optimization library providing comprehensive algorithms for unconstrained and constrained optimization, least-squares problems, root finding, and global optimization. Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), it provides a high-performance Rust implementation of SciPy's optimization functionality with an ergonomic API, advanced features, excellent performance, and ecosystem consistency through scirs2-core abstractions.
+`scirs2-optimize` (v0.1.4) is a production-ready optimization library providing comprehensive algorithms for unconstrained and constrained optimization, least-squares problems, root finding, and global optimization. Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), it provides a high-performance Rust implementation of SciPy's optimization functionality with an ergonomic API, advanced features, excellent performance, and ecosystem consistency through scirs2-core abstractions.
 
 ## Features
 
@@ -85,14 +85,14 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scirs2-optimize = "0.1.2"
+scirs2-optimize = "0.1.4"
 ```
 
 For advanced features, enable optional feature flags:
 
 ```toml
 [dependencies]
-scirs2-optimize = { version = "0.1.2", features = ["async"] }
+scirs2-optimize = { version = "0.1.4", features = ["async"] }
 ```
 
 ## Quick Start
@@ -222,9 +222,6 @@ fn main() -> Result<(), OptimizeError> {
 
 ## License
 
-This project is dual-licensed under:
-
-- [MIT License](../LICENSE-MIT)
-- [Apache License Version 2.0](../LICENSE-APACHE)
+This project is Licensed under the Apache License 2.0. See LICENSE for details.
 
 You can choose to use either license. See the [LICENSE](../LICENSE) file for details.

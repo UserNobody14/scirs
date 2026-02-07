@@ -238,6 +238,199 @@ impl LanguageDetector {
             german_profile.insert(ngram.to_string(), *freq);
         }
         self.profiles.insert(Language::German, german_profile);
+
+        // Italian profile
+        let mut italian_profile = HashMap::new();
+        for (ngram, freq) in &[
+            ("che", 0.05),
+            ("la_", 0.04),
+            ("il_", 0.03),
+            ("di_", 0.025),
+            ("del", 0.02),
+            ("le_", 0.018),
+            ("lla", 0.015),
+            ("per", 0.013),
+            ("ato", 0.012),
+            ("gli", 0.011),
+            ("sta", 0.01),
+            ("con", 0.009),
+            ("ent", 0.008),
+            ("ion", 0.008),
+            ("are", 0.007),
+            ("una", 0.007),
+        ] {
+            italian_profile.insert(ngram.to_string(), *freq);
+        }
+        self.profiles.insert(Language::Italian, italian_profile);
+
+        // Portuguese profile
+        let mut portuguese_profile = HashMap::new();
+        for (ngram, freq) in &[
+            ("que", 0.05),
+            ("de_", 0.04),
+            ("os_", 0.03),
+            ("as_", 0.025),
+            ("da_", 0.02),
+            ("do_", 0.018),
+            ("ão_", 0.015),
+            ("ent", 0.013),
+            ("com", 0.012),
+            ("para", 0.011),
+            ("uma", 0.01),
+            ("est", 0.009),
+            ("nte", 0.008),
+            ("ção", 0.008),
+            ("por", 0.007),
+            ("não", 0.007),
+        ] {
+            portuguese_profile.insert(ngram.to_string(), *freq);
+        }
+        self.profiles
+            .insert(Language::Portuguese, portuguese_profile);
+
+        // Dutch profile
+        let mut dutch_profile = HashMap::new();
+        for (ngram, freq) in &[
+            ("de_", 0.05),
+            ("het", 0.04),
+            ("een", 0.03),
+            ("van", 0.025),
+            ("en_", 0.02),
+            ("dat", 0.018),
+            ("te_", 0.015),
+            ("op_", 0.013),
+            ("aar", 0.012),
+            ("oor", 0.011),
+            ("eer", 0.01),
+            ("sch", 0.009),
+            ("ver", 0.008),
+            ("ing", 0.008),
+            ("cht", 0.007),
+            ("ter", 0.007),
+        ] {
+            dutch_profile.insert(ngram.to_string(), *freq);
+        }
+        self.profiles.insert(Language::Dutch, dutch_profile);
+
+        // Russian profile
+        let mut russian_profile = HashMap::new();
+        for (ngram, freq) in &[
+            ("что", 0.05),
+            ("ого", 0.04),
+            ("как", 0.03),
+            ("это", 0.025),
+            ("все", 0.02),
+            ("был", 0.018),
+            ("ени", 0.015),
+            ("ост", 0.013),
+            ("ова", 0.012),
+            ("про", 0.011),
+            ("сто", 0.01),
+            ("ого", 0.009),
+            ("при", 0.008),
+            ("ени", 0.008),
+            ("ать", 0.007),
+            ("ный", 0.007),
+        ] {
+            russian_profile.insert(ngram.to_string(), *freq);
+        }
+        self.profiles.insert(Language::Russian, russian_profile);
+
+        // Chinese profile (using pinyin representation)
+        let mut chinese_profile = HashMap::new();
+        for (ngram, freq) in &[
+            ("的_", 0.06),
+            ("是_", 0.045),
+            ("了_", 0.035),
+            ("在_", 0.03),
+            ("和_", 0.025),
+            ("有_", 0.022),
+            ("我_", 0.02),
+            ("他_", 0.018),
+            ("不_", 0.016),
+            ("为_", 0.014),
+            ("这_", 0.013),
+            ("个_", 0.012),
+            ("们_", 0.011),
+            ("人_", 0.01),
+            ("要_", 0.009),
+            ("会_", 0.008),
+        ] {
+            chinese_profile.insert(ngram.to_string(), *freq);
+        }
+        self.profiles.insert(Language::Chinese, chinese_profile);
+
+        // Japanese profile (using hiragana/katakana)
+        let mut japanese_profile = HashMap::new();
+        for (ngram, freq) in &[
+            ("の_", 0.05),
+            ("に_", 0.04),
+            ("は_", 0.035),
+            ("を_", 0.03),
+            ("た_", 0.025),
+            ("と_", 0.022),
+            ("が_", 0.02),
+            ("で_", 0.018),
+            ("る_", 0.016),
+            ("す_", 0.014),
+            ("い_", 0.013),
+            ("ます", 0.012),
+            ("した", 0.011),
+            ("して", 0.01),
+            ("です", 0.009),
+            ("ない", 0.008),
+        ] {
+            japanese_profile.insert(ngram.to_string(), *freq);
+        }
+        self.profiles.insert(Language::Japanese, japanese_profile);
+
+        // Korean profile (using Hangul)
+        let mut korean_profile = HashMap::new();
+        for (ngram, freq) in &[
+            ("의_", 0.05),
+            ("이_", 0.04),
+            ("가_", 0.035),
+            ("을_", 0.03),
+            ("는_", 0.025),
+            ("에_", 0.022),
+            ("하_", 0.02),
+            ("고_", 0.018),
+            ("다_", 0.016),
+            ("지_", 0.014),
+            ("한_", 0.013),
+            ("로_", 0.012),
+            ("서_", 0.011),
+            ("도_", 0.01),
+            ("와_", 0.009),
+            ("니_", 0.008),
+        ] {
+            korean_profile.insert(ngram.to_string(), *freq);
+        }
+        self.profiles.insert(Language::Korean, korean_profile);
+
+        // Arabic profile (using Arabic script)
+        let mut arabic_profile = HashMap::new();
+        for (ngram, freq) in &[
+            ("ال_", 0.06),
+            ("في_", 0.045),
+            ("من_", 0.035),
+            ("على", 0.03),
+            ("إلى", 0.025),
+            ("ها_", 0.022),
+            ("أن_", 0.02),
+            ("ما_", 0.018),
+            ("هو_", 0.016),
+            ("كان", 0.014),
+            ("هذا", 0.013),
+            ("عن_", 0.012),
+            ("بين", 0.011),
+            ("لا_", 0.01),
+            ("قد_", 0.009),
+            ("كل_", 0.008),
+        ] {
+            arabic_profile.insert(ngram.to_string(), *freq);
+        }
+        self.profiles.insert(Language::Arabic, arabic_profile);
     }
 
     /// Detect the language of a text

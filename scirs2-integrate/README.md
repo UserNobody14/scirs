@@ -1,7 +1,7 @@
 # SciRS2 Integrate
 
 [![crates.io](https://img.shields.io/crates/v/scirs2-integrate.svg)](https://crates.io/crates/scirs2-integrate)
-[[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)]](../LICENSE)
+[[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)]](../LICENSE)
 [![Documentation](https://img.shields.io/docsrs/scirs2-integrate)](https://docs.rs/scirs2-integrate)
 
 **🚀 Production-Ready Release 0.1.0 (SciRS2 POLICY & Performance)**
@@ -79,7 +79,7 @@ Add the following to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scirs2-integrate = "0.1.2"
+scirs2-integrate = "0.1.4"
 ndarray = "0.16.1"
 ```
 
@@ -89,7 +89,7 @@ Enable optional features for enhanced performance:
 
 ```toml
 [dependencies]
-scirs2-integrate = { version = "0.1.2", features = ["simd", "parallel"] }
+scirs2-integrate = { version = "0.1.4", features = ["simd", "parallel"] }
 ```
 
 Available features:
@@ -385,7 +385,7 @@ Vectorized operations for better performance on modern CPUs:
 
 ```rust
 // Enable SIMD features in Cargo.toml:
-// scirs2-integrate = { version = "0.1.2", features = ["simd"] }
+// scirs2-integrate = { version = "0.1.4", features = ["simd"] }
 
 use scirs2_integrate::ode::utils::simd_ops;
 
@@ -898,20 +898,17 @@ For production deployments, we recommend:
 
 ```toml
 [dependencies]
-scirs2-integrate = { version = "0.1.2", features = ["parallel", "simd"] }
+scirs2-integrate = { version = "0.1.4", features = ["parallel", "simd"] }
 ```
 
 Enable all optimizations for maximum performance in production environments.
 
 ## License
 
-This project is dual-licensed under:
-
-- [MIT License](../LICENSE-MIT)
-- [Apache License Version 2.0](../LICENSE-APACHE)
+This project is Licensed under the Apache License 2.0. See LICENSE for details.
 
 You can choose to use either license. See the [LICENSE](../LICENSE) file for details.
 
 ---
 
-**scirs2-integrate v0.1.0** - Production-ready numerical integration for Rust
+**scirs2-integrate v0.1.4** - Production-ready numerical integration for Rust

@@ -1,12 +1,12 @@
 # SciRS2 Autograd
 
 [![crates.io](https://img.shields.io/crates/v/scirs2-autograd.svg)](https://crates.io/crates/scirs2-autograd)
-[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](../LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../LICENSE)
 [![Documentation](https://img.shields.io/docsrs/scirs2-autograd)](https://docs.rs/scirs2-autograd)
 [![Build Status](https://img.shields.io/badge/tests-404%20passing-brightgreen)](https://github.com/cool-japan/scirs)
 [![Production Ready](https://img.shields.io/badge/status-production%20ready-green)](https://github.com/cool-japan/scirs)
 
-**Production-Ready Automatic Differentiation for Rust (v0.1.0)**
+**Production-Ready Automatic Differentiation for Rust (v0.1.4)**
 
 A high-performance automatic differentiation library for SciRS2, providing functionality comparable to PyTorch/TensorFlow's autograd systems with native Rust performance and safety guarantees.
 
@@ -44,7 +44,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-scirs2-autograd = "0.1.2"
+scirs2-autograd = "0.1.4"
 ```
 
 ### Optional Features
@@ -53,7 +53,7 @@ Enable performance optimizations and additional backends:
 
 ```toml
 [dependencies]
-scirs2-autograd = { version = "0.1.2", features = ["blas", "simd"] }
+scirs2-autograd = { version = "0.1.4", features = ["blas", "simd"] }
 ```
 
 **Available Features:**
@@ -279,7 +279,7 @@ T::CheckpointProfiler::reset_statistics();
 
 ## 🚀 Production Readiness
 
-SciRS2 Autograd v0.1.0 is **Stable Release** and is **production-ready**:
+SciRS2 Autograd v0.1.4 is **Stable Release** and is **production-ready**:
 
 - ✅ **Stable API:** No breaking changes expected before v1.0
 - ✅ **Comprehensive Testing:** All core functionality thoroughly tested
@@ -289,9 +289,6 @@ SciRS2 Autograd v0.1.0 is **Stable Release** and is **production-ready**:
 
 ## License
 
-This project is dual-licensed under:
-
-- [MIT License](../LICENSE-MIT)
-- [Apache License Version 2.0](../LICENSE-APACHE)
+This project is Licensed under the Apache License 2.0. See LICENSE for details.
 
 You can choose to use either license. See the [LICENSE](../LICENSE) file for details.

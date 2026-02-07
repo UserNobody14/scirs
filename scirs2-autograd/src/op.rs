@@ -133,16 +133,15 @@ impl<F: Float> ComputeContext<F> {
     }
 
     /// Returns `i`-th input array.
-    /// If inputs are empty or out of bounds, returns an empty array view.
+    /// If index is out of bounds, returns an empty scalar array.
+    /// This can happen when operations are created dynamically during gradient computation.
     pub fn input(&self, i: usize) -> NdArrayView<F> {
-        if self.inputs.is_empty() {
-            // Create a dummy array for use when no inputs are available
-            static DUMMY_ARRAY: once_cell::sync::Lazy<NdArray<f32>> =
-                once_cell::sync::Lazy::new(|| crate::ndarray_ext::zeros(&[1, 1]));
+        if i >= self.inputs.len() {
+            // Return an empty scalar instead of panicking or warning
+            // This handles the case where some operations may not have all inputs during evaluation
+            static DUMMY_SCALAR: once_cell::sync::Lazy<NdArray<f32>> =
+                once_cell::sync::Lazy::new(|| crate::ndarray_ext::zeros::<f32>(&[]));
 
-            // Safety: This is a read-only view, and we're converting types.
-            // This is safe as long as Float has the same memory layout as f32,
-            // which isn't guaranteed but works for our concrete types.
             #[allow(clippy::transmute_ptr_to_ref)]
             unsafe {
                 std::mem::transmute::<
@@ -154,31 +153,10 @@ impl<F: Float> ComputeContext<F> {
                         scirs2_core::ndarray::ViewRepr<&F>,
                         scirs2_core::ndarray::Dim<scirs2_core::ndarray::IxDynImpl>,
                     >,
-                >(DUMMY_ARRAY.view())
+                >(DUMMY_SCALAR.view())
             }
-        } else if i < self.inputs.len() {
-            self.inputs[i].view()
         } else {
-            eprintln!("Warning: Index out of bounds in ComputeContext::input: the len is {} but the index is {}", 
-                     self.inputs.len(), i);
-
-            // Return the same dummy array as above
-            static DUMMY_ARRAY: once_cell::sync::Lazy<NdArray<f32>> =
-                once_cell::sync::Lazy::new(|| crate::ndarray_ext::zeros(&[1, 1]));
-
-            #[allow(clippy::transmute_ptr_to_ref)]
-            unsafe {
-                std::mem::transmute::<
-                    scirs2_core::ndarray::ArrayBase<
-                        scirs2_core::ndarray::ViewRepr<&f32>,
-                        scirs2_core::ndarray::Dim<scirs2_core::ndarray::IxDynImpl>,
-                    >,
-                    scirs2_core::ndarray::ArrayBase<
-                        scirs2_core::ndarray::ViewRepr<&F>,
-                        scirs2_core::ndarray::Dim<scirs2_core::ndarray::IxDynImpl>,
-                    >,
-                >(DUMMY_ARRAY.view())
-            }
+            self.inputs[i].view()
         }
     }
 

@@ -56,7 +56,8 @@ where
         + NumCast
         + std::iter::Sum<F>
         + std::fmt::Display
-        + scirs2_core::simd_ops::SimdUnifiedOps,
+        + scirs2_core::simd_ops::SimdUnifiedOps
+        + 'static,
     D: Data<Elem = F>,
     Ix1: Dimension,
 {
@@ -78,17 +79,88 @@ where
     let mean_y = mean(&y.view())?;
 
     // Calculate intermediate sums
-    let mut sum_xy = F::zero();
-    let mut sum_x2 = F::zero();
-    let mut sum_y2 = F::zero();
+    // For f32/f64 with SIMD support, use optimized path for better performance
+    let sum_xy: F;
+    let sum_x2: F;
+    let sum_y2: F;
 
-    for i in 0..x.len() {
-        let x_dev = x[i] - mean_x;
-        let y_dev = y[i] - mean_y;
+    // Check if we can use SIMD optimization (f32/f64 with sufficient size)
+    use std::any::TypeId;
+    let n = x.len();
 
-        sum_xy = sum_xy + x_dev * y_dev;
-        sum_x2 = sum_x2 + x_dev * x_dev;
-        sum_y2 = sum_y2 + y_dev * y_dev;
+    if TypeId::of::<F>() == TypeId::of::<f64>() && n >= 64 {
+        // SIMD optimization for f64
+        // Create deviation arrays
+        let x_dev: Vec<f64> = x
+            .iter()
+            .map(|&val| {
+                let val_f64: f64 = unsafe { std::mem::transmute_copy(&val) };
+                let mean_f64: f64 = unsafe { std::mem::transmute_copy(&mean_x) };
+                val_f64 - mean_f64
+            })
+            .collect();
+        let y_dev: Vec<f64> = y
+            .iter()
+            .map(|&val| {
+                let val_f64: f64 = unsafe { std::mem::transmute_copy(&val) };
+                let mean_f64: f64 = unsafe { std::mem::transmute_copy(&mean_y) };
+                val_f64 - mean_f64
+            })
+            .collect();
+
+        // Use SIMD dot products
+        let sum_xy_f64 = scirs2_core::simd_ops::simd_dot_product_f64(&x_dev, &y_dev);
+        let sum_x2_f64 = scirs2_core::simd_ops::simd_dot_product_f64(&x_dev, &x_dev);
+        let sum_y2_f64 = scirs2_core::simd_ops::simd_dot_product_f64(&y_dev, &y_dev);
+
+        // Transmute back to F
+        sum_xy = unsafe { std::mem::transmute_copy(&sum_xy_f64) };
+        sum_x2 = unsafe { std::mem::transmute_copy(&sum_x2_f64) };
+        sum_y2 = unsafe { std::mem::transmute_copy(&sum_y2_f64) };
+    } else if TypeId::of::<F>() == TypeId::of::<f32>() && n >= 64 {
+        // SIMD optimization for f32
+        let x_dev: Vec<f32> = x
+            .iter()
+            .map(|&val| {
+                let val_f32: f32 = unsafe { std::mem::transmute_copy(&val) };
+                let mean_f32: f32 = unsafe { std::mem::transmute_copy(&mean_x) };
+                val_f32 - mean_f32
+            })
+            .collect();
+        let y_dev: Vec<f32> = y
+            .iter()
+            .map(|&val| {
+                let val_f32: f32 = unsafe { std::mem::transmute_copy(&val) };
+                let mean_f32: f32 = unsafe { std::mem::transmute_copy(&mean_y) };
+                val_f32 - mean_f32
+            })
+            .collect();
+
+        let sum_xy_f32 = scirs2_core::simd_ops::simd_dot_product_f32(&x_dev, &y_dev);
+        let sum_x2_f32 = scirs2_core::simd_ops::simd_dot_product_f32(&x_dev, &x_dev);
+        let sum_y2_f32 = scirs2_core::simd_ops::simd_dot_product_f32(&y_dev, &y_dev);
+
+        sum_xy = unsafe { std::mem::transmute_copy(&sum_xy_f32) };
+        sum_x2 = unsafe { std::mem::transmute_copy(&sum_x2_f32) };
+        sum_y2 = unsafe { std::mem::transmute_copy(&sum_y2_f32) };
+    } else {
+        // Fallback to scalar implementation for other types or small arrays
+        let mut sum_xy_tmp = F::zero();
+        let mut sum_x2_tmp = F::zero();
+        let mut sum_y2_tmp = F::zero();
+
+        for i in 0..n {
+            let x_dev = x[i] - mean_x;
+            let y_dev = y[i] - mean_y;
+
+            sum_xy_tmp = sum_xy_tmp + x_dev * y_dev;
+            sum_x2_tmp = sum_x2_tmp + x_dev * x_dev;
+            sum_y2_tmp = sum_y2_tmp + y_dev * y_dev;
+        }
+
+        sum_xy = sum_xy_tmp;
+        sum_x2 = sum_x2_tmp;
+        sum_y2 = sum_y2_tmp;
     }
 
     // Check for zero variances
@@ -152,7 +224,8 @@ where
         + NumCast
         + std::iter::Sum<F>
         + std::fmt::Display
-        + scirs2_core::simd_ops::SimdUnifiedOps,
+        + scirs2_core::simd_ops::SimdUnifiedOps
+        + 'static,
     D: Data<Elem = F>,
     Ix1: Dimension,
 {
@@ -975,7 +1048,8 @@ where
         + std::iter::Sum<F>
         + std::fmt::Display
         + std::marker::Send
-        + scirs2_core::simd_ops::SimdUnifiedOps,
+        + scirs2_core::simd_ops::SimdUnifiedOps
+        + 'static,
     D: Data<Elem = F> + Sync,
     Ix2: Dimension,
 {
@@ -1231,7 +1305,8 @@ where
         + NumCast
         + std::iter::Sum<F>
         + std::fmt::Display
-        + scirs2_core::simd_ops::SimdUnifiedOps,
+        + scirs2_core::simd_ops::SimdUnifiedOps
+        + 'static,
     D: Data<Elem = F>,
 {
     // Use standardized validation
@@ -1528,7 +1603,8 @@ where
         + NumCast
         + std::iter::Sum<F>
         + std::fmt::Display
-        + scirs2_core::simd_ops::SimdUnifiedOps,
+        + scirs2_core::simd_ops::SimdUnifiedOps
+        + 'static,
     D: Data<Elem = F>,
 {
     // Calculate Spearman's rank correlation coefficient (rho)

@@ -259,7 +259,8 @@ where
         + std::iter::Sum<F>
         + std::fmt::Debug
         + std::fmt::Display
-        + scirs2_core::simd_ops::SimdUnifiedOps,
+        + scirs2_core::simd_ops::SimdUnifiedOps
+        + 'static,
     D: Data<Elem = F> + Sync,
 {
     use crate::pearson_r;
