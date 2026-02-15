@@ -54,6 +54,10 @@ pub enum DatasetsError {
     #[error("Validation error: {0}")]
     ValidationError(String),
 
+    /// Processing error
+    #[error("Processing error: {0}")]
+    ProcessingError(String),
+
     /// Other error
     #[error("Error: {0}")]
     Other(String),
@@ -79,6 +83,7 @@ impl PartialEq for DatasetsError {
             (DatasetsError::GpuError(a), DatasetsError::GpuError(b)) => a == b,
             (DatasetsError::ComputationError(a), DatasetsError::ComputationError(b)) => a == b,
             (DatasetsError::ValidationError(a), DatasetsError::ValidationError(b)) => a == b,
+            (DatasetsError::ProcessingError(a), DatasetsError::ProcessingError(b)) => a == b,
             (DatasetsError::Other(a), DatasetsError::Other(b)) => a == b,
             _ => false,
         }

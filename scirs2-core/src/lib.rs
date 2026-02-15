@@ -1,3 +1,6 @@
+// Embedded systems support (v0.2.0) - no_std compatibility
+// Enable no_std by default, opt-in to std with the "std" feature
+#![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "512"]
 // TODO: Remove dead code or justify why it's kept
 #![allow(dead_code)]
@@ -364,7 +367,14 @@
 //! See the [examples directory](https://github.com/cool-japan/scirs/tree/master/scirs2-core/examples)
 //! for more detailed usage examples.
 
-// Re-export modules
+// Use alloc when available but not in std mode
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+extern crate alloc;
+
+// Re-export std as alloc when std is enabled for compatibility
+#[cfg(feature = "std")]
+extern crate std;
+
 pub mod api_freeze;
 pub mod apiversioning;
 #[cfg(feature = "array")]
@@ -382,10 +392,12 @@ pub mod constants;
 pub mod distributed;
 pub mod ecosystem;
 pub mod error;
+// Cross-module integration framework (v0.2.0)
 #[cfg(feature = "gpu")]
 pub mod gpu;
 #[cfg(feature = "gpu")]
 pub mod gpu_registry;
+pub mod integration;
 pub mod io;
 #[cfg(feature = "jit")]
 pub mod jit;
@@ -435,6 +447,12 @@ pub mod units;
 pub mod utils;
 pub mod validation;
 
+// Embedded systems support (v0.2.0)
+#[cfg(feature = "embedded")]
+pub mod embedded;
+#[cfg(feature = "fixed-point")]
+pub mod fixed_point;
+
 // Production-level features for enterprise deployments
 pub mod observability;
 pub mod stability;
@@ -477,9 +495,7 @@ pub use crate::cloud::{
     TransferOptions,
 };
 pub use crate::config::production as config_production;
-pub use crate::config::{
-    get_config, get_config_value, set_config_value, set_global_config, Config, ConfigValue,
-};
+pub use crate::config::{get_config, get_config_value, set_config_value, Config, ConfigValue};
 pub use crate::constants::{math, physical, prefixes};
 #[allow(ambiguous_glob_reexports)]
 pub use crate::error::*;
@@ -605,7 +621,7 @@ pub use crate::batch_conversions::{
 pub use crate::memory::metrics::{setup_gpu_memory_tracking, TrackedGpuBuffer, TrackedGpuContext};
 pub use crate::metrics::{
     global_healthmonitor, global_metrics_registry, Counter, Gauge, HealthCheck, HealthMonitor,
-    HealthStatus, Histogram, MetricPoint, MetricType, MetricValue, Timer,
+    Histogram, MetricPoint, MetricType, MetricValue, Timer,
 };
 #[cfg(feature = "ml_pipeline")]
 pub use crate::ml_pipeline::DataType as MLDataType;
@@ -704,6 +720,37 @@ pub use crate::neural_architecture_search::{
 };
 pub use crate::quantum_optimization::{
     OptimizationResult, QuantumOptimizer, QuantumParameters, QuantumState, QuantumStrategy,
+};
+
+// Cross-module integration re-exports (v0.2.0)
+pub use crate::integration::{
+    // Configuration
+    config::{
+        global_config, update_global_config, DiagnosticsConfig, EcosystemConfig,
+        EcosystemConfigBuilder, LogLevel, MemoryConfig, ModuleConfig, NumericConfig,
+        ParallelConfig, Precision, PrecisionConfig,
+    },
+    // Type conversion
+    conversion::{
+        ArrayConvert, ConversionError, ConversionOptions, ConversionResult, CrossModuleConvert,
+        DataFlowConverter, LosslessConvert, LossyConvert, TypeAdapter,
+    },
+    // Interface traits
+    traits::{
+        ApiVersion as IntegrationApiVersion, Capability, Composable, Configurable,
+        CrossModuleOperator, DataConsumer, DataProvider, Diagnosable, DiagnosticInfo,
+        DiagnosticLevel, Identifiable, ModuleCapability, ModuleInterface, ResourceAware,
+        ResourceUsage, Serializable, VersionedInterface,
+    },
+    // Zero-copy operations
+    zero_copy::{
+        Alignment, ArrayBridge, BorrowedArray, BufferMut, BufferRef, ContiguousMemory,
+        MemoryLayout, OwnedArray, SharedArrayView, SharedArrayViewMut, TypedBuffer, ZeroCopyBuffer,
+        ZeroCopySlice,
+    },
+    // Error types
+    IntegrationError,
+    IntegrationResult,
 };
 
 // Advanced JIT Compilation re-exports

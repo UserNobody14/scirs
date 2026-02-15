@@ -4,7 +4,7 @@ use crate::error::{NeuralError, Result};
 use crate::layers::recurrent::{LstmGateCache, LstmStepOutput};
 use crate::layers::{Layer, ParamLayer};
 use scirs2_core::ndarray::{Array, ArrayView, ArrayView1, Ix2, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::{Distribution, Uniform};
 use scirs2_core::simd_ops::SimdUnifiedOps;
 use std::fmt::Debug;
@@ -47,7 +47,7 @@ pub struct LSTMConfig {
 /// let output = lstm.forward(&input).expect("Operation failed");
 /// // Output should have dimensions [batch_size, seq_len, hidden_size]
 /// assert_eq!(output.shape(), &[batch_size, seq_len, 20]);
-pub struct LSTM<F: Float + Debug + Send + Sync> {
+pub struct LSTM<F: Float + Debug + Send + Sync + NumAssign> {
     /// Input size (number of input features)
     input_size: usize,
     /// Hidden size (number of hidden units)
@@ -98,7 +98,9 @@ pub struct LSTM<F: Float + Debug + Send + Sync> {
     gate_cache: LstmGateCache<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> LSTM<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static>
+    LSTM<F>
+{
     /// Create a new LSTM layer
     ///
     /// # Arguments
@@ -410,37 +412,37 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
             for i in 0..self.hidden_size {
                 let mut i_sum = self.bias_ii[i] + self.bias_hi[i];
                 for j in 0..self.input_size {
-                    i_sum = i_sum + self.weight_ii[[i, j]] * x[[b, j]];
+                    i_sum += self.weight_ii[[i, j]] * x[[b, j]];
                 }
                 for j in 0..self.hidden_size {
-                    i_sum = i_sum + self.weight_hi[[i, j]] * h[[b, j]];
+                    i_sum += self.weight_hi[[i, j]] * h[[b, j]];
                 }
                 i_gate[[b, i]] = F::one() / (F::one() + (-i_sum).exp());
 
                 let mut f_sum = self.bias_if[i] + self.bias_hf[i];
                 for j in 0..self.input_size {
-                    f_sum = f_sum + self.weight_if[[i, j]] * x[[b, j]];
+                    f_sum += self.weight_if[[i, j]] * x[[b, j]];
                 }
                 for j in 0..self.hidden_size {
-                    f_sum = f_sum + self.weight_hf[[i, j]] * h[[b, j]];
+                    f_sum += self.weight_hf[[i, j]] * h[[b, j]];
                 }
                 f_gate[[b, i]] = F::one() / (F::one() + (-f_sum).exp());
 
                 let mut g_sum = self.bias_ig[i] + self.bias_hg[i];
                 for j in 0..self.input_size {
-                    g_sum = g_sum + self.weight_ig[[i, j]] * x[[b, j]];
+                    g_sum += self.weight_ig[[i, j]] * x[[b, j]];
                 }
                 for j in 0..self.hidden_size {
-                    g_sum = g_sum + self.weight_hg[[i, j]] * h[[b, j]];
+                    g_sum += self.weight_hg[[i, j]] * h[[b, j]];
                 }
                 g_gate[[b, i]] = g_sum.tanh();
 
                 let mut o_sum = self.bias_io[i] + self.bias_ho[i];
                 for j in 0..self.input_size {
-                    o_sum = o_sum + self.weight_io[[i, j]] * x[[b, j]];
+                    o_sum += self.weight_io[[i, j]] * x[[b, j]];
                 }
                 for j in 0..self.hidden_size {
-                    o_sum = o_sum + self.weight_ho[[i, j]] * h[[b, j]];
+                    o_sum += self.weight_ho[[i, j]] * h[[b, j]];
                 }
                 o_gate[[b, i]] = F::one() / (F::one() + (-o_sum).exp());
 
@@ -462,7 +464,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Layer<F>
     for LSTM<F>
 {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -575,7 +577,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
         // Helper function to update a parameter
         let update_param = |param: &mut Array<F, IxDyn>| {
             for w in param.iter_mut() {
-                *w = *w - lr;
+                *w -= lr;
             }
         };
 
@@ -600,8 +602,8 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> ParamLayer<F>
-    for LSTM<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static>
+    ParamLayer<F> for LSTM<F>
 {
     fn get_parameters(&self) -> Vec<Array<F, scirs2_core::ndarray::IxDyn>> {
         vec![

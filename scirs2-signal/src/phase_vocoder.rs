@@ -10,7 +10,7 @@ use crate::lombscargle_enhanced::WindowType;
 use crate::stft::{ShortTimeFft, StftConfig};
 use scirs2_core::numeric::Complex64;
 use scirs2_core::numeric::{Float, NumCast};
-use rustfft;
+
 use std::fmt::Debug;
 
 #[allow(unused_imports)]
@@ -672,23 +672,12 @@ fn compute_ifft(signal: &[Complex64]) -> SignalResult<Vec<f64>> {
     // Instead of using the library FFT implementation directly, which might have issues with
     // numerical stability, use a more robust approach with rustfft
 
-    // Create FFT planner
-    let mut planner = rustfft::FftPlanner::new();
-    let ifft = planner.plan_fft_inverse(_signal.len());
+    // Compute IFFT using scirs2_fft
+    let result = scirs2_fft::ifft(signal, Some(signal.len()))
+        .map_err(|e| SignalError::ComputationError(format!("IFFT failed: {}", e)))?;
 
-    // Convert to rustfft Complex type
-    let mut buffer: Vec<rustfft::num_complex::Complex<f64>> = _signal
-        .iter()
-        .map(|&c| rustfft::num_complex::Complex::<f64>::new(c.re, c.im))
-        .collect();
-
-    // Perform IFFT in-place
-    ifft.process(&mut buffer);
-
-    // Extract real part and scale
-    // The scaling factor is 1/n for normalization of IFFT
-    let scale = 1.0 / signal.len() as f64;
-    let real_result: Vec<f64> = buffer.iter().map(|c| c.re * scale).collect();
+    // Extract real part (scirs2_fft::ifft already handles normalization)
+    let real_result: Vec<f64> = result.iter().map(|c| c.re).collect();
 
     Ok(real_result)
 }

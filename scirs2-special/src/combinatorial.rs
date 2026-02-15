@@ -647,7 +647,7 @@ fn euler_number_asymptotic(n: i32) -> SpecialResult<f64> {
     // Calculate log of the asymptotic approximation to avoid overflow
     // ln|E_n| ≈ ln(8) + 0.5*ln(2/π) + (n+2)*ln(2) + ln(n!) - (n+1)*ln(π)
 
-    let ln_8 = 3.0_f64.ln();
+    let ln_8 = 8.0_f64.ln();
     let ln_sqrt_2_over_pi = 0.5 * (2.0 / PI).ln();
     let power_of_2_term = (n_f + 2.0) * 2.0_f64.ln();
     let pi_power_term = -(n_f + 1.0) * PI.ln();

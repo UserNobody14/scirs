@@ -89,7 +89,13 @@ fn standard_denoise_1d(
 
     // Reconstruct signal
     let waverec_input = thresholded_coeffs.to_wavedec();
-    let denoised_vec = waverec(&waverec_input, config.wavelet)?;
+    let mut denoised_vec = waverec(&waverec_input, config.wavelet)?;
+
+    // Trim reconstructed signal to match original length
+    // (DWT reconstruction may produce a slightly longer signal due to padding)
+    if denoised_vec.len() > n {
+        denoised_vec.truncate(n);
+    }
     let denoised = Array1::from_vec(denoised_vec);
 
     // Calculate diagnostics

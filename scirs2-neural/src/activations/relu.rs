@@ -5,8 +5,8 @@
 
 use crate::activations::Activation;
 use crate::error::{NeuralError, Result};
-use scirs2_core::ndarray::{Array, Zip, ArrayView1, Ix1, IxDyn};
-use scirs2_core::numeric::Float;
+use scirs2_core::ndarray::{Array, ArrayView1, Ix1, IxDyn, Zip};
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::simd_ops::SimdUnifiedOps;
 use std::fmt::Debug;
 /// Rectified Linear Unit (ReLU) activation function.
@@ -41,7 +41,11 @@ impl ReLU {
 
     /// Try SIMD path for f64 arrays
     #[inline]
-    fn try_simd_f64<F: Float>(&self, input: &Array<F, IxDyn>, alpha: F) -> Option<Array<F, IxDyn>> {
+    fn try_simd_f64<F: Float + NumAssign>(
+        &self,
+        input: &Array<F, IxDyn>,
+        alpha: F,
+    ) -> Option<Array<F, IxDyn>> {
         // Check if F is f64 using size_of
         if std::mem::size_of::<F>() != std::mem::size_of::<f64>() {
             return None;
@@ -55,7 +59,7 @@ impl ReLU {
             let slice = std::slice::from_raw_parts(ptr, len);
             let arr1d = ArrayView1::from(slice);
 
-            let alpha_f64 = *(& alpha as *const F as *const f64);
+            let alpha_f64 = *(&alpha as *const F as *const f64);
             let result = if alpha_f64 == 0.0 {
                 f64::simd_relu(&arr1d)
             } else {
@@ -65,10 +69,8 @@ impl ReLU {
             // Convert back to F
             let result_ptr = result.as_ptr() as *const F;
             let result_slice = std::slice::from_raw_parts(result_ptr, result.len());
-            let result_dyn = Array::from_shape_vec(
-                IxDyn(&[result.len()]),
-                result_slice.to_vec()
-            ).ok()?;
+            let result_dyn =
+                Array::from_shape_vec(IxDyn(&[result.len()]), result_slice.to_vec()).ok()?;
 
             Some(result_dyn)
         }
@@ -76,7 +78,11 @@ impl ReLU {
 
     /// Try SIMD path for f32 arrays
     #[inline]
-    fn try_simd_f32<F: Float>(&self, input: &Array<F, IxDyn>, alpha: F) -> Option<Array<F, IxDyn>> {
+    fn try_simd_f32<F: Float + NumAssign>(
+        &self,
+        input: &Array<F, IxDyn>,
+        alpha: F,
+    ) -> Option<Array<F, IxDyn>> {
         // Check if F is f32 using size_of
         if std::mem::size_of::<F>() != std::mem::size_of::<f32>() {
             return None;
@@ -89,7 +95,7 @@ impl ReLU {
             let slice = std::slice::from_raw_parts(ptr, len);
             let arr1d = ArrayView1::from(slice);
 
-            let alpha_f32 = *(& alpha as *const F as *const f32);
+            let alpha_f32 = *(&alpha as *const F as *const f32);
             let result = if alpha_f32 == 0.0 {
                 f32::simd_relu(&arr1d)
             } else {
@@ -99,10 +105,8 @@ impl ReLU {
             // Convert back to F
             let result_ptr = result.as_ptr() as *const F;
             let result_slice = std::slice::from_raw_parts(result_ptr, result.len());
-            let result_dyn = Array::from_shape_vec(
-                IxDyn(&[result.len()]),
-                result_slice.to_vec()
-            ).ok()?;
+            let result_dyn =
+                Array::from_shape_vec(IxDyn(&[result.len()]), result_slice.to_vec()).ok()?;
 
             Some(result_dyn)
         }
@@ -115,8 +119,11 @@ impl Default for ReLU {
     }
 }
 
-impl<F: Float + Debug> Activation<F> for ReLU {
-    fn forward(&self, input: &Array<F, scirs2_core::ndarray::IxDyn>) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
+impl<F: Float + Debug + NumAssign> Activation<F> for ReLU {
+    fn forward(
+        &self,
+        input: &Array<F, scirs2_core::ndarray::IxDyn>,
+    ) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
         let alpha = F::from(self.alpha).ok_or_else(|| {
             NeuralError::InferenceError(
                 "Could not convert alpha to the required float type".to_string(),
@@ -203,8 +210,11 @@ impl Default for LeakyReLU {
     }
 }
 
-impl<F: Float + Debug> Activation<F> for LeakyReLU {
-    fn forward(&self, input: &Array<F, scirs2_core::ndarray::IxDyn>) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
+impl<F: Float + Debug + NumAssign> Activation<F> for LeakyReLU {
+    fn forward(
+        &self,
+        input: &Array<F, scirs2_core::ndarray::IxDyn>,
+    ) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
         // Use ReLU implementation with the alpha parameter
         let relu = ReLU::leaky(self.alpha);
         relu.forward(input)
@@ -291,7 +301,11 @@ mod tests {
 
         // Verify correctness
         for (i, &val) in output.iter().enumerate() {
-            let expected = if input[i] > 0.0 { input[i] } else { 0.01 * input[i] };
+            let expected = if input[i] > 0.0 {
+                input[i]
+            } else {
+                0.01 * input[i]
+            };
             assert!((val - expected).abs() < 1e-5);
         }
     }
@@ -327,7 +341,9 @@ mod tests {
         let relu = ReLU::new();
         let output = Array::from_vec(vec![0.0, 0.0, 0.0, 1.0, 2.0]).into_dyn();
         let grad_output = Array::from_vec(vec![1.0, 1.0, 1.0, 1.0, 1.0]).into_dyn();
-        let grad_input = relu.backward(&grad_output, &output).expect("Operation failed");
+        let grad_input = relu
+            .backward(&grad_output, &output)
+            .expect("Operation failed");
         let expected = Array::from_vec(vec![0.0, 0.0, 0.0, 1.0, 1.0]).into_dyn();
         assert_eq!(grad_input, expected);
     }
@@ -337,7 +353,9 @@ mod tests {
         let relu = ReLU::leaky(0.01);
         let output = Array::from_vec(vec![-0.02, -0.01, 0.0, 1.0, 2.0]).into_dyn();
         let grad_output = Array::from_vec(vec![1.0, 1.0, 1.0, 1.0, 1.0]).into_dyn();
-        let grad_input = relu.backward(&grad_output, &output).expect("Operation failed");
+        let grad_input = relu
+            .backward(&grad_output, &output)
+            .expect("Operation failed");
         let expected = Array::from_vec(vec![0.01, 0.01, 0.01, 1.0, 1.0]).into_dyn();
         for (a, b) in grad_input.iter().zip(expected.iter()) {
             assert!((a - b).abs() < 1e-10);

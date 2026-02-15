@@ -3,9 +3,10 @@
 use crate::callbacks::{Callback, CallbackContext, CallbackTiming};
 use crate::error::Result;
 use scirs2_core::ndarray::ScalarOperand;
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
+
 /// Model checkpoint callback that saves the model after every epoch
 /// and optionally only saves the best models based on a monitored metric.
 pub struct ModelCheckpoint<F: Float + Debug + ScalarOperand> {
@@ -20,31 +21,39 @@ pub struct ModelCheckpoint<F: Float + Debug + ScalarOperand> {
     /// Best value of the monitored metric so far
     best_value: Option<F>,
 }
-impl<F: Float + Debug + ScalarOperand> ModelCheckpoint<F> {
+
+impl<F: Float + Debug + ScalarOperand + NumAssign> ModelCheckpoint<F> {
     /// Create a new model checkpoint callback
     ///
     /// # Arguments
     /// * `filepath` - Directory or file path to save the model
     /// * `save_best_only` - Whether to save only the best model based on the monitored metric
     #[allow(dead_code)]
-    pub fn new<P: AsRef<Path>>(filepath: P, save_bestonly: bool) -> Self {
+    pub fn new<P: AsRef<Path>>(filepath: P, save_best_only: bool) -> Self {
         Self {
-            _filepath: filepath.as_ref().to_path_buf(),
+            filepath: filepath.as_ref().to_path_buf(),
             save_best_only,
             monitor_val_loss: true,
             monitor_decrease: true,
             best_value: None,
         }
     }
+
     /// Configure to monitor training loss instead of validation loss
     pub fn monitor_train_loss(mut self) -> Self {
         self.monitor_val_loss = false;
         self
+    }
+
     /// Configure to monitor if values are increasing (higher is better)
     /// Default is monitoring decreases (lower is better)
     pub fn monitor_increase(mut self) -> Self {
         self.monitor_decrease = false;
-impl<F: Float + Debug + ScalarOperand> Callback<F> for ModelCheckpoint<F> {
+        self
+    }
+}
+
+impl<F: Float + Debug + ScalarOperand + NumAssign> Callback<F> for ModelCheckpoint<F> {
     fn on_event(&mut self, timing: CallbackTiming, context: &mut CallbackContext<F>) -> Result<()> {
         if timing == CallbackTiming::AfterEpoch {
             let should_save = if self.save_best_only {
@@ -54,6 +63,7 @@ impl<F: Float + Debug + ScalarOperand> Callback<F> for ModelCheckpoint<F> {
                 } else {
                     context.epoch_loss
                 };
+
                 if let Some(current) = current_value {
                     match self.best_value {
                         None => {
@@ -70,13 +80,17 @@ impl<F: Float + Debug + ScalarOperand> Callback<F> for ModelCheckpoint<F> {
                                 // Higher is better
                                 current > best
                             };
+
                             if improved {
                                 // Update best value and save the model
                                 self.best_value = Some(current);
                                 true
+                            } else {
                                 false
                             }
+                        }
                     }
+                } else {
                     // No value to monitor, don't save
                     false
                 }
@@ -84,34 +98,51 @@ impl<F: Float + Debug + ScalarOperand> Callback<F> for ModelCheckpoint<F> {
                 // Always save
                 true
             };
+
             if should_save {
                 let epoch = context.epoch;
                 let epoch_display = epoch + 1; // Convert to 1-based for display
+
                 let filepath = if self.filepath.is_dir() {
                     self.filepath
                         .join(format!("model_epoch_{}.pth", epoch_display))
+                } else {
                     self.filepath.clone()
+                };
+
                 println!("Saving model to: {}", filepath.display());
                 // In a real implementation, we'd save the model here
                 // model.save(filepath);
             }
+        }
+
         Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    // No imports needed for this test
+
     #[test]
     fn test_model_checkpoint_creation() {
         // Test creating with default values
         let checkpoint = ModelCheckpoint::<f32>::new("test_path", true);
-        assert_eq!(checkpoint.filepath.to_str().expect("Operation failed"), "test_path");
+        assert_eq!(
+            checkpoint.filepath.to_str().expect("Operation failed"),
+            "test_path"
+        );
         assert!(checkpoint.save_best_only);
         assert!(checkpoint.monitor_val_loss);
         assert!(checkpoint.monitor_decrease);
         assert!(checkpoint.best_value.is_none());
+
         // Test monitor_train_loss
         let checkpoint = ModelCheckpoint::<f32>::new("test_path", true).monitor_train_loss();
         assert!(!checkpoint.monitor_val_loss);
+
         // Test monitor_increase
         let checkpoint = ModelCheckpoint::<f32>::new("test_path", true).monitor_increase();
         assert!(!checkpoint.monitor_decrease);
+    }
+}

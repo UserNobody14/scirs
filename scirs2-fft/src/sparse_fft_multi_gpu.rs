@@ -171,12 +171,18 @@ impl MultiGPUSparseFFT {
         }
 
         // Add CPU fallback as last resort
+        #[cfg(target_pointer_width = "32")]
+        let (memory_total, memory_free) = (1024 * 1024 * 1024, 512 * 1024 * 1024); // 1GB total, 512MB free for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let (memory_total, memory_free) =
+            (16usize * 1024 * 1024 * 1024, 8usize * 1024 * 1024 * 1024); // 16GB total, 8GB free for 64-bit
+
         self.devices.push(GPUDeviceInfo {
             device_id: -1,
             backend: GPUBackend::CPUFallback,
             device_name: "CPU Fallback".to_string(),
-            memory_total: 16 * 1024 * 1024 * 1024, // Assume 16GB RAM
-            memory_free: 8 * 1024 * 1024 * 1024,   // Assume half available
+            memory_total,
+            memory_free,
             compute_capability: 1.0,
             compute_units: num_cpus::get(),
             max_threads_per_block: 1,
@@ -192,12 +198,18 @@ impl MultiGPUSparseFFT {
         if init_cuda_device()? {
             // In a real implementation, this would query actual CUDA devices
             // For now, simulate one CUDA device
+            #[cfg(target_pointer_width = "32")]
+            let (memory_total, memory_free) = (512 * 1024 * 1024, 384 * 1024 * 1024); // 512MB total, 384MB free for 32-bit
+            #[cfg(target_pointer_width = "64")]
+            let (memory_total, memory_free) =
+                (8usize * 1024 * 1024 * 1024, 6usize * 1024 * 1024 * 1024); // 8GB total, 6GB free for 64-bit
+
             self.devices.push(GPUDeviceInfo {
                 device_id: 0,
                 backend: GPUBackend::CUDA,
                 device_name: "NVIDIA GPU (simulated)".to_string(),
-                memory_total: 8 * 1024 * 1024 * 1024, // 8GB
-                memory_free: 6 * 1024 * 1024 * 1024,  // 6GB free
+                memory_total,
+                memory_free,
                 compute_capability: 8.6,
                 compute_units: 68,
                 max_threads_per_block: 1024,
@@ -214,13 +226,19 @@ impl MultiGPUSparseFFT {
         if init_hip_device()? {
             // In a real implementation, this would query actual HIP devices
             // For now, simulate one HIP device
+            #[cfg(target_pointer_width = "32")]
+            let (memory_total, memory_free) = (1024 * 1024 * 1024, 768 * 1024 * 1024); // 1GB total, 768MB free for 32-bit
+            #[cfg(target_pointer_width = "64")]
+            let (memory_total, memory_free) =
+                (16usize * 1024 * 1024 * 1024, 12usize * 1024 * 1024 * 1024); // 16GB total, 12GB free for 64-bit
+
             self.devices.push(GPUDeviceInfo {
                 device_id: 0,
                 backend: GPUBackend::HIP,
                 device_name: "AMD GPU (simulated)".to_string(),
-                memory_total: 16 * 1024 * 1024 * 1024, // 16GB
-                memory_free: 12 * 1024 * 1024 * 1024,  // 12GB free
-                compute_capability: 10.3,              // GFX103x equivalent
+                memory_total,
+                memory_free,
+                compute_capability: 10.3, // GFX103x equivalent
                 compute_units: 40,
                 max_threads_per_block: 256,
                 is_available: true,
@@ -236,13 +254,19 @@ impl MultiGPUSparseFFT {
         if init_sycl_device()? {
             // In a real implementation, this would query actual SYCL devices
             // For now, simulate one SYCL device
+            #[cfg(target_pointer_width = "32")]
+            let (memory_total, memory_free) = (256 * 1024 * 1024, 192 * 1024 * 1024); // 256MB total, 192MB free for 32-bit
+            #[cfg(target_pointer_width = "64")]
+            let (memory_total, memory_free) =
+                (4usize * 1024 * 1024 * 1024, 3usize * 1024 * 1024 * 1024); // 4GB total, 3GB free for 64-bit
+
             self.devices.push(GPUDeviceInfo {
                 device_id: 0,
                 backend: GPUBackend::SYCL,
                 device_name: "Intel GPU (simulated)".to_string(),
-                memory_total: 4 * 1024 * 1024 * 1024, // 4GB
-                memory_free: 3 * 1024 * 1024 * 1024,  // 3GB free
-                compute_capability: 1.2,              // Intel GPU equivalent
+                memory_total,
+                memory_free,
+                compute_capability: 1.2, // Intel GPU equivalent
                 compute_units: 96,
                 max_threads_per_block: 512,
                 is_available: true,

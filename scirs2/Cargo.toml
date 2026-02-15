@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "A Rust port of SciPy with AI/ML extensions - Scientific Computing and AI Library (scirs2)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["scientific", "mathematics", "science", "scipy", "ai"]

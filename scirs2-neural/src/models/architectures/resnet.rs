@@ -3,12 +3,13 @@
 //! ResNet (Residual Network) is a popular CNN architecture that introduced
 //! skip connections to allow for training very deep networks.
 //! Reference: "Deep Residual Learning for Image Recognition", He et al. (2015)
-//! https://arxiv.org/abs/1512.03385
+//! <https://arxiv.org/abs/1512.03385>
 
 use crate::error::{NeuralError, Result};
-use crate::layers::{BatchNorm, Conv2D, Dense, Dropout, Layer, PaddingMode};
+use crate::layers::conv::PaddingMode;
+use crate::layers::{BatchNorm, Conv2D, Dense, Dropout, Layer};
 use scirs2_core::ndarray::{Array, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::SeedableRng;
 use std::fmt::Debug;
 
@@ -53,10 +54,26 @@ impl ResNetConfig {
         Self {
             block: ResNetBlock::Basic,
             layers: vec![
-                ResNetLayer { blocks: 2, channels: 64, stride: 1 },
-                ResNetLayer { blocks: 2, channels: 128, stride: 2 },
-                ResNetLayer { blocks: 2, channels: 256, stride: 2 },
-                ResNetLayer { blocks: 2, channels: 512, stride: 2 },
+                ResNetLayer {
+                    blocks: 2,
+                    channels: 64,
+                    stride: 1,
+                },
+                ResNetLayer {
+                    blocks: 2,
+                    channels: 128,
+                    stride: 2,
+                },
+                ResNetLayer {
+                    blocks: 2,
+                    channels: 256,
+                    stride: 2,
+                },
+                ResNetLayer {
+                    blocks: 2,
+                    channels: 512,
+                    stride: 2,
+                },
             ],
             input_channels,
             num_classes,
@@ -69,10 +86,26 @@ impl ResNetConfig {
         Self {
             block: ResNetBlock::Basic,
             layers: vec![
-                ResNetLayer { blocks: 3, channels: 64, stride: 1 },
-                ResNetLayer { blocks: 4, channels: 128, stride: 2 },
-                ResNetLayer { blocks: 6, channels: 256, stride: 2 },
-                ResNetLayer { blocks: 3, channels: 512, stride: 2 },
+                ResNetLayer {
+                    blocks: 3,
+                    channels: 64,
+                    stride: 1,
+                },
+                ResNetLayer {
+                    blocks: 4,
+                    channels: 128,
+                    stride: 2,
+                },
+                ResNetLayer {
+                    blocks: 6,
+                    channels: 256,
+                    stride: 2,
+                },
+                ResNetLayer {
+                    blocks: 3,
+                    channels: 512,
+                    stride: 2,
+                },
             ],
             input_channels,
             num_classes,
@@ -85,10 +118,26 @@ impl ResNetConfig {
         Self {
             block: ResNetBlock::Bottleneck,
             layers: vec![
-                ResNetLayer { blocks: 3, channels: 64, stride: 1 },
-                ResNetLayer { blocks: 4, channels: 128, stride: 2 },
-                ResNetLayer { blocks: 6, channels: 256, stride: 2 },
-                ResNetLayer { blocks: 3, channels: 512, stride: 2 },
+                ResNetLayer {
+                    blocks: 3,
+                    channels: 64,
+                    stride: 1,
+                },
+                ResNetLayer {
+                    blocks: 4,
+                    channels: 128,
+                    stride: 2,
+                },
+                ResNetLayer {
+                    blocks: 6,
+                    channels: 256,
+                    stride: 2,
+                },
+                ResNetLayer {
+                    blocks: 3,
+                    channels: 512,
+                    stride: 2,
+                },
             ],
             input_channels,
             num_classes,
@@ -101,10 +150,26 @@ impl ResNetConfig {
         Self {
             block: ResNetBlock::Bottleneck,
             layers: vec![
-                ResNetLayer { blocks: 3, channels: 64, stride: 1 },
-                ResNetLayer { blocks: 4, channels: 128, stride: 2 },
-                ResNetLayer { blocks: 23, channels: 256, stride: 2 },
-                ResNetLayer { blocks: 3, channels: 512, stride: 2 },
+                ResNetLayer {
+                    blocks: 3,
+                    channels: 64,
+                    stride: 1,
+                },
+                ResNetLayer {
+                    blocks: 4,
+                    channels: 128,
+                    stride: 2,
+                },
+                ResNetLayer {
+                    blocks: 23,
+                    channels: 256,
+                    stride: 2,
+                },
+                ResNetLayer {
+                    blocks: 3,
+                    channels: 512,
+                    stride: 2,
+                },
             ],
             input_channels,
             num_classes,
@@ -117,10 +182,26 @@ impl ResNetConfig {
         Self {
             block: ResNetBlock::Bottleneck,
             layers: vec![
-                ResNetLayer { blocks: 3, channels: 64, stride: 1 },
-                ResNetLayer { blocks: 8, channels: 128, stride: 2 },
-                ResNetLayer { blocks: 36, channels: 256, stride: 2 },
-                ResNetLayer { blocks: 3, channels: 512, stride: 2 },
+                ResNetLayer {
+                    blocks: 3,
+                    channels: 64,
+                    stride: 1,
+                },
+                ResNetLayer {
+                    blocks: 8,
+                    channels: 128,
+                    stride: 2,
+                },
+                ResNetLayer {
+                    blocks: 36,
+                    channels: 256,
+                    stride: 2,
+                },
+                ResNetLayer {
+                    blocks: 3,
+                    channels: 512,
+                    stride: 2,
+                },
             ],
             input_channels,
             num_classes,
@@ -136,7 +217,7 @@ impl ResNetConfig {
 }
 
 /// Basic block for ResNet (2 conv layers)
-struct BasicBlock<F: Float + Debug + ScalarOperand + Send + Sync + 'static> {
+struct BasicBlock<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> {
     /// First convolutional layer
     conv1: Conv2D<F>,
     /// First batch normalization layer
@@ -149,7 +230,7 @@ struct BasicBlock<F: Float + Debug + ScalarOperand + Send + Sync + 'static> {
     downsample: Option<(Conv2D<F>, BatchNorm<F>)>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Clone for BasicBlock<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> Clone for BasicBlock<F> {
     fn clone(&self) -> Self {
         Self {
             conv1: self.conv1.clone(),
@@ -161,7 +242,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Clone for BasicBl
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> BasicBlock<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> BasicBlock<F> {
     /// Create a new basic block
     pub fn new(
         in_channels: usize,
@@ -172,41 +253,23 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> BasicBlock<F> {
         let stride_tuple = (stride, stride);
 
         let mut rng1 = scirs2_core::random::rngs::SmallRng::from_seed([42; 32]);
-        let conv1 = Conv2D::new(
-            in_channels,
-            out_channels,
-            (3, 3),
-            stride_tuple,
-            PaddingMode::Same,
-            &mut rng1,
-        )?;
+        let conv1 = Conv2D::new(in_channels, out_channels, (3, 3), stride_tuple, None)?
+            .with_padding(PaddingMode::Same);
 
         let mut rng2 = scirs2_core::random::rngs::SmallRng::from_seed([43; 32]);
         let bn1 = BatchNorm::new(out_channels, 1e-5, 0.1, &mut rng2)?;
 
         let mut rng3 = scirs2_core::random::rngs::SmallRng::from_seed([44; 32]);
-        let conv2 = Conv2D::new(
-            out_channels,
-            out_channels,
-            (3, 3),
-            (1, 1),
-            PaddingMode::Same,
-            &mut rng3,
-        )?;
+        let conv2 = Conv2D::new(out_channels, out_channels, (3, 3), (1, 1), None)?
+            .with_padding(PaddingMode::Same);
 
         let mut rng4 = scirs2_core::random::rngs::SmallRng::from_seed([45; 32]);
         let bn2 = BatchNorm::new(out_channels, 1e-5, 0.1, &mut rng4)?;
 
         let downsample = if downsample {
             let mut rng5 = scirs2_core::random::rngs::SmallRng::from_seed([46; 32]);
-            let ds_conv = Conv2D::new(
-                in_channels,
-                out_channels,
-                (1, 1),
-                stride_tuple,
-                PaddingMode::Valid,
-                &mut rng5,
-            )?;
+            let ds_conv = Conv2D::new(in_channels, out_channels, (1, 1), stride_tuple, None)?
+                .with_padding(PaddingMode::Valid);
 
             let mut rng6 = scirs2_core::random::rngs::SmallRng::from_seed([47; 32]);
             let ds_bn = BatchNorm::new(out_channels, 1e-5, 0.1, &mut rng6)?;
@@ -225,12 +288,14 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> BasicBlock<F> {
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for BasicBlock<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> Layer<F>
+    for BasicBlock<F>
+{
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
         // First conv block
         let mut x = self.conv1.forward(input)?;
         x = self.bn1.forward(&x)?;
-        x = x.mapv(|v| v.max(F::zero())); // ReLU
+        x = x.mapv(|v: F| v.max(F::zero())); // ReLU
 
         // Second conv block
         x = self.conv2.forward(&x)?;
@@ -248,7 +313,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for Basi
         let x = &x + &identity;
 
         // Final ReLU
-        let x = x.mapv(|v| v.max(F::zero()));
+        let x = x.mapv(|v: F| v.max(F::zero()));
 
         Ok(x)
     }
@@ -283,7 +348,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for Basi
 }
 
 /// Bottleneck block for ResNet (3 conv layers)
-struct BottleneckBlock<F: Float + Debug + ScalarOperand + Send + Sync + 'static> {
+struct BottleneckBlock<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> {
     /// First convolutional layer (1x1 reduce)
     conv1: Conv2D<F>,
     /// First batch normalization layer
@@ -303,7 +368,9 @@ struct BottleneckBlock<F: Float + Debug + ScalarOperand + Send + Sync + 'static>
     expansion: usize,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Clone for BottleneckBlock<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> Clone
+    for BottleneckBlock<F>
+{
     fn clone(&self) -> Self {
         Self {
             conv1: self.conv1.clone(),
@@ -318,7 +385,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Clone for Bottlen
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> BottleneckBlock<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> BottleneckBlock<F> {
     /// Expansion factor for bottleneck blocks
     const EXPANSION: usize = 4;
 
@@ -334,14 +401,8 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> BottleneckBlock<F
 
         // First conv (1x1 reduce)
         let mut rng1 = scirs2_core::random::rngs::SmallRng::from_seed([48; 32]);
-        let conv1 = Conv2D::new(
-            in_channels,
-            bottleneck_channels,
-            (1, 1),
-            (1, 1),
-            PaddingMode::Valid,
-            &mut rng1,
-        )?;
+        let conv1 = Conv2D::new(in_channels, bottleneck_channels, (1, 1), (1, 1), None)?
+            .with_padding(PaddingMode::Valid);
 
         let mut rng2 = scirs2_core::random::rngs::SmallRng::from_seed([49; 32]);
         let bn1 = BatchNorm::new(bottleneck_channels, 1e-5, 0.1, &mut rng2)?;
@@ -353,23 +414,17 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> BottleneckBlock<F
             bottleneck_channels,
             (3, 3),
             stride_tuple,
-            PaddingMode::Same,
-            &mut rng3,
-        )?;
+            None,
+        )?
+        .with_padding(PaddingMode::Same);
 
         let mut rng4 = scirs2_core::random::rngs::SmallRng::from_seed([51; 32]);
         let bn2 = BatchNorm::new(bottleneck_channels, 1e-5, 0.1, &mut rng4)?;
 
         // Third conv (1x1 expand)
         let mut rng5 = scirs2_core::random::rngs::SmallRng::from_seed([52; 32]);
-        let conv3 = Conv2D::new(
-            bottleneck_channels,
-            out_channels,
-            (1, 1),
-            (1, 1),
-            PaddingMode::Valid,
-            &mut rng5,
-        )?;
+        let conv3 = Conv2D::new(bottleneck_channels, out_channels, (1, 1), (1, 1), None)?
+            .with_padding(PaddingMode::Valid);
 
         let mut rng6 = scirs2_core::random::rngs::SmallRng::from_seed([53; 32]);
         let bn3 = BatchNorm::new(out_channels, 1e-5, 0.1, &mut rng6)?;
@@ -377,14 +432,8 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> BottleneckBlock<F
         // Downsample
         let downsample = if downsample {
             let mut rng7 = scirs2_core::random::rngs::SmallRng::from_seed([54; 32]);
-            let ds_conv = Conv2D::new(
-                in_channels,
-                out_channels,
-                (1, 1),
-                stride_tuple,
-                PaddingMode::Valid,
-                &mut rng7,
-            )?;
+            let ds_conv = Conv2D::new(in_channels, out_channels, (1, 1), stride_tuple, None)?
+                .with_padding(PaddingMode::Valid);
 
             let mut rng8 = scirs2_core::random::rngs::SmallRng::from_seed([55; 32]);
             let ds_bn = BatchNorm::new(out_channels, 1e-5, 0.1, &mut rng8)?;
@@ -406,17 +455,19 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> BottleneckBlock<F
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for BottleneckBlock<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> Layer<F>
+    for BottleneckBlock<F>
+{
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
         // First conv block
         let mut x = self.conv1.forward(input)?;
         x = self.bn1.forward(&x)?;
-        x = x.mapv(|v| v.max(F::zero())); // ReLU
+        x = x.mapv(|v: F| v.max(F::zero())); // ReLU
 
         // Second conv block
         x = self.conv2.forward(&x)?;
         x = self.bn2.forward(&x)?;
-        x = x.mapv(|v| v.max(F::zero())); // ReLU
+        x = x.mapv(|v: F| v.max(F::zero())); // ReLU
 
         // Third conv block
         x = self.conv3.forward(&x)?;
@@ -434,7 +485,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for Bott
         let x = &x + &identity;
 
         // Final ReLU
-        let x = x.mapv(|v| v.max(F::zero()));
+        let x = x.mapv(|v: F| v.max(F::zero()));
 
         Ok(x)
     }
@@ -471,7 +522,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for Bott
 }
 
 /// ResNet implementation
-pub struct ResNet<F: Float + Debug + ScalarOperand + Send + Sync + 'static> {
+pub struct ResNet<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> {
     /// Initial convolutional layer
     conv1: Conv2D<F>,
     /// Initial batch normalization
@@ -488,19 +539,13 @@ pub struct ResNet<F: Float + Debug + ScalarOperand + Send + Sync + 'static> {
     config: ResNetConfig,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> ResNet<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> ResNet<F> {
     /// Create a new ResNet model
     pub fn new(config: ResNetConfig) -> Result<Self> {
         // Initial convolution
         let mut rng1 = scirs2_core::random::rngs::SmallRng::from_seed([56; 32]);
-        let conv1 = Conv2D::new(
-            config.input_channels,
-            64,
-            (7, 7),
-            (2, 2),
-            PaddingMode::Same,
-            &mut rng1,
-        )?;
+        let conv1 = Conv2D::new(config.input_channels, 64, (7, 7), (2, 2), None)?
+            .with_padding(PaddingMode::Same);
 
         let mut rng2 = scirs2_core::random::rngs::SmallRng::from_seed([57; 32]);
         let bn1 = BatchNorm::new(64, 1e-5, 0.1, &mut rng2)?;
@@ -512,9 +557,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> ResNet<F> {
         // Final FC layer
         let fc_in_features = match config.block {
             ResNetBlock::Basic => config.layers.last().map(|l| l.channels).unwrap_or(512),
-            ResNetBlock::Bottleneck => {
-                config.layers.last().map(|l| l.channels * 4).unwrap_or(2048)
-            }
+            ResNetBlock::Bottleneck => config.layers.last().map(|l| l.channels * 4).unwrap_or(2048),
         };
 
         let mut rng3 = scirs2_core::random::rngs::SmallRng::from_seed([58; 32]);
@@ -597,7 +640,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> ResNet<F> {
                 let mut sum = F::zero();
                 for h in 0..height {
                     for w in 0..width {
-                        sum = sum + x[[b, c, h, w]];
+                        sum += x[[b, c, h, w]];
                     }
                 }
                 output[[b, c]] = sum / count;
@@ -608,12 +651,12 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> ResNet<F> {
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for ResNet<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> Layer<F> for ResNet<F> {
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
         // Initial conv
         let mut x = self.conv1.forward(input)?;
         x = self.bn1.forward(&x)?;
-        x = x.mapv(|v| v.max(F::zero())); // ReLU
+        x = x.mapv(|v: F| v.max(F::zero())); // ReLU
 
         // Process through basic blocks
         for block in &self.layer1 {

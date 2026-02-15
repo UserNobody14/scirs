@@ -5,41 +5,80 @@
 
 use crate::error::{FFTError, FFTResult};
 use crate::fft::NormMode;
+#[cfg(feature = "oxifft")]
+use crate::oxifft_plan_cache;
+#[cfg(feature = "oxifft")]
+use oxifft::{Complex as OxiComplex, Direction};
 use scirs2_core::ndarray::{Array, Array1, Array2, ArrayD, Dimension, IxDyn, ShapeBuilder};
 use scirs2_core::numeric::Complex64;
 use scirs2_core::numeric::NumCast;
+#[cfg(feature = "rustfft-backend")]
 use rustfft::{num_complex::Complex as RustComplex, FftPlanner};
 use std::fmt::Debug;
 use std::sync::Arc;
 
 // Thread-local buffer cache for reusing allocated memory
+#[cfg(feature = "oxifft")]
+thread_local! {
+    static BUFFER_CACHE: std::cell::RefCell<Option<Vec<OxiComplex<f64>>>> = std::cell::RefCell::new(None);
+}
+
+#[cfg(all(not(feature = "oxifft"), feature = "rustfft-backend"))]
 thread_local! {
     static BUFFER_CACHE: std::cell::RefCell<Option<Vec<RustComplex<f64>>>> = std::cell::RefCell::new(None);
 }
 
 /// Get a buffer from the thread-local cache or create a new one
+#[cfg(feature = "oxifft")]
+#[allow(dead_code)]
+fn get_or_create_buffer(size: usize) -> Vec<OxiComplex<f64>> {
+    BUFFER_CACHE.with(|cache| {
+        let mut cache_ref = cache.borrow_mut();
+        if let Some(buffer) = cache_ref.take() {
+            if buffer.capacity() >= size {
+                // Reuse existing buffer
+                let mut buffer = buffer;
+                buffer.resize(size, OxiComplex::zero());
+                return buffer;
+            }
+        }
+        // Create new buffer
+        Vec::with_capacity(size)
+    })
+}
+
+#[cfg(all(not(feature = "oxifft"), feature = "rustfft-backend"))]
 #[allow(dead_code)]
 fn get_or_create_buffer(size: usize) -> Vec<RustComplex<f64>> {
     BUFFER_CACHE.with(|cache| {
         let mut cache_ref = cache.borrow_mut();
         if let Some(buffer) = cache_ref.take() {
-            if buffer.capacity() >= _size {
+            if buffer.capacity() >= size {
                 // Reuse existing buffer
                 let mut buffer = buffer;
-                buffer.resize(_size, RustComplex::new(0.0, 0.0));
+                buffer.resize(size, RustComplex::new(0.0, 0.0));
                 return buffer;
             }
         }
         // Create new buffer
-        Vec::with_capacity(_size)
+        Vec::with_capacity(size)
     })
 }
 
 /// Return a buffer to the thread-local cache for future reuse
+#[cfg(feature = "oxifft")]
+#[allow(dead_code)]
+fn return_buffer_to_cache(buffer: Vec<OxiComplex<f64>>) {
+    BUFFER_CACHE.with(|cache| {
+        *cache.borrow_mut() = Some(buffer);
+    });
+}
+
+#[cfg(all(not(feature = "oxifft"), feature = "rustfft-backend"))]
 #[allow(dead_code)]
 fn return_buffer_to_cache(buffer: Vec<RustComplex<f64>>) {
     BUFFER_CACHE.with(|cache| {
-        *cache.borrow_mut() = Some(_buffer);
+        *cache.borrow_mut() = Some(buffer);
     });
 }
 
@@ -53,11 +92,11 @@ where
     if let Some(complex) = try_as_complex(&val) {
         return Ok(complex);
     }
-    
+
     // Handle real value
-    let real = NumCast::from(_val)
+    let real = NumCast::from(val)
         .ok_or_else(|| FFTError::ValueError(format!("Could not convert {:?} to f64", val)))?;
-    
+
     Ok(Complex64::new(real, 0.0))
 }
 
@@ -65,26 +104,41 @@ where
 #[allow(dead_code)]
 fn try_as_complex<T: 'static>(val: &T) -> Option<Complex64> {
     use std::any::Any;
-    
+
     // Try direct cast
-    if let Some(complex) = (_val as &dyn Any).downcast_ref::<Complex64>() {
+    if let Some(complex) = (val as &dyn Any).downcast_ref::<Complex64>() {
         return Some(*complex);
     }
-    
+
     // Try f32 complex
-    if let Some(complex) = (_val as &dyn Any).downcast_ref::<scirs2_core::numeric::Complex<f32>>() {
+    if let Some(complex) = (val as &dyn Any).downcast_ref::<scirs2_core::numeric::Complex<f32>>() {
         return Some(Complex64::new(complex.re as f64, complex.im as f64));
     }
-    
+
+    // Try OxiFFT complex types
+    #[cfg(feature = "oxifft")]
+    {
+        if let Some(complex) = (val as &dyn Any).downcast_ref::<OxiComplex<f64>>() {
+            return Some(Complex64::new(complex.re, complex.im));
+        }
+
+        if let Some(complex) = (val as &dyn Any).downcast_ref::<OxiComplex<f32>>() {
+            return Some(Complex64::new(complex.re as f64, complex.im as f64));
+        }
+    }
+
     // Try rustfft complex types
-    if let Some(complex) = (_val as &dyn Any).downcast_ref::<RustComplex<f64>>() {
-        return Some(Complex64::new(complex.re, complex.im));
+    #[cfg(feature = "rustfft-backend")]
+    {
+        if let Some(complex) = (val as &dyn Any).downcast_ref::<RustComplex<f64>>() {
+            return Some(Complex64::new(complex.re, complex.im));
+        }
+
+        if let Some(complex) = (val as &dyn Any).downcast_ref::<RustComplex<f32>>() {
+            return Some(Complex64::new(complex.re as f64, complex.im as f64));
+        }
     }
-    
-    if let Some(complex) = (_val as &dyn Any).downcast_ref::<RustComplex<f32>>() {
-        return Some(Complex64::new(complex.re as f64, complex.im as f64));
-    }
-    
+
     None
 }
 
@@ -123,30 +177,75 @@ where
     
     // Get the normalization mode
     let norm_mode = norm.unwrap_or(NormMode::None);
-    
+
     // Get or create the buffer
     let mut buffer = get_or_create_buffer(fft_size);
-    buffer.resize(fft_size, RustComplex::new(0.0, 0.0));
-    
+    #[cfg(feature = "oxifft")]
+    {
+        buffer.resize(fft_size, OxiComplex::zero());
+    }
+    #[cfg(all(not(feature = "oxifft"), feature = "rustfft-backend"))]
+    {
+        buffer.resize(fft_size, RustComplex::new(0.0, 0.0));
+    }
+
     // Convert input to complex numbers with minimal allocations
-    for (i, val) in input.iter().enumerate() {
-        if i < fft_size {
-            let complex = to_complex_value(*val)?;
-            buffer[i] = RustComplex::new(complex.re, complex.im);
+    #[cfg(feature = "oxifft")]
+    {
+        for (i, val) in input.iter().enumerate() {
+            if i < fft_size {
+                let complex = to_complex_value(*val)?;
+                buffer[i] = OxiComplex::new(complex.re, complex.im);
+            }
         }
     }
-    
-    // Use rustfft library for computation with planner caching
-    static PLANNER_CACHE: std::sync::OnceLock<std::sync::Mutex<FftPlanner<f64>>> = std::sync::OnceLock::new();
-    let planner = PLANNER_CACHE.get_or_init(|| std::sync::Mutex::new(FftPlanner::new()));
-    
-    let fft_plan = {
-        let mut planner = planner.lock().expect("Operation failed");
-        planner.plan_fft_forward(fft_size)
-    };
-    
-    // Perform FFT in-place
-    fft_plan.process(&mut buffer);
+
+    #[cfg(all(not(feature = "oxifft"), feature = "rustfft-backend"))]
+    {
+        for (i, val) in input.iter().enumerate() {
+            if i < fft_size {
+                let complex = to_complex_value(*val)?;
+                buffer[i] = RustComplex::new(complex.re, complex.im);
+            }
+        }
+    }
+
+    // Use FFT library for computation with planner caching
+    #[cfg(feature = "oxifft")]
+    {
+        // Convert to output buffer
+        let input_oxi: Vec<OxiComplex<f64>> = buffer.iter().map(|&c| *c).collect();
+        let mut output_oxi: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); fft_size];
+
+        // Perform FFT
+        oxifft_plan_cache::execute_c2c(&input_oxi, &mut output_oxi, Direction::Forward)?;
+
+        // Copy back to buffer
+        buffer.clear();
+        buffer.extend(output_oxi);
+    }
+
+    #[cfg(all(not(feature = "oxifft"), feature = "rustfft-backend"))]
+    {
+        // Use rustfft library for computation with planner caching
+        static PLANNER_CACHE: std::sync::OnceLock<std::sync::Mutex<FftPlanner<f64>>> = std::sync::OnceLock::new();
+        let planner = PLANNER_CACHE.get_or_init(|| std::sync::Mutex::new(FftPlanner::new()));
+
+        let fft_plan = {
+            let mut planner = planner.lock().expect("Operation failed");
+            planner.plan_fft_forward(fft_size)
+        };
+
+        // Perform FFT in-place
+        fft_plan.process(&mut buffer);
+    }
+
+    #[cfg(all(not(feature = "oxifft"), not(feature = "rustfft-backend")))]
+    {
+        return Err(FFTError::ComputationError(
+            "No FFT backend available. Enable either 'oxifft' or 'rustfft-backend' feature.".to_string()
+        ));
+    }
     
     // Apply normalization if needed
     if norm_mode != NormMode::None {
@@ -227,31 +326,75 @@ where
     
     // Get the normalization mode
     let norm_mode = norm.unwrap_or(NormMode::Backward);
-    
+
     // Get or create the buffer
     let mut buffer = get_or_create_buffer(fft_size);
-    buffer.resize(fft_size, RustComplex::new(0.0, 0.0));
-    
+    #[cfg(feature = "oxifft")]
+    {
+        buffer.resize(fft_size, OxiComplex::zero());
+    }
+    #[cfg(all(not(feature = "oxifft"), feature = "rustfft-backend"))]
+    {
+        buffer.resize(fft_size, RustComplex::new(0.0, 0.0));
+    }
+
     // Convert input to complex numbers with minimal allocations
-    for (i, val) in input.iter().enumerate() {
-        if i < fft_size {
-            let complex = to_complex_value(*val)?;
-            buffer[i] = RustComplex::new(complex.re, complex.im);
+    #[cfg(feature = "oxifft")]
+    {
+        for (i, val) in input.iter().enumerate() {
+            if i < fft_size {
+                let complex = to_complex_value(*val)?;
+                buffer[i] = OxiComplex::new(complex.re, complex.im);
+            }
         }
     }
-    
-    // Use rustfft library for computation with planner caching
-    static PLANNER_CACHE: std::sync::OnceLock<std::sync::Mutex<FftPlanner<f64>>> = std::sync::OnceLock::new();
-    let planner = PLANNER_CACHE.get_or_init(|| std::sync::Mutex::new(FftPlanner::new()));
-    
-    let ifft_plan = {
-        let mut planner = planner.lock().expect("Operation failed");
-        planner.plan_fft_inverse(fft_size)
-    };
-    
-    // Perform IFFT in-place
-    ifft_plan.process(&mut buffer);
-    
+
+    #[cfg(all(not(feature = "oxifft"), feature = "rustfft-backend"))]
+    {
+        for (i, val) in input.iter().enumerate() {
+            if i < fft_size {
+                let complex = to_complex_value(*val)?;
+                buffer[i] = RustComplex::new(complex.re, complex.im);
+            }
+        }
+    }
+
+    // Use FFT library for computation with planner caching
+    #[cfg(feature = "oxifft")]
+    {
+        // Convert to output buffer
+        let input_oxi: Vec<OxiComplex<f64>> = buffer.iter().map(|&c| *c).collect();
+        let mut output_oxi: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); fft_size];
+
+        // Perform IFFT
+        oxifft_plan_cache::execute_c2c(&input_oxi, &mut output_oxi, Direction::Backward)?;
+
+        // Copy back to buffer
+        buffer.clear();
+        buffer.extend(output_oxi);
+    }
+
+    #[cfg(all(not(feature = "oxifft"), feature = "rustfft-backend"))]
+    {
+        static PLANNER_CACHE: std::sync::OnceLock<std::sync::Mutex<FftPlanner<f64>>> = std::sync::OnceLock::new();
+        let planner = PLANNER_CACHE.get_or_init(|| std::sync::Mutex::new(FftPlanner::new()));
+
+        let ifft_plan = {
+            let mut planner = planner.lock().expect("Operation failed");
+            planner.plan_fft_inverse(fft_size)
+        };
+
+        // Perform IFFT in-place
+        ifft_plan.process(&mut buffer);
+    }
+
+    #[cfg(all(not(feature = "oxifft"), not(feature = "rustfft-backend")))]
+    {
+        return Err(FFTError::ComputationError(
+            "No FFT backend available. Enable either 'oxifft' or 'rustfft-backend' feature.".to_string()
+        ));
+    }
+
     // Apply normalization if needed
     if norm_mode != NormMode::None {
         let scale = match norm_mode {
@@ -339,7 +482,8 @@ where
     let norm_mode = match norm {
         Some("forward") => NormMode::Forward,
         Some("backward") => NormMode::Backward,
-        Some("ortho") => NormMode::Ortho_ => NormMode::Backward, // Default
+        Some("ortho") => NormMode::Ortho,
+        _ => NormMode::Backward, // Default
     };
     
     // Create output array
@@ -453,7 +597,8 @@ where
     let norm_mode = match norm {
         Some("forward") => NormMode::Forward,
         Some("backward") => NormMode::Backward,
-        Some("ortho") => NormMode::Ortho_ => NormMode::Backward, // Default
+        Some("ortho") => NormMode::Ortho,
+        _ => NormMode::Backward, // Default
     };
     
     // Create output array

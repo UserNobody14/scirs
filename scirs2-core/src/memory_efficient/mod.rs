@@ -44,7 +44,21 @@ mod zero_serialization;
 mod zerocopy;
 
 pub use adaptive_chunking::{
-    AdaptiveChunking, AdaptiveChunkingBuilder, AdaptiveChunkingParams, AdaptiveChunkingResult,
+    create_shared_monitor,
+    // Core types
+    AdaptiveChunking,
+    AdaptiveChunkingBuilder,
+    AdaptiveChunkingParams,
+    AdaptiveChunkingResult,
+    // v0.2.0: Memory management types
+    AdaptiveChunkingWithMonitoring,
+    ChunkProcessingStats,
+    DynamicChunkAdjuster,
+    MemoryLimits,
+    MemoryPressureLevel,
+    MemoryPressureMonitor,
+    MemoryTrend,
+    SharedMemoryMonitor,
     WorkloadType,
 };
 pub use adaptive_feedback::{

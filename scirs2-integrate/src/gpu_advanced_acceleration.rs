@@ -968,11 +968,16 @@ impl MultiGpuConfiguration {
 
     /// Create a CPU fallback configuration
     pub fn cpu_fallback_config(&self) -> IntegrateResult<Self> {
+        #[cfg(target_pointer_width = "32")]
+        let total_memory = 512 * 1024 * 1024; // 512MB system RAM for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let total_memory = 8usize * 1024 * 1024 * 1024; // 8GB system RAM for 64-bit
+
         let devices = vec![GpuDeviceInfo {
             device_id: 0,
             name: "CPU Fallback Mode".to_string(),
-            total_memory: 8 * 1024 * 1024 * 1024, // 8GB system RAM
-            compute_capability: (1, 0),           // Minimal capability
+            total_memory,
+            compute_capability: (1, 0), // Minimal capability
             multiprocessor_count: num_cpus::get(),
             max_threads_per_block: 1,
             current_load: 0.0,
@@ -992,10 +997,15 @@ impl MultiGpuConfiguration {
     /// Detect available GPU devices
     fn detect_gpu_devices(&self) -> IntegrateResult<Vec<GpuDeviceInfo>> {
         // Simplified detection - real implementation would query GPU drivers
+        #[cfg(target_pointer_width = "32")]
+        let total_memory = 1024 * 1024 * 1024; // 1GB for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let total_memory = 24usize * 1024 * 1024 * 1024; // 24GB for 64-bit
+
         Ok(vec![GpuDeviceInfo {
             device_id: 0,
             name: "NVIDIA RTX 4090".to_string(),
-            total_memory: 24 * 1024 * 1024 * 1024, // 24GB
+            total_memory,
             compute_capability: (8, 9),
             multiprocessor_count: 128,
             max_threads_per_block: 1024,

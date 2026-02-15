@@ -184,7 +184,16 @@ impl Default for AdvancedParallelConfig {
                 system_ram,
                 memory_limit: Some(system_ram * 3 / 4), // Use 75% of system RAM
                 enable_out_of_core: true,
-                out_of_core_chunksize: 1024 * 1024 * 1024, // 1GB chunks
+                out_of_core_chunksize: {
+                    #[cfg(target_pointer_width = "32")]
+                    {
+                        64 * 1024 * 1024
+                    } // 64MB chunks for 32-bit
+                    #[cfg(target_pointer_width = "64")]
+                    {
+                        1024 * 1024 * 1024
+                    } // 1GB chunks for 64-bit
+                },
                 enable_memory_mapping: true,
                 memory_poolsize: system_ram / 8,
                 enable_gc: true,
@@ -244,7 +253,14 @@ impl AdvancedParallelConfig {
             // For now, use environment variable if available
             if let Ok(mem_str) = std::env::var("SCIRS_SYSTEM_RAM") {
                 if let Ok(mem_gb) = mem_str.parse::<usize>() {
-                    return mem_gb * 1024 * 1024 * 1024;
+                    #[cfg(target_pointer_width = "32")]
+                    {
+                        return (mem_gb * 1024 * 1024 * 1024).min(2 * 1024 * 1024 * 1024);
+                    }
+                    #[cfg(target_pointer_width = "64")]
+                    {
+                        return mem_gb * 1024 * 1024 * 1024;
+                    }
                 }
             }
         }
@@ -255,7 +271,14 @@ impl AdvancedParallelConfig {
             // For now, use environment variable if available
             if let Ok(mem_str) = std::env::var("SCIRS_SYSTEM_RAM") {
                 if let Ok(mem_gb) = mem_str.parse::<usize>() {
-                    return mem_gb * 1024 * 1024 * 1024;
+                    #[cfg(target_pointer_width = "32")]
+                    {
+                        return (mem_gb * 1024 * 1024 * 1024).min(2 * 1024 * 1024 * 1024);
+                    }
+                    #[cfg(target_pointer_width = "64")]
+                    {
+                        return mem_gb * 1024 * 1024 * 1024;
+                    }
                 }
             }
         }
@@ -263,14 +286,29 @@ impl AdvancedParallelConfig {
         // Fallback: Estimate based on available threads (rough heuristic)
         let num_cores = num_threads().max(1);
 
-        if num_cores >= 16 {
-            32 * 1024 * 1024 * 1024 // 32GB for high-end systems
-        } else if num_cores >= 8 {
-            16 * 1024 * 1024 * 1024 // 16GB for mid-range systems
-        } else if num_cores >= 4 {
-            8 * 1024 * 1024 * 1024 // 8GB for entry-level systems
-        } else {
-            4 * 1024 * 1024 * 1024 // 4GB for minimal systems
+        #[cfg(target_pointer_width = "32")]
+        {
+            if num_cores >= 16 {
+                2 * 1024 * 1024 * 1024 // 2GB max for 32-bit high-end systems
+            } else if num_cores >= 8 {
+                1024 * 1024 * 1024 // 1GB for 32-bit mid-range systems
+            } else if num_cores >= 4 {
+                512 * 1024 * 1024 // 512MB for 32-bit entry-level systems
+            } else {
+                256 * 1024 * 1024 // 256MB for 32-bit minimal systems
+            }
+        }
+        #[cfg(target_pointer_width = "64")]
+        {
+            if num_cores >= 16 {
+                32usize * 1024 * 1024 * 1024 // 32GB for high-end systems
+            } else if num_cores >= 8 {
+                16usize * 1024 * 1024 * 1024 // 16GB for mid-range systems
+            } else if num_cores >= 4 {
+                8usize * 1024 * 1024 * 1024 // 8GB for entry-level systems
+            } else {
+                4usize * 1024 * 1024 * 1024 // 4GB for minimal systems
+            }
         }
     }
 
@@ -1062,9 +1100,14 @@ impl Worker {
 impl GpuContext {
     fn new(config: &GpuConfig) -> Result<Self, String> {
         // Simplified GPU initialization
+        #[cfg(target_pointer_width = "32")]
+        let default_gpu_memory = 256 * 1024 * 1024; // 256MB for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let default_gpu_memory = 1024 * 1024 * 1024; // 1GB for 64-bit
+
         Ok(Self {
             device_id: config.preferred_device.unwrap_or(0),
-            available_memory: config.gpu_memory_limit.unwrap_or(1024 * 1024 * 1024),
+            available_memory: config.gpu_memory_limit.unwrap_or(default_gpu_memory),
             stream_handles: Vec::new(),
             unified_memory_enabled: config.enable_unified_memory,
         })

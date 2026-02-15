@@ -3,16 +3,19 @@
 //! This module provides implementations of neural network models,
 //! including Sequential models and training utilities.
 
-use scirs2_core::ndarray::{Array, ScalarOperand};
-use scirs2_core::numeric::Float;
-use std::fmt::Debug;
 use crate::error::Result;
 use crate::losses::Loss;
 use crate::optimizers::Optimizer;
+use scirs2_core::ndarray::{Array, ScalarOperand};
+use scirs2_core::numeric::Float;
+use std::fmt::Debug;
 /// Trait for neural network models
 pub trait Model<F: Float + Debug + ScalarOperand> {
     /// Forward pass through the model
-    fn forward(&self, input: &Array<F, scirs2_core::ndarray::IxDyn>) -> Result<Array<F, scirs2_core::ndarray::IxDyn>>;
+    fn forward(
+        &self,
+        input: &Array<F, scirs2_core::ndarray::IxDyn>,
+    ) -> Result<Array<F, scirs2_core::ndarray::IxDyn>>;
     /// Backward pass to compute gradients
     fn backward(
         &self,
@@ -30,9 +33,17 @@ pub trait Model<F: Float + Debug + ScalarOperand> {
         optimizer: &mut dyn Optimizer<F>,
     ) -> Result<F>;
     /// Predict the output for a batch of inputs
-    fn predict(&self, inputs: &Array<F, scirs2_core::ndarray::IxDyn>) -> Result<Array<F, scirs2_core::ndarray::IxDyn>>;
+    fn predict(
+        &self,
+        inputs: &Array<F, scirs2_core::ndarray::IxDyn>,
+    ) -> Result<Array<F, scirs2_core::ndarray::IxDyn>>;
     /// Evaluate the model on a batch of data
     fn evaluate(
+        &self,
+        inputs: &Array<F, scirs2_core::ndarray::IxDyn>,
+        targets: &Array<F, scirs2_core::ndarray::IxDyn>,
+        loss_fn: &dyn Loss<F>,
+    ) -> Result<F>;
 }
 // Model architectures
 pub mod architectures;

@@ -46,6 +46,7 @@ pub enum GpuBackend {
     Metal,
     Rocm,
     Wgpu,
+    Vulkan,
 }
 
 #[cfg(not(feature = "gpu"))]
@@ -472,6 +473,17 @@ mod tests {
 
     #[test]
     fn test_gpu_backend_enum() {
+        #[cfg(not(feature = "gpu"))]
+        let backends = [
+            GpuBackend::Cpu,
+            GpuBackend::Cuda,
+            GpuBackend::OpenCL,
+            GpuBackend::Metal,
+            GpuBackend::Rocm,
+            GpuBackend::Wgpu,
+            GpuBackend::Vulkan,
+        ];
+        #[cfg(feature = "gpu")]
         let backends = [
             GpuBackend::Cpu,
             GpuBackend::Cuda,
@@ -489,6 +501,8 @@ mod tests {
                 GpuBackend::Metal => (),
                 GpuBackend::Rocm => (),
                 GpuBackend::Wgpu => (),
+                #[cfg(not(feature = "gpu"))]
+                GpuBackend::Vulkan => (),
             }
         }
     }

@@ -7,7 +7,7 @@ use crate::error::Result;
 use crate::layers::Layer;
 use crate::models::History;
 use scirs2_core::ndarray::ScalarOperand;
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 /// Enum for callback execution timing
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,7 +26,7 @@ pub enum CallbackTiming {
     AfterTraining,
 }
 /// Struct containing state during training
-pub struct CallbackContext<'a, F: Float + Debug + ScalarOperand> {
+pub struct CallbackContext<'a, F: Float + Debug + ScalarOperand + NumAssign> {
     /// Current epoch (0-based)
     pub epoch: usize,
     /// Total number of epochs
@@ -49,10 +49,14 @@ pub struct CallbackContext<'a, F: Float + Debug + ScalarOperand> {
     pub stop_training: bool,
     /// Optional reference to the model for gradient access
     pub model: Option<&'a mut dyn Layer<F>>,
+}
+
 /// Trait for training callbacks
-pub trait Callback<F: Float + Debug + ScalarOperand> {
+pub trait Callback<F: Float + Debug + ScalarOperand + NumAssign> {
     /// Called during training at specific points
     fn on_event(&mut self, timing: CallbackTiming, context: &mut CallbackContext<F>) -> Result<()>;
+}
+
 mod callback_manager;
 mod checkpoint;
 mod early_stopping;
@@ -64,23 +68,35 @@ mod model_checkpoint;
 mod tensorboard;
 mod visualization_callback;
 /// Adapter to use a function as a callback
-pub struct FunctionCallback<F: Float + Debug + ScalarOperand + Send + Sync> {
+pub struct FunctionCallback<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign> {
     /// The function to call
     func: Box<dyn Fn() -> Result<()> + Send + Sync>,
     /// Phantom data for F
     _phantom: std::marker::PhantomData<F>,
-impl<F: Float + Debug + ScalarOperand + Send + Sync> FunctionCallback<F> {
+}
+
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign> FunctionCallback<F> {
     /// Create a new function callback
     pub fn new(func: Box<dyn Fn() -> Result<()> + Send + Sync>) -> Self {
         Self {
-            _func_phantom: std::marker::PhantomData,
+            func,
+            _phantom: std::marker::PhantomData,
         }
     }
-impl<F: Float + Debug + ScalarOperand + Send + Sync> Callback<F> for FunctionCallback<F> {
+}
+
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign> Callback<F>
+    for FunctionCallback<F>
+{
     fn on_event(
-        &mut self_timing: CallbackTiming, _context: &mut CallbackContext<F>,
+        &mut self,
+        _timing: CallbackTiming,
+        _context: &mut CallbackContext<F>,
     ) -> Result<()> {
         (self.func)()
+    }
+}
+
 pub use callback_manager::CallbackManager;
 pub use checkpoint::ModelCheckpoint;
 pub use early_stopping::EarlyStopping;

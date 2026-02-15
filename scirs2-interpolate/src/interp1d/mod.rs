@@ -117,6 +117,22 @@ impl<F: Float + FromPrimitive + Debug + std::fmt::Display> Interp1d<F> {
             ));
         }
 
+        // Check for NaN and Infinity in input data
+        for i in 0..x.len() {
+            if !x[i].is_finite() {
+                return Err(InterpolateError::invalid_input(format!(
+                    "x values must be finite, found non-finite value at index {}",
+                    i
+                )));
+            }
+            if !y[i].is_finite() {
+                return Err(InterpolateError::invalid_input(format!(
+                    "y values must be finite, found non-finite value at index {}",
+                    i
+                )));
+            }
+        }
+
         // Check that x is sorted
         for i in 1..x.len() {
             if x[i] <= x[i - 1] {
@@ -203,14 +219,8 @@ impl<F: Float + FromPrimitive + Debug + std::fmt::Display> Interp1d<F> {
             }
         }
 
-        // Find the index of the segment containing xnew
-        let mut idx = 0;
-        for i in 0..self.x.len() - 1 {
-            if xnew >= self.x[i] && xnew <= self.x[i + 1] {
-                idx = i;
-                break;
-            }
-        }
+        // Find the index of the segment containing xnew using binary search
+        let idx = self.find_segment(xnew);
 
         // Special case: xnew is exactly the last point
         if xnew == self.x[self.x.len() - 1] {
@@ -233,6 +243,40 @@ impl<F: Float + FromPrimitive + Debug + std::fmt::Display> Interp1d<F> {
                 pchip.evaluate(xnew)
             }
         }
+    }
+
+    /// Find the segment index containing the given x value using binary search.
+    ///
+    /// Returns the index `i` such that `x[i] <= xnew <= x[i+1]`.
+    /// For values at or beyond the last point, returns `x.len() - 2`.
+    fn find_segment(&self, xnew: F) -> usize {
+        let n = self.x.len();
+        if n < 2 {
+            return 0;
+        }
+
+        // Binary search: find the largest i such that x[i] <= xnew
+        let mut lo = 0usize;
+        let mut hi = n - 1;
+
+        // Clamp to valid range
+        if xnew <= self.x[0] {
+            return 0;
+        }
+        if xnew >= self.x[n - 1] {
+            return n - 2;
+        }
+
+        while hi - lo > 1 {
+            let mid = lo + (hi - lo) / 2;
+            if self.x[mid] <= xnew {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+
+        lo
     }
 
     /// Evaluate the interpolation at multiple points

@@ -1576,6 +1576,7 @@ mod tests {
     use super::*;
     use scirs2_core::ndarray::array;
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     #[ignore] // Quantum neural speedup assertion may fail in CI
     async fn test_quantum_spiking_clusterer() {
@@ -1594,6 +1595,7 @@ mod tests {
         assert!(metrics.quantum_neural_speedup > 0.0);
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     #[ignore = "Test failure - assertion failed: opt_result.quantum_contribution >= 0.0 at line 1613"]
     async fn test_neural_quantum_optimizer() {
@@ -1654,6 +1656,7 @@ mod tests {
         assert!(metrics.biological_plausibility > 0.5);
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     #[ignore = "Test failure - assertion `left == right` failed: left: 6, right: 9 at line 1684"]
     async fn test_comprehensive_fusion_workflow() {

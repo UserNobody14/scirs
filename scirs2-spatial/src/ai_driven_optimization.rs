@@ -1551,6 +1551,7 @@ mod tests {
     use super::*;
     use scirs2_core::ndarray::array;
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     #[ignore = "Test failure - assertion failed: !algorithm_parameters.is_empty() at line 1568"]
     async fn test_ai_algorithm_selector() {
@@ -1571,6 +1572,7 @@ mod tests {
         assert!(prediction.confidence >= 0.0 && prediction.confidence <= 1.0);
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_data_characteristics_analysis() {
         let mut selector = AIAlgorithmSelector::new();
@@ -1593,6 +1595,7 @@ mod tests {
         assert!(chars.outlier_ratio >= 0.0 && chars.outlier_ratio <= 1.0);
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_meta_learning_optimizer() {
         let mut optimizer = MetaLearningOptimizer::new()

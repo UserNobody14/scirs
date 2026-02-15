@@ -10,14 +10,13 @@ use crate::hilbert::hilbert;
 use crate::window;
 use scirs2_core::ndarray::Array2;
 use scirs2_core::numeric::Complex64;
-use rustfft::{num_complex::Complex, FftPlanner};
 use scirs2_core::parallel_ops::*;
+use std::f64::consts::PI;
 use std::sync::Arc;
 
 #[allow(unused_imports)]
 type SpectrogramResult = (Vec<f64>, Vec<f64>, Array2<f64>);
 type TimeFrequencyCoherenceResult = (Vec<f64>, Vec<f64>, Array2<f64>);
-#[cfg(feature = "parallel")]
 /// Configuration for parallel spectral processing
 #[derive(Debug, Clone)]
 pub struct ParallelSpectralConfig {
@@ -46,7 +45,7 @@ impl Default for ParallelSpectralConfig {
 pub struct ParallelSpectralProcessor {
     #[allow(dead_code)]
     config: ParallelSpectralConfig,
-    fft_planner: Arc<std::sync::Mutex<FftPlanner<f64>>>,
+    fft_planner: std::sync::Mutex<()>, // Placeholder - using scirs2_fft instead
 }
 
 impl ParallelSpectralProcessor {
@@ -60,7 +59,7 @@ impl ParallelSpectralProcessor {
 
         Self {
             config,
-            fft_planner: Arc::new(std::sync::Mutex::new(FftPlanner::new())),
+            fft_planner: std::sync::Mutex::new(()), // Placeholder - using scirs2_fft instead
         }
     }
 
@@ -371,19 +370,13 @@ impl ParallelSpectralProcessor {
             signal.to_vec()
         };
 
-        // Zero-pad if necessary
-        let mut fft_input: Vec<Complex<f64>> = windowed_signal
-            .iter()
-            .map(|&x| Complex::new(x, 0.0))
-            .collect();
-        fft_input.resize(nfft_actual, Complex::new(0.0, 0.0));
+        // Zero-pad if necessary and compute FFT
+        let mut fft_input_data = windowed_signal.to_vec();
+        fft_input_data.resize(nfft_actual, 0.0);
 
-        // Compute FFT
-        let mut planner = self.fft_planner.lock().expect("Operation failed");
-        let fft = planner.plan_fft_forward(nfft_actual);
-        drop(planner);
-
-        fft.process(&mut fft_input);
+        // Compute FFT using scirs2_fft
+        let fft_input = scirs2_fft::fft(&fft_input_data, Some(nfft_actual))
+            .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
         // Compute power spectral density
         let n_freq_bins = nfft_actual / 2 + 1;
@@ -471,8 +464,7 @@ impl ParallelSpectralProcessor {
             .par_chunks(chunk_size)
             .map(|chunk| {
                 let mut local_results = Vec::new();
-                let mut planner = FftPlanner::new();
-                let fft = planner.plan_fft_forward(window_size);
+                // Using scirs2_fft instead of FftPlanner
 
                 for &frame_idx in chunk {
                     let start = frame_idx * hop_size;
@@ -480,20 +472,21 @@ impl ParallelSpectralProcessor {
 
                     if end <= n_samples {
                         // Apply window and prepare for FFT
-                        let mut fft_input: Vec<Complex<f64>> = signal[start..end]
+                        let windowed_frame: Vec<f64> = signal[start..end]
                             .iter()
                             .zip(window.iter())
-                            .map(|(&s, &w)| Complex::new(s * w, 0.0))
+                            .map(|(&s, &w)| s * w)
                             .collect();
 
-                        // Compute FFT
-                        fft.process(&mut fft_input);
+                        // Compute FFT using scirs2_fft
+                        let fft_result = match scirs2_fft::fft(&windowed_frame, Some(window_size)) {
+                            Ok(result) => result,
+                            Err(_) => continue,
+                        };
 
                         // Extract positive frequencies
-                        let frame_spectrum: Vec<Complex64> = fft_input[..n_freq_bins]
-                            .iter()
-                            .map(|&c| Complex64::new(c.re, c.im))
-                            .collect();
+                        let frame_spectrum: Vec<Complex64> =
+                            fft_result[..n_freq_bins].iter().copied().collect();
 
                         local_results.push((frame_idx, frame_spectrum));
                     }
@@ -507,8 +500,7 @@ impl ParallelSpectralProcessor {
             .chunks(chunk_size)
             .map(|chunk| {
                 let mut local_results = Vec::new();
-                let mut planner = FftPlanner::new();
-                let fft = planner.plan_fft_forward(window_size);
+                // Using scirs2_fft instead of FftPlanner
 
                 for &frame_idx in chunk {
                     let start = frame_idx * hop_size;
@@ -516,20 +508,21 @@ impl ParallelSpectralProcessor {
 
                     if end <= n_samples {
                         // Apply window and prepare for FFT
-                        let mut fft_input: Vec<Complex<f64>> = signal[start..end]
+                        let windowed_frame: Vec<f64> = signal[start..end]
                             .iter()
                             .zip(window.iter())
-                            .map(|(&s, &w)| Complex::new(s * w, 0.0))
+                            .map(|(&s, &w)| s * w)
                             .collect();
 
-                        // Compute FFT
-                        fft.process(&mut fft_input);
+                        // Compute FFT using scirs2_fft
+                        let fft_result = match scirs2_fft::fft(&windowed_frame, Some(window_size)) {
+                            Ok(result) => result,
+                            Err(_) => continue,
+                        };
 
                         // Extract positive frequencies
-                        let frame_spectrum: Vec<Complex64> = fft_input[..n_freq_bins]
-                            .iter()
-                            .map(|&c| Complex64::new(c.re, c.im))
-                            .collect();
+                        let frame_spectrum: Vec<Complex64> =
+                            fft_result[..n_freq_bins].iter().copied().collect();
 
                         local_results.push((frame_idx, frame_spectrum));
                     }
@@ -541,8 +534,8 @@ impl ParallelSpectralProcessor {
         // Collect results back into the main array
         for chunk_results in results {
             for (frame_idx, spectrum) in chunk_results {
-                for (freq_idx, &value) in spectrum.iter().enumerate() {
-                    stft_result[[freq_idx, frame_idx]] = value;
+                for (freq_idx, value) in spectrum.iter().enumerate() {
+                    stft_result[[freq_idx, frame_idx]] = *value;
                 }
             }
         }
@@ -814,15 +807,9 @@ fn single_welch(
                 .map(|(&s, &w)| s * w)
                 .collect();
 
-            // Compute FFT
-            let mut fft_input: Vec<Complex<f64>> = windowed_segment
-                .iter()
-                .map(|&x| Complex::new(x, 0.0))
-                .collect();
-
-            let mut planner = FftPlanner::new();
-            let fft = planner.plan_fft_forward(window_size);
-            fft.process(&mut fft_input);
+            // Compute FFT using scirs2_fft
+            let fft_input = scirs2_fft::fft(&windowed_segment, Some(window_size))
+                .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
             // Add to average PSD
             let normalization = fs * window.iter().map(|&w| w * w).sum::<f64>();
@@ -1103,34 +1090,29 @@ impl ParallelSpectralProcessor {
         let window = window::hann(window_size, true)
             .map_err(|_| SignalError::ValueError("Failed to create window".to_string()))?;
 
-        let mut fft_planner = self.fft_planner.lock().map_err(|_| {
-            SignalError::ComputationError("Failed to acquire FFT planner".to_string())
-        })?;
-        let fft = fft_planner.plan_fft_forward(window_size);
-
         let mut cross_psd_sum = vec![Complex64::new(0.0, 0.0); window_size / 2 + 1];
         let mut n_segments = 0;
 
         let mut idx = 0;
         while idx + window_size <= n {
             // Apply window to both signals
-            let windowed1: Vec<Complex64> = signal1[idx..idx + window_size]
+            let windowed1_data: Vec<f64> = signal1[idx..idx + window_size]
                 .iter()
                 .zip(window.iter())
-                .map(|(&s, &w)| Complex64::new(s * w, 0.0))
+                .map(|(&s, &w)| s * w)
                 .collect();
 
-            let windowed2: Vec<Complex64> = signal2[idx..idx + window_size]
+            let windowed2_data: Vec<f64> = signal2[idx..idx + window_size]
                 .iter()
                 .zip(window.iter())
-                .map(|(&s, &w)| Complex64::new(s * w, 0.0))
+                .map(|(&s, &w)| s * w)
                 .collect();
 
-            // Compute FFTs
-            let mut fft1 = windowed1;
-            let mut fft2 = windowed2;
-            fft.process(&mut fft1);
-            fft.process(&mut fft2);
+            // Compute FFTs using scirs2_fft
+            let fft1 = scirs2_fft::fft(&windowed1_data, Some(window_size))
+                .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
+            let fft2 = scirs2_fft::fft(&windowed2_data, Some(window_size))
+                .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
             // Compute cross-power spectrum
             for i in 0..cross_psd_sum.len() {
@@ -1225,34 +1207,29 @@ impl ParallelSpectralProcessor {
         let window = window::hann(window_size, true)
             .map_err(|_| SignalError::ValueError("Failed to create window".to_string()))?;
 
-        let mut fft_planner = self.fft_planner.lock().map_err(|_| {
-            SignalError::ComputationError("Failed to acquire FFT planner".to_string())
-        })?;
-        let fft = fft_planner.plan_fft_forward(window_size);
-
         for frame in 0..n_frames {
             let start = frame * hop_size;
             let end = start + window_size;
 
             if end <= n {
                 // Windowed signals
-                let windowed1: Vec<Complex64> = signal1[start..end]
+                let windowed1_data: Vec<f64> = signal1[start..end]
                     .iter()
                     .zip(window.iter())
-                    .map(|(&s, &w)| Complex64::new(s * w, 0.0))
+                    .map(|(&s, &w)| s * w)
                     .collect();
 
-                let windowed2: Vec<Complex64> = signal2[start..end]
+                let windowed2_data: Vec<f64> = signal2[start..end]
                     .iter()
                     .zip(window.iter())
-                    .map(|(&s, &w)| Complex64::new(s * w, 0.0))
+                    .map(|(&s, &w)| s * w)
                     .collect();
 
-                // Compute FFTs
-                let mut fft1 = windowed1;
-                let mut fft2 = windowed2;
-                fft.process(&mut fft1);
-                fft.process(&mut fft2);
+                // Compute FFTs using scirs2_fft
+                let fft1 = scirs2_fft::fft(&windowed1_data, Some(window_size))
+                    .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
+                let fft2 = scirs2_fft::fft(&windowed2_data, Some(window_size))
+                    .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
                 // Compute coherence for each frequency
                 for freq in 0..n_freqs {
@@ -1358,7 +1335,7 @@ impl ParallelSpectralProcessor {
             let power = frequencies
                 .iter()
                 .zip(psd.iter())
-                .filter(|(&freq_)| freq_ >= low_freq && freq_ <= high_freq)
+                .filter(|(freq, _)| **freq >= low_freq && **freq <= high_freq)
                 .map(|(_, &power)| power)
                 .sum::<f64>();
 
@@ -1375,6 +1352,9 @@ impl ParallelSpectralProcessor {
 }
 
 mod tests {
+    use super::*;
+    use scirs2_core::Rng;
+    use std::f64::consts::PI;
 
     #[test]
     fn test_parallel_periodogram() {
@@ -1425,7 +1405,7 @@ mod tests {
             .expect("Operation failed");
 
         assert_eq!(results.len(), 1);
-        let (frequencies, times, spectrogram) = &results[0];
+        let (ref frequencies, ref times, ref spectrogram) = results[0];
         assert!(!frequencies.is_empty());
         assert!(!times.is_empty());
         assert_eq!(spectrogram.shape()[0], frequencies.len());
@@ -1456,13 +1436,13 @@ mod tests {
             .expect("Operation failed");
 
         assert_eq!(results.len(), 1);
-        let (frequencies, coherence) = &results[0];
+        let (ref frequencies, ref coherence) = results[0];
         assert_eq!(frequencies.len(), coherence.len());
 
         // Coherence should be high at 50 Hz
         let freq_50hz_idx = frequencies
             .iter()
-            .position((|&f| (f - 50.0) as f64).abs() < 5.0)
+            .position(|&f| ((f - 50.0) as f64).abs() < 5.0)
             .expect("Operation failed");
         assert!(coherence[freq_50hz_idx] > 0.5);
     }
@@ -1483,11 +1463,12 @@ mod tests {
 
         let signals = vec![signal1.as_slice(), signal2.as_slice()];
 
-        let results = parallel_welch(&signals, fs, 512, 0.5, Some("hann")).expect("Operation failed");
+        let results =
+            parallel_welch(&signals, fs, 512, 0.5, Some("hann")).expect("Operation failed");
 
         assert_eq!(results.len(), 2);
 
-        for (frequencies, psd) in &results {
+        for (ref frequencies, ref psd) in &results {
             assert_eq!(frequencies.len(), psd.len());
             assert!(!frequencies.is_empty());
         }

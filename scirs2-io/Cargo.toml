@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Input/Output utilities module for SciRS2 (scirs2-io)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["io", "serialization", "data", "scientific", "scipy"]
@@ -25,10 +26,12 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 oxicode = { workspace = true }  # Binary serialization (SIMD-optimized)
 rmp-serde = { workspace = true }
-flate2 = { workspace = true }
-lz4 = { workspace = true }
-zstd = { workspace = true }
-bzip2 = { workspace = true }
+oxiarc-archive = { workspace = true }  # Pure Rust compression (COOLJAPAN Policy)
+# C-backed compression libraries (feature-gated for backward compatibility)
+flate2 = { workspace = true, optional = true }
+lz4 = { workspace = true, optional = true }
+zstd = { workspace = true, optional = true }
+bzip2 = { workspace = true, optional = true }
 sha2 = { workspace = true }
 crc32fast = { workspace = true }
 blake3 = { workspace = true }
@@ -67,8 +70,8 @@ uuid = { workspace = true, features = ["v4", "serde"] }
 urlencoding = { workspace = true }
 crossbeam-channel = { workspace = true }
 cron = { workspace = true }
-snap = { workspace = true }
-brotli = { workspace = true }
+snap = { workspace = true }  # Pure Rust Snappy
+brotli = { workspace = true }  # Pure Rust Brotli (Dropbox implementation)
 # Database drivers
 rusqlite = { workspace = true, optional = true }
 # sqlx removed - postgres/mysql implementations are stubs only
@@ -88,7 +91,10 @@ tokio-test = { workspace = true }
 [features]
 default = ["csv", "compression", "validation"]
 csv = []
+# Default compression uses 100% Pure Rust libraries (COOLJAPAN Policy)
 compression = []
+# Legacy C-backed compression (feature-gated, not in default)
+compression-c = ["dep:flate2", "dep:lz4", "dep:zstd", "dep:bzip2"]
 validation = []
 hdf5 = ["dep:hdf5"]
 parquet = ["dep:parquet", "dep:arrow", "dep:arrow-array", "dep:arrow-schema", "dep:arrow-cast"]
@@ -97,7 +103,9 @@ reqwest = ["dep:reqwest", "dep:log"]
 aws-sdk-s3 = []
 google-cloud-storage = []
 azure-storage-blobs = []
-gpu = []
+# GPU compression currently requires C-backed libraries for block-level APIs
+# TODO: Migrate to Pure Rust when oxiarc-archive adds block compression support
+gpu = ["compression-c"]
 exif = []
 # Database features
 sqlite = ["dep:rusqlite"]

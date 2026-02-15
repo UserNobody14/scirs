@@ -1698,6 +1698,7 @@ mod tests {
         assert!(compiler.target_features.fma);
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_jit_compilation() {
         let mut compiler = JitCompiler::new();
@@ -1722,6 +1723,7 @@ mod tests {
         assert_eq!(allocator.numa_pools[0].stats.allocations, 1);
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_advancedfast_distance_matrix() {
         let optimizer = ExtremeOptimizer::new()
@@ -1746,6 +1748,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_optimizing_algorithm() {
         let mut algorithm = SelfOptimizingAlgorithm::new("clustering")
@@ -1779,6 +1782,7 @@ mod tests {
         assert!(optimizer.ilp_maximization);
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_extreme_performance_benchmark() {
         // Use a very small dataset for fast testing

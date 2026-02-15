@@ -634,6 +634,22 @@ pub use traits::{
     MultivariateDistribution, Truncatable,
 };
 
+// v0.2.0 SIMD enhancements
+pub mod correlation_simd_enhanced; // Enhanced correlation and covariance with SIMD
+pub mod parallel_simd_stats;
+pub mod sampling_simd; // SIMD-optimized distribution sampling // Parallel processing with SIMD acceleration
+
+pub use correlation_simd_enhanced::{
+    covariance_matrix_simd, partial_correlation_simd, rolling_correlation_simd, spearman_r_simd,
+};
+pub use parallel_simd_stats::{
+    bootstrap_parallel_simd, corrcoef_parallel_simd, covariance_matrix_parallel_simd,
+    pairwise_distances_parallel_simd, row_statistics_parallel_simd,
+};
+pub use sampling_simd::{
+    bootstrap_simd, box_muller_simd, exponential_simd, inverse_transform_simd,
+};
+
 // Core functions for descriptive statistics
 mod adaptive_memory_advanced;
 pub mod advanced_simd_stats;
@@ -853,8 +869,9 @@ pub use simd_enhanced_v3::{
     euclidean_distance_simd, histogram_simd, manhattan_distance_simd, MovingWindowSIMD,
 };
 pub use simd_enhanced_v4::{
-    batch_normalize_simd, comprehensive_stats_simd, covariance_matrix_simd,
-    exponential_moving_average_simd, outlier_detection_zscore_simd, quantiles_batch_simd,
+    batch_normalize_simd, comprehensive_stats_simd,
+    covariance_matrix_simd as covariance_matrix_simd_v4, exponential_moving_average_simd,
+    outlier_detection_zscore_simd, quantiles_batch_simd,
     robust_statistics_simd as robust_stats_v4_simd, sliding_window_stats_simd,
     ComprehensiveStats as V4ComprehensiveStats, RobustStats, SlidingWindowStats,
 };

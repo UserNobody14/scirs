@@ -15,6 +15,12 @@
 //! * Type 2 (Uniform to Non-Uniform): Data at uniform locations, transform to non-uniform frequency grid
 
 use crate::error::{FFTError, FFTResult};
+#[cfg(feature = "oxifft")]
+use crate::oxifft_plan_cache;
+#[cfg(feature = "oxifft")]
+use oxifft::{Complex as OxiComplex, Direction};
+#[cfg(feature = "rustfft-backend")]
+use rustfft::{num_complex::Complex as RustComplex, FftPlanner};
 use scirs2_core::numeric::Complex64;
 use scirs2_core::numeric::Zero;
 use std::f64::consts::PI;
@@ -328,46 +334,115 @@ pub fn nufft_type2(
 /// Helper function for FFT computation used in NUFFT implementations
 #[allow(dead_code)]
 fn fft_backend(data: &[Complex64]) -> FFTResult<Vec<Complex64>> {
-    use rustfft::{num_complex::Complex, FftPlanner};
-
     let n = data.len();
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(n);
 
-    // Convert to rustfft's Complex type
-    let mut buffer: Vec<Complex<f64>> = data.iter().map(|&c| Complex::new(c.re, c.im)).collect();
+    // Use FFT library for computation
+    #[cfg(feature = "oxifft")]
+    {
+        // Convert to OxiFFT-compatible complex type
+        let input_oxi: Vec<OxiComplex<f64>> =
+            data.iter().map(|c| OxiComplex::new(c.re, c.im)).collect();
+        let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); n];
 
-    // Perform the FFT
-    fft.process(&mut buffer);
+        // Execute FFT with cached plan
+        oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Forward)?;
 
-    // Convert back to scirs2_core::numeric::Complex64
-    Ok(buffer
-        .into_iter()
-        .map(|c| Complex64::new(c.re, c.im))
-        .collect())
+        // Convert back to our Complex64 type
+        let result: Vec<Complex64> = output
+            .into_iter()
+            .map(|c| Complex64::new(c.re, c.im))
+            .collect();
+
+        Ok(result)
+    }
+
+    #[cfg(not(feature = "oxifft"))]
+    {
+        #[cfg(feature = "rustfft-backend")]
+        {
+            let mut planner = FftPlanner::new();
+            let fft = planner.plan_fft_forward(n);
+
+            // Convert to rustfft's Complex type
+            let mut buffer: Vec<RustComplex<f64>> =
+                data.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+
+            // Perform the FFT
+            fft.process(&mut buffer);
+
+            // Convert back to scirs2_core::numeric::Complex64
+            Ok(buffer
+                .into_iter()
+                .map(|c| Complex64::new(c.re, c.im))
+                .collect())
+        }
+
+        #[cfg(not(feature = "rustfft-backend"))]
+        {
+            Err(FFTError::ComputationError(
+                "No FFT backend available. Enable either 'oxifft' or 'rustfft-backend' feature."
+                    .to_string(),
+            ))
+        }
+    }
 }
 
 /// Helper function for IFFT computation used in NUFFT implementations
 #[allow(dead_code)]
 fn ifft_backend(data: &[Complex64]) -> FFTResult<Vec<Complex64>> {
-    use rustfft::{num_complex::Complex, FftPlanner};
-
     let n = data.len();
-    let mut planner = FftPlanner::new();
-    let ifft = planner.plan_fft_inverse(n);
 
-    // Convert to rustfft's Complex type
-    let mut buffer: Vec<Complex<f64>> = data.iter().map(|&c| Complex::new(c.re, c.im)).collect();
+    // Use FFT library for computation
+    #[cfg(feature = "oxifft")]
+    {
+        // Convert to OxiFFT-compatible complex type
+        let input_oxi: Vec<OxiComplex<f64>> =
+            data.iter().map(|c| OxiComplex::new(c.re, c.im)).collect();
+        let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); n];
 
-    // Perform the IFFT
-    ifft.process(&mut buffer);
+        // Execute IFFT with cached plan
+        oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Backward)?;
 
-    // Convert back to scirs2_core::numeric::Complex64 and normalize
-    let scale = 1.0 / n as f64;
-    Ok(buffer
-        .into_iter()
-        .map(|c| Complex64::new(c.re * scale, c.im * scale))
-        .collect())
+        // Convert back to our Complex64 type and normalize
+        let scale = 1.0 / n as f64;
+        let result: Vec<Complex64> = output
+            .into_iter()
+            .map(|c| Complex64::new(c.re * scale, c.im * scale))
+            .collect();
+
+        Ok(result)
+    }
+
+    #[cfg(not(feature = "oxifft"))]
+    {
+        #[cfg(feature = "rustfft-backend")]
+        {
+            let mut planner = FftPlanner::new();
+            let ifft = planner.plan_fft_inverse(n);
+
+            // Convert to rustfft's Complex type
+            let mut buffer: Vec<RustComplex<f64>> =
+                data.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+
+            // Perform the IFFT
+            ifft.process(&mut buffer);
+
+            // Convert back to scirs2_core::numeric::Complex64 and normalize
+            let scale = 1.0 / n as f64;
+            Ok(buffer
+                .into_iter()
+                .map(|c| Complex64::new(c.re * scale, c.im * scale))
+                .collect())
+        }
+
+        #[cfg(not(feature = "rustfft-backend"))]
+        {
+            Err(FFTError::ComputationError(
+                "No FFT backend available. Enable either 'oxifft' or 'rustfft-backend' feature."
+                    .to_string(),
+            ))
+        }
+    }
 }
 
 #[cfg(test)]

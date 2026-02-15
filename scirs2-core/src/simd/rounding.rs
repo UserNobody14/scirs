@@ -10,10 +10,10 @@ use ndarray::{Array1, ArrayView1};
 pub fn simd_floor_f32(input: &ArrayView1<f32>) -> Array1<f32> {
     let len = input.len();
     if len == 0 {
-        return Array1::zeros(0);
+        return Array1::<f32>::zeros(0);
     }
 
-    let mut result = Array1::zeros(len);
+    let mut result = Array1::<f32>::zeros(len);
 
     #[cfg(target_arch = "x86_64")]
     {
@@ -101,10 +101,10 @@ pub fn simd_floor_f32(input: &ArrayView1<f32>) -> Array1<f32> {
 pub fn simd_floor_f64(input: &ArrayView1<f64>) -> Array1<f64> {
     let len = input.len();
     if len == 0 {
-        return Array1::zeros(0);
+        return Array1::<f64>::zeros(0);
     }
 
-    let mut result = Array1::zeros(len);
+    let mut result = Array1::<f64>::zeros(len);
 
     #[cfg(target_arch = "x86_64")]
     {
@@ -192,10 +192,10 @@ pub fn simd_floor_f64(input: &ArrayView1<f64>) -> Array1<f64> {
 pub fn simd_ceil_f32(input: &ArrayView1<f32>) -> Array1<f32> {
     let len = input.len();
     if len == 0 {
-        return Array1::zeros(0);
+        return Array1::<f32>::zeros(0);
     }
 
-    let mut result = Array1::zeros(len);
+    let mut result = Array1::<f32>::zeros(len);
 
     #[cfg(target_arch = "x86_64")]
     {
@@ -277,10 +277,10 @@ pub fn simd_ceil_f32(input: &ArrayView1<f32>) -> Array1<f32> {
 pub fn simd_ceil_f64(input: &ArrayView1<f64>) -> Array1<f64> {
     let len = input.len();
     if len == 0 {
-        return Array1::zeros(0);
+        return Array1::<f64>::zeros(0);
     }
 
-    let mut result = Array1::zeros(len);
+    let mut result = Array1::<f64>::zeros(len);
 
     #[cfg(target_arch = "x86_64")]
     {
@@ -362,10 +362,10 @@ pub fn simd_ceil_f64(input: &ArrayView1<f64>) -> Array1<f64> {
 pub fn simd_round_f32(input: &ArrayView1<f32>) -> Array1<f32> {
     let len = input.len();
     if len == 0 {
-        return Array1::zeros(0);
+        return Array1::<f32>::zeros(0);
     }
 
-    let mut result = Array1::zeros(len);
+    let mut result = Array1::<f32>::zeros(len);
 
     #[cfg(target_arch = "x86_64")]
     {
@@ -449,10 +449,10 @@ pub fn simd_round_f32(input: &ArrayView1<f32>) -> Array1<f32> {
 pub fn simd_round_f64(input: &ArrayView1<f64>) -> Array1<f64> {
     let len = input.len();
     if len == 0 {
-        return Array1::zeros(0);
+        return Array1::<f64>::zeros(0);
     }
 
-    let mut result = Array1::zeros(len);
+    let mut result = Array1::<f64>::zeros(len);
 
     #[cfg(target_arch = "x86_64")]
     {
@@ -535,10 +535,10 @@ pub fn simd_round_f64(input: &ArrayView1<f64>) -> Array1<f64> {
 pub fn simd_trunc_f32(input: &ArrayView1<f32>) -> Array1<f32> {
     let len = input.len();
     if len == 0 {
-        return Array1::zeros(0);
+        return Array1::<f32>::zeros(0);
     }
 
-    let mut result = Array1::zeros(len);
+    let mut result = Array1::<f32>::zeros(len);
 
     #[cfg(target_arch = "x86_64")]
     {
@@ -621,10 +621,10 @@ pub fn simd_trunc_f32(input: &ArrayView1<f32>) -> Array1<f32> {
 pub fn simd_trunc_f64(input: &ArrayView1<f64>) -> Array1<f64> {
     let len = input.len();
     if len == 0 {
-        return Array1::zeros(0);
+        return Array1::<f64>::zeros(0);
     }
 
-    let mut result = Array1::zeros(len);
+    let mut result = Array1::<f64>::zeros(len);
 
     #[cfg(target_arch = "x86_64")]
     {

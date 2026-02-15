@@ -305,6 +305,9 @@ pub mod analysis;
 // Visualization utilities
 pub mod visualization;
 
+// Distributed computing support
+pub mod distributed;
+
 // ODE module is now fully implemented in ode/
 
 pub mod qmc;
@@ -602,6 +605,57 @@ pub use verification::{
     polynomial_solution, trigonometric_solution_2d, ConvergenceAnalysis, ErrorAnalysis,
     ExactSolution, MMSODEProblem, MMSPDEProblem, PDEType as VerificationPDEType,
     PolynomialSolution, TrigonometricSolution2D,
+};
+// Distributed computing exports
+pub use distributed::{
+    // Types
+    BoundaryConditions as DistributedBoundaryConditions,
+    BoundaryData,
+    // Communication
+    BoundaryExchanger,
+    // Checkpointing
+    Checkpoint,
+    CheckpointConfig,
+    CheckpointGlobalState,
+    CheckpointManager,
+    CheckpointStatistics,
+    ChunkCheckpoint,
+    // Load balancing
+    ChunkDistributor,
+    ChunkId,
+    ChunkResult,
+    ChunkResultStatus,
+    Communicator,
+    // Node management
+    ComputeNode,
+    DistributedConfig,
+    DistributedError,
+    DistributedMessage,
+    DistributedMetrics,
+    // Solver
+    DistributedODEResult,
+    DistributedODESolver,
+    DistributedODESolverBuilder,
+    DistributedResult,
+    FaultToleranceCoordinator,
+    FaultToleranceMode,
+    JobId,
+    LoadBalancer as DistributedLoadBalancer,
+    LoadBalancerConfig,
+    LoadBalancerStatistics,
+    LoadBalancingStrategy as DistributedLoadBalancingStrategy,
+    MessageChannel,
+    NodeBuilder,
+    NodeCapabilities,
+    NodeId,
+    NodeInfo,
+    NodeManager,
+    NodePerformance,
+    NodeStatus,
+    RecoveryAction,
+    ResourceMonitor,
+    SyncBarrier,
+    WorkChunk,
 };
 
 #[cfg(test)]

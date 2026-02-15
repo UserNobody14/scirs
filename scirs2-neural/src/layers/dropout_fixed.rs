@@ -7,7 +7,7 @@
 use crate::error::{NeuralError, Result};
 use crate::layers::Layer;
 use scirs2_core::ndarray::{Array, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::{Rng, RngCore, SeedableRng};
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -17,7 +17,7 @@ use std::sync::{Arc, RwLock};
 ///
 /// During training, randomly sets input elements to zero with probability `p`.
 /// During inference, scales the output by 1/(1-p) to maintain the expected value.
-pub struct Dropout<F: Float + Debug + Send + Sync> {
+pub struct Dropout<F: Float + Debug + Send + Sync + NumAssign> {
     /// Probability of dropping an element
     p: F,
     /// Random number generator
@@ -33,7 +33,7 @@ pub struct Dropout<F: Float + Debug + Send + Sync> {
 }
 
 // Manual implementation of Debug because dyn RngCore doesn't implement Debug
-impl<F: Float + Debug + Send + Sync> + std::fmt::Debug for Dropout<F> {
+impl<F: Float + Debug + Send + Sync + NumAssign> + std::fmt::Debug for Dropout<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Dropout")
             .field("p", &self.p)
@@ -44,7 +44,7 @@ impl<F: Float + Debug + Send + Sync> + std::fmt::Debug for Dropout<F> {
 }
 
 // Manual implementation of Clone
-impl<F: Float + Debug + Send + Sync> Clone for Dropout<F> {
+impl<F: Float + Debug + Send + Sync + NumAssign> Clone for Dropout<F> {
     fn clone(&self) -> Self {
         let rng = scirs2_core::random::rngs::SmallRng::from_seed([42; 32]);
         Self {
@@ -234,5 +234,5 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for Drop
 }
 
 // Explicit Send + Sync implementations for Dropout layer
-unsafe impl<F: Float + Debug + Send + Sync> Send for Dropout<F> {}
-unsafe impl<F: Float + Debug + Send + Sync> Sync for Dropout<F> {}
+unsafe impl<F: Float + Debug + Send + Sync + NumAssign> Send for Dropout<F> {}
+unsafe impl<F: Float + Debug + Send + Sync + NumAssign> Sync for Dropout<F> {}

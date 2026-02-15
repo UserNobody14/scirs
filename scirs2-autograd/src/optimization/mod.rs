@@ -15,6 +15,10 @@ use std::collections::HashSet;
 pub mod loop_fusion;
 pub mod memory_optimization;
 
+// v0.2.0: Enhanced optimizations
+pub mod cse;
+pub mod fusion;
+
 /// Graph optimization configuration
 #[derive(Debug, Clone)]
 pub struct OptimizationConfig {

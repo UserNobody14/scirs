@@ -1,10 +1,53 @@
 # SciRS2 Performance Benchmarking Suite
 
-This directory contains a comprehensive benchmarking suite for SciRS2 that measures performance against SciPy, analyzes numerical stability, evaluates memory efficiency, and provides detailed performance characterization.
+This directory contains comprehensive benchmarking suites for SciRS2 across multiple versions.
 
-## Overview
+## 🎯 v0.2.0 Benchmark Suite (New!)
 
-The benchmarking suite consists of four main components:
+**Comprehensive performance validation suite for SciRS2 v0.2.0 release.**
+
+### Quick Start
+
+```bash
+# Check setup
+./v020_check_setup.sh
+
+# Run all benchmarks
+./v020_run_all_benchmarks.sh
+
+# Run with options
+./v020_run_all_benchmarks.sh --skip-python --quick
+```
+
+**See [`V020_BENCHMARKS.md`](./V020_BENCHMARKS.md) for complete documentation.**
+
+### v0.2.0 Features
+
+- ✅ **Comprehensive Suite**: All modules (Core, LinAlg, FFT, Stats, etc.)
+- ✅ **SIMD Comparison**: Scalar vs vectorized (8-18x speedup targets)
+- ✅ **GPU Acceleration**: CUDA/Metal/WGPU vs CPU (5-50x targets)
+- ✅ **Memory Profiling**: Allocation, bandwidth, cache efficiency
+- ✅ **Scalability**: Thread scaling, data size scaling
+- ✅ **Python Comparison**: vs NumPy/SciPy (2-10x faster targets)
+
+### v0.2.0 Benchmarks
+
+| Benchmark | Description | Lines | Benchmarks |
+|-----------|-------------|-------|------------|
+| `v020_comprehensive_suite` | All modules performance validation | 625 | ~40 |
+| `v020_simd_comparison` | SIMD vs scalar speedup analysis | 538 | ~30 |
+| `v020_gpu_comparison` | GPU vs CPU performance | 550 | ~25 |
+| `v020_memory_profiling` | Memory efficiency analysis | 638 | ~30 |
+| `v020_scalability` | Thread and data scaling | 584 | ~35 |
+| `v020_python_comparison` | vs NumPy/SciPy comparison | 607+507 | ~40 |
+
+**Total: ~5,000 lines of code, ~200 benchmarks**
+
+---
+
+## 📊 Legacy Benchmark Suite (v0.1.x)
+
+The original benchmarking suite with four main components:
 
 1. **Linear Algebra Benchmarks** (`linalg_benchmarks.rs`) - Core mathematical operation performance
 2. **SciPy Comparison** (`scipy_comparison.rs` + `scipy_benchmark.py`) - Direct performance comparison

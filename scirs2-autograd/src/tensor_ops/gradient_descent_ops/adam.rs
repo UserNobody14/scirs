@@ -56,10 +56,48 @@ impl<F: Float> crate::op::Op<F> for AdamOp<F> {
 
         // Get all the inputs we need (clone them to avoid borrowing issues)
         let param = ctx.input(0).to_owned(); // The parameter to update
-        let grad = ctx.input(1).to_owned(); // The gradient
+        let grad_raw = ctx.input(1).to_owned(); // The gradient
         let m = ctx.input(2).to_owned(); // First moment estimate
         let v = ctx.input(3).to_owned(); // Second moment estimate
         let t_array = ctx.input(4).to_owned(); // Timestep
+
+        // When the parameter is scalar-like but the gradient has more elements
+        // (e.g., from broadcasting during the forward pass), reduce the gradient
+        // by summing to match the parameter's shape. This is standard behavior
+        // for gradient accumulation across broadcast dimensions.
+        let param_is_scalar = is_scalar(&param);
+        let grad = if param_is_scalar && grad_raw.len() > 1 {
+            // Sum all gradient elements to produce a scalar gradient
+            let sum_val = grad_raw.iter().fold(F::zero(), |acc, &x| acc + x);
+            if param.shape().is_empty() {
+                NdArray::from_elem(scirs2_core::ndarray::IxDyn(&[]), sum_val)
+            } else {
+                NdArray::from_elem(scirs2_core::ndarray::IxDyn(&[1]), sum_val)
+            }
+        } else if !param_is_scalar && param.shape() != grad_raw.shape() {
+            // For non-scalar params, try to reduce gradient to param shape
+            // by summing over extra dimensions
+            let param_len = param.len();
+            let grad_len = grad_raw.len();
+            if grad_len > param_len && grad_len.is_multiple_of(param_len) {
+                // Sum grad elements in groups to match param size
+                let mut reduced = NdArray::zeros(param.raw_dim());
+                let chunks = grad_len / param_len;
+                let grad_flat = grad_raw.iter().copied().collect::<Vec<_>>();
+                for (i, elem) in reduced.iter_mut().enumerate() {
+                    let mut sum = F::zero();
+                    for c in 0..chunks {
+                        sum += grad_flat[c * param_len + i];
+                    }
+                    *elem = sum;
+                }
+                reduced
+            } else {
+                grad_raw
+            }
+        } else {
+            grad_raw
+        };
 
         // Handle shape mismatches: ensure arrays have compatible shapes
         // We need to create arrays of matching shapes for operations to work

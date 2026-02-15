@@ -688,11 +688,13 @@ pub mod classification;
 pub mod clustering;
 pub mod custom;
 pub mod dashboard;
+pub mod distance;
 pub mod domains;
 pub mod error;
 pub mod evaluation;
 pub mod explainability;
 pub mod fairness;
+pub mod information_theory;
 
 // Integration modules with conditional compilation
 #[cfg(any(feature = "neural_common", feature = "optim_integration"))]

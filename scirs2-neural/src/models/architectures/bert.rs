@@ -3,12 +3,14 @@
 //! BERT (Bidirectional Encoder Representations from Transformers) is a transformer-based
 //! model designed to pretrain deep bidirectional representations from unlabeled text.
 //! Reference: "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding", Devlin et al. (2018)
-//! https://arxiv.org/abs/1810.04805
+//! <https://arxiv.org/abs/1810.04805>
 
 use crate::error::{NeuralError, Result};
-use crate::layers::{Dense, Dropout, Embedding, Layer, LayerNorm, MultiHeadAttention};
+use crate::layers::{
+    Dense, Dropout, Embedding, EmbeddingConfig, Layer, LayerNorm, MultiHeadAttention,
+};
 use scirs2_core::ndarray::{Array, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::SeedableRng;
 use scirs2_core::simd_ops::SimdUnifiedOps;
 use std::fmt::Debug;
@@ -104,7 +106,10 @@ impl BertConfig {
 }
 
 /// BERT embeddings combining token, position, and token type embeddings
-struct BertEmbeddings<F: Float + Debug + ScalarOperand + Send + Sync + 'static> {
+struct BertEmbeddings<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static>
+where
+    F: SimdUnifiedOps,
+{
     /// Token embeddings
     word_embeddings: Embedding<F>,
     /// Position embeddings
@@ -117,7 +122,7 @@ struct BertEmbeddings<F: Float + Debug + ScalarOperand + Send + Sync + 'static> 
     dropout: Dropout<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Clone
     for BertEmbeddings<F>
 {
     fn clone(&self) -> Self {
@@ -131,20 +136,37 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> BertEmbeddings<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static>
+    BertEmbeddings<F>
+{
     /// Create BERT embeddings
     pub fn new(config: &BertConfig) -> Result<Self> {
-        let mut rng = scirs2_core::random::rngs::SmallRng::from_seed([42; 32]);
+        let word_embeddings = Embedding::new(EmbeddingConfig {
+            num_embeddings: config.vocab_size,
+            embedding_dim: config.hidden_size,
+            padding_idx: None,
+            max_norm: None,
+            norm_type: 2.0,
+            scale_grad_by_freq: false,
+        })?;
 
-        let word_embeddings = Embedding::new(config.vocab_size, config.hidden_size, &mut rng)?;
+        let position_embeddings = Embedding::new(EmbeddingConfig {
+            num_embeddings: config.max_position_embeddings,
+            embedding_dim: config.hidden_size,
+            padding_idx: None,
+            max_norm: None,
+            norm_type: 2.0,
+            scale_grad_by_freq: false,
+        })?;
 
-        let mut rng2 = scirs2_core::random::rngs::SmallRng::from_seed([43; 32]);
-        let position_embeddings =
-            Embedding::new(config.max_position_embeddings, config.hidden_size, &mut rng2)?;
-
-        let mut rng3 = scirs2_core::random::rngs::SmallRng::from_seed([44; 32]);
-        let token_type_embeddings =
-            Embedding::new(config.type_vocab_size, config.hidden_size, &mut rng3)?;
+        let token_type_embeddings = Embedding::new(EmbeddingConfig {
+            num_embeddings: config.type_vocab_size,
+            embedding_dim: config.hidden_size,
+            padding_idx: None,
+            max_norm: None,
+            norm_type: 2.0,
+            scale_grad_by_freq: false,
+        })?;
 
         let mut rng4 = scirs2_core::random::rngs::SmallRng::from_seed([45; 32]);
         let layer_norm = LayerNorm::new(config.hidden_size, config.layer_norm_eps, &mut rng4)?;
@@ -162,7 +184,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Layer<F>
     for BertEmbeddings<F>
 {
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
@@ -236,14 +258,16 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
 }
 
 /// BERT self-attention layer
-struct BertSelfAttention<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps> {
+struct BertSelfAttention<
+    F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign,
+> {
     /// Multi-head attention layer
     attention: MultiHeadAttention<F>,
     /// Output dropout
     dropout: Dropout<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Clone
     for BertSelfAttention<F>
 {
     fn clone(&self) -> Self {
@@ -254,7 +278,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static>
     BertSelfAttention<F>
 {
     /// Create BERT self-attention layer
@@ -278,7 +302,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static>
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Layer<F>
     for BertSelfAttention<F>
 {
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
@@ -310,7 +334,10 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
 }
 
 /// BERT feed-forward network (intermediate + output)
-struct BertFeedForward<F: Float + Debug + ScalarOperand + Send + Sync + 'static> {
+struct BertFeedForward<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static>
+where
+    F: SimdUnifiedOps,
+{
     /// Intermediate dense layer
     intermediate_dense: Dense<F>,
     /// Output dense layer
@@ -321,7 +348,7 @@ struct BertFeedForward<F: Float + Debug + ScalarOperand + Send + Sync + 'static>
     dropout: Dropout<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Clone
     for BertFeedForward<F>
 {
     fn clone(&self) -> Self {
@@ -334,16 +361,26 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> BertFeedForward<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static>
+    BertFeedForward<F>
+{
     /// Create BERT feed-forward layer
     pub fn new(config: &BertConfig) -> Result<Self> {
         let mut rng1 = scirs2_core::random::rngs::SmallRng::from_seed([49; 32]);
-        let intermediate_dense =
-            Dense::new(config.hidden_size, config.intermediate_size, None, &mut rng1)?;
+        let intermediate_dense = Dense::new(
+            config.hidden_size,
+            config.intermediate_size,
+            None,
+            &mut rng1,
+        )?;
 
         let mut rng2 = scirs2_core::random::rngs::SmallRng::from_seed([50; 32]);
-        let output_dense =
-            Dense::new(config.intermediate_size, config.hidden_size, None, &mut rng2)?;
+        let output_dense = Dense::new(
+            config.intermediate_size,
+            config.hidden_size,
+            None,
+            &mut rng2,
+        )?;
 
         let mut rng3 = scirs2_core::random::rngs::SmallRng::from_seed([51; 32]);
         let layer_norm = LayerNorm::new(config.hidden_size, config.layer_norm_eps, &mut rng3)?;
@@ -360,17 +397,19 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Layer<F>
     for BertFeedForward<F>
 {
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
         // Intermediate layer with GELU activation
         let hidden = self.intermediate_dense.forward(input)?;
-        let hidden = hidden.mapv(|v| {
+        let hidden = hidden.mapv(|v: F| {
             // GELU approximation
             let x3 = v * v * v;
             v * F::from(0.5).expect("Failed to convert constant to float")
-                * (F::one() + (v + F::from(0.044715).expect("Failed to convert constant to float") * x3).tanh())
+                * (F::one()
+                    + (v + F::from(0.044715).expect("Failed to convert constant to float") * x3)
+                        .tanh())
         });
 
         // Output layer
@@ -409,7 +448,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
 }
 
 /// BERT layer (attention + feed-forward)
-struct BertLayer<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps> {
+struct BertLayer<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign> {
     /// Self attention
     attention: BertSelfAttention<F>,
     /// Attention output layer norm
@@ -418,7 +457,7 @@ struct BertLayer<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps
     feed_forward: BertFeedForward<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Clone
     for BertLayer<F>
 {
     fn clone(&self) -> Self {
@@ -430,7 +469,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> BertLayer<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static>
+    BertLayer<F>
+{
     /// Create BERT layer
     pub fn new(config: &BertConfig) -> Result<Self> {
         let attention = BertSelfAttention::new(config)?;
@@ -449,7 +490,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Layer<F>
     for BertLayer<F>
 {
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
@@ -489,12 +530,12 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
 }
 
 /// BERT encoder
-struct BertEncoder<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps> {
+struct BertEncoder<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign> {
     /// BERT layers
     layers: Vec<BertLayer<F>>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Clone
     for BertEncoder<F>
 {
     fn clone(&self) -> Self {
@@ -504,7 +545,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> BertEncoder<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static>
+    BertEncoder<F>
+{
     /// Create BERT encoder
     pub fn new(config: &BertConfig) -> Result<Self> {
         let mut layers = Vec::with_capacity(config.num_hidden_layers);
@@ -516,7 +559,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Layer<F>
     for BertEncoder<F>
 {
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
@@ -552,12 +595,12 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
 }
 
 /// BERT pooler (for classification tasks)
-struct BertPooler<F: Float + Debug + ScalarOperand + Send + Sync + 'static> {
+struct BertPooler<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> {
     /// Dense layer
     dense: Dense<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Clone
     for BertPooler<F>
 {
     fn clone(&self) -> Self {
@@ -567,7 +610,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> BertPooler<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static>
+    BertPooler<F>
+{
     /// Create BERT pooler
     pub fn new(config: &BertConfig) -> Result<Self> {
         let mut rng = scirs2_core::random::rngs::SmallRng::from_seed([54; 32]);
@@ -577,7 +622,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Layer<F>
     for BertPooler<F>
 {
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
@@ -605,7 +650,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
         let pooled_output = self.dense.forward(&cls_tokens)?;
 
         // Apply tanh activation
-        let pooled_output = pooled_output.mapv(|x| x.tanh());
+        let pooled_output = pooled_output.mapv(|x: F| x.tanh());
 
         Ok(pooled_output)
     }
@@ -633,7 +678,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
 }
 
 /// BERT model implementation
-pub struct BertModel<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps> {
+pub struct BertModel<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign> {
     /// Embeddings layer
     embeddings: BertEmbeddings<F>,
     /// Encoder
@@ -644,7 +689,7 @@ pub struct BertModel<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifie
     config: BertConfig,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Clone
     for BertModel<F>
 {
     fn clone(&self) -> Self {
@@ -657,7 +702,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> BertModel<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static>
+    BertModel<F>
+{
     /// Create a new BERT model
     pub fn new(config: BertConfig) -> Result<Self> {
         let embeddings = BertEmbeddings::new(&config)?;
@@ -691,7 +738,12 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
         num_hidden_layers: usize,
         num_attention_heads: usize,
     ) -> Result<Self> {
-        let config = BertConfig::custom(vocab_size, hidden_size, num_hidden_layers, num_attention_heads);
+        let config = BertConfig::custom(
+            vocab_size,
+            hidden_size,
+            num_hidden_layers,
+            num_attention_heads,
+        );
         Self::new(config)
     }
 
@@ -715,7 +767,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Layer<F>
     for BertModel<F>
 {
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {

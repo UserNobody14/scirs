@@ -28,11 +28,16 @@ where
 {
     /// Create new advanced GPU operations handler
     pub fn new() -> Self {
+        #[cfg(target_pointer_width = "32")]
+        let max_memory = 256 * 1024 * 1024; // 256MB default for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let max_memory = 1024 * 1024 * 1024; // 1GB default for 64-bit
+
         Self {
             dispatcher: GpuOperationDispatcher::new(),
             kernel_manager: GpuKernelManager::new(),
             profiler: GpuPerformanceProfiler::new(),
-            batchsize_optimizer: BatchSizeOptimizer::new(1024 * 1024 * 1024), // 1GB default
+            batchsize_optimizer: BatchSizeOptimizer::new(max_memory),
         }
     }
 

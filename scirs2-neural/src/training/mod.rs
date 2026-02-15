@@ -3,13 +3,39 @@
 //! This module provides comprehensive utilities for training neural networks,
 //! including advanced features like gradient accumulation, mixed precision training,
 //! distributed training, and sophisticated training loop management.
+//!
+//! ## Key Features
+//!
+//! - **Enhanced Training Loop**: Comprehensive training with validation, early stopping,
+//!   and learning rate scheduling
+//! - **Profiled Training**: Automatic timing analysis and optimization recommendations
+//! - **Optimized Data Loading**: Prefetching, parallel loading, and batch caching
+//! - **Gradient Accumulation**: Memory-efficient training with large effective batch sizes
+//! - **Mixed Precision**: FP16/BF16 training for faster computation (with GPU feature)
+//!
+//! ## Quick Start
+//!
+//! ```rust,ignore
+//! use scirs2_neural::training::{EnhancedTrainer, EnhancedTrainingConfig};
+//!
+//! let config = EnhancedTrainingConfig {
+//!     epochs: 10,
+//!     batch_size: 32,
+//!     learning_rate: 0.001,
+//!     early_stopping: Some(EarlyStoppingConfig::default()),
+//!     ..Default::default()
+//! };
+//!
+//! let mut trainer = EnhancedTrainer::new(config);
+//! let history = trainer.fit(&mut model, dataset, &loss_fn, &mut optimizer)?;
+//! ```
 
 use scirs2_core::ndarray::ScalarOperand;
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-// Re-export submodules
+// Core training modules
 pub mod backprop_efficient;
 pub mod gradient_accumulation;
 pub mod gradient_checkpointing;
@@ -18,6 +44,11 @@ pub mod progress_monitor;
 pub mod quantization_aware;
 pub mod sparse_training;
 
+// Enhanced training loop (v0.2.0)
+pub mod enhanced_trainer;
+pub mod optimized_dataloader;
+
+// Re-export core modules
 pub use backprop_efficient::*;
 pub use gradient_accumulation::*;
 pub use gradient_checkpointing::*;
@@ -25,6 +56,18 @@ pub use mixed_precision::*;
 pub use progress_monitor::*;
 pub use quantization_aware::*;
 pub use sparse_training::*;
+
+// Re-export enhanced training (v0.2.0)
+pub use enhanced_trainer::{
+    EarlyStoppingConfig, EnhancedTrainer, EnhancedTrainingConfig, GradientAccumulationSettings,
+    LRWarmupConfig, OperationTiming, OptimizationAnalyzer, OptimizationRecommendation,
+    ProfilingConfig, ProfilingResults, ProgressConfig, RecommendationType, TrainingState,
+    ValidationConfig, WarmupSchedule,
+};
+pub use optimized_dataloader::{
+    BatchSizeOptimizationResult, BatchSizeOptimizer, LoadingStats, OptimizedDataLoader,
+    OptimizedLoaderConfig, PrefetchingIterator,
+};
 
 /// Configuration structure for training neural networks
 #[derive(Debug, Clone)]

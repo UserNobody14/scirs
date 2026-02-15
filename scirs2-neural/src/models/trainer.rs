@@ -3,13 +3,13 @@
 //! This module provides utilities for training neural network models.
 
 use scirs2_core::ndarray::ScalarOperand;
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::collections::HashMap;
 use std::fmt::Debug;
 
 /// Training history that stores metrics during training
 #[derive(Debug, Clone)]
-pub struct History<F: Float> {
+pub struct History<F: Float + NumAssign> {
     /// Training loss per epoch
     pub train_loss: Vec<F>,
     /// Validation loss per epoch  
@@ -18,7 +18,7 @@ pub struct History<F: Float> {
     pub metrics: HashMap<String, Vec<F>>,
 }
 
-impl<F: Float> Default for History<F> {
+impl<F: Float + NumAssign> Default for History<F> {
     fn default() -> Self {
         Self {
             train_loss: Vec::new(),
@@ -59,14 +59,14 @@ impl Default for TrainingConfig {
 }
 
 /// Neural network model trainer
-pub struct Trainer<F: Float + Debug + ScalarOperand> {
+pub struct Trainer<F: Float + Debug + ScalarOperand + NumAssign> {
     /// Training configuration
     pub config: TrainingConfig,
     /// Training history
     pub history: History<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand> Trainer<F> {
+impl<F: Float + Debug + ScalarOperand + NumAssign> Trainer<F> {
     /// Create a new trainer
     pub fn new(config: TrainingConfig) -> Self {
         Self {

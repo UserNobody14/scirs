@@ -26,13 +26,13 @@ use scirs2_optim::optimizers as optim_optimizers;
 /// let grads = vec![Array::from_vec(vec![0.1, 0.2, 0.3]).into_dyn()];
 /// // Update parameters
 /// sgd.update(&mut params, &grads).unwrap();
-pub struct SGD<F: Float + Debug> {
+pub struct SGD<F: Float + Debug + NumAssign> {
     /// Inner SGD optimizer from scirs2-optim
     inner: optim, optimizers: SGD<F>,
     /// Weight decay (L2 regularization)
     weight_decay: F,
 }
-impl<F: Float + Debug> SGD<F> {
+impl<F: Float + Debug + NumAssign> SGD<F> {
     /// Create a new SGD optimizer
     ///
     /// # Arguments
@@ -71,7 +71,7 @@ impl<F: Float + Debug> SGD<F> {
     pub fn set_weight_decay(&mut self, weightdecay: F) {
         self.weight_decay = weight_decay;
         self.inner.set_weight_decay(weight_decay);
-impl<F: Float + Debug> Optimizer<F> for SGD<F> {
+impl<F: Float + Debug + NumAssign> Optimizer<F> for SGD<F> {
     fn update(&mut self, params: &mut [Array<F, scirs2_core::ndarray::IxDyn>], 
               grads: &[Array<F, scirs2_core::ndarray::IxDyn>]) -> Result<()> {
         if params.len() != grads.len() {

@@ -152,7 +152,8 @@ fn simulate_scalar_add(a: &[f64], b: &[f64]) -> Vec<f64> {
 /// Simulate SIMD complex multiplication
 fn simulate_simd_complex_multiply(input: &[f64]) -> Vec<f64> {
     // Simplified complex multiplication simulation
-    input.chunks(2)
+    input
+        .chunks(2)
         .flat_map(|chunk| {
             if chunk.len() == 2 {
                 let real = chunk[0] * chunk[0] - chunk[1] * chunk[1];
@@ -247,7 +248,7 @@ mod tests {
     }
 
     #[test]
-    fn test_simd_correctness() {
+    fn test_simd_correctness_validation() {
         let config = TestSignalConfig {
             length: 128,
             test_simd: true,

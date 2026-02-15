@@ -8,7 +8,7 @@ use crate::layers::Layer;
 use crate::transformer::{TransformerDecoder, TransformerEncoder};
 use crate::utils::{PositionalEncoding, PositionalEncodingFactory, PositionalEncodingType};
 use scirs2_core::ndarray::{Array, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::Rng;
 use scirs2_core::simd_ops::SimdUnifiedOps;
 use std::fmt::Debug;
@@ -58,20 +58,20 @@ impl Default for TransformerConfig {
 /// This implements the full transformer architecture from
 /// "Attention Is All You Need", combining encoder and decoder
 /// stacks with positional encoding.
-pub struct Transformer<F: Float + Debug + Send + Sync + SimdUnifiedOps> {
+pub struct Transformer<F: Float + Debug + Send + Sync + SimdUnifiedOps + NumAssign> {
     /// Transformer encoder stack
     encoder: TransformerEncoder<F>,
     /// Transformer decoder stack
     decoder: TransformerDecoder<F>,
     /// Positional encoding for input embeddings
-    pos_encoding: Box<dyn PositionalEncoding<F>>,
+    pos_encoding: Box<dyn PositionalEncoding<F> + Send + Sync>,
     /// Model configuration
     config: TransformerConfig,
     /// Encoder output cache for backward pass
     encoder_output_cache: Arc<RwLock<Option<Array<F, IxDyn>>>>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign> Clone
     for Transformer<F>
 {
     fn clone(&self) -> Self {
@@ -85,7 +85,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> Transformer<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign>
+    Transformer<F>
+{
     /// Create a new transformer model
     ///
     /// # Arguments
@@ -122,7 +124,8 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
             config.pos_encoding_type,
             config.d_model,
             config.max_seq_len,
-        )?;
+            rng,
+        );
 
         Ok(Self {
             encoder,
@@ -186,7 +189,8 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
 
         // Encode source
         let encoder_output = self.encoder.forward(&src_pos)?;
-        *self.encoder_output_cache.write().expect("Operation failed") = Some(encoder_output.clone());
+        *self.encoder_output_cache.write().expect("Operation failed") =
+            Some(encoder_output.clone());
 
         // Decode target with encoder output
         let decoder_output = self
@@ -249,7 +253,8 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
 
         // Encode source (for inference, we might cache this for efficiency)
         let encoder_output = self.encoder.forward(&src_pos)?;
-        *self.encoder_output_cache.write().expect("Operation failed") = Some(encoder_output.clone());
+        *self.encoder_output_cache.write().expect("Operation failed") =
+            Some(encoder_output.clone());
 
         // Decode target with encoder output
         let decoder_output = self
@@ -285,7 +290,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign> Layer<F>
     for Transformer<F>
 {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -413,7 +418,9 @@ mod tests {
         let tgt = Array3::<f64>::from_elem((batch_size, tgt_len, d_model), 0.1).into_dyn();
 
         // Forward pass for training
-        let output = transformer.forward_train(&src, &tgt).expect("Operation failed");
+        let output = transformer
+            .forward_train(&src, &tgt)
+            .expect("Operation failed");
 
         // Check output shape
         assert_eq!(output.shape(), tgt.shape());
@@ -445,7 +452,9 @@ mod tests {
         let tgt = Array3::<f64>::from_elem((batch_size, tgt_len, d_model), 0.1).into_dyn();
 
         // Forward pass for inference
-        let output = transformer.forward_inference(&src, &tgt).expect("Operation failed");
+        let output = transformer
+            .forward_inference(&src, &tgt)
+            .expect("Operation failed");
 
         // Check output shape
         assert_eq!(output.shape(), tgt.shape());
@@ -525,8 +534,7 @@ mod tests {
         let transformer = Transformer::<f64>::new(config, &mut rng).expect("Operation failed");
 
         // Test with wrong dimensions (2D instead of 3D)
-        let wrong_input =
-            scirs2_core::ndarray::Array2::<f64>::from_elem((4, 64), 0.1).into_dyn();
+        let wrong_input = scirs2_core::ndarray::Array2::<f64>::from_elem((4, 64), 0.1).into_dyn();
         let result = transformer.forward(&wrong_input);
         assert!(result.is_err());
 
@@ -551,7 +559,8 @@ mod tests {
             epsilon: 1e-5,
         };
 
-        let transformer = Transformer::<f64>::new(config.clone(), &mut rng).expect("Operation failed");
+        let transformer =
+            Transformer::<f64>::new(config.clone(), &mut rng).expect("Operation failed");
 
         // Test config accessor
         assert_eq!(transformer.config().d_model, 64);

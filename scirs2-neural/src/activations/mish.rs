@@ -3,7 +3,7 @@
 use crate::activations::Activation;
 use crate::error::Result;
 use scirs2_core::ndarray::{Array, Zip};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 /// Mish activation function.
 ///
@@ -33,8 +33,11 @@ impl Default for Mish {
     }
 }
 
-impl<F: Float + Debug> Activation<F> for Mish {
-    fn forward(&self, input: &Array<F, scirs2_core::ndarray::IxDyn>) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
+impl<F: Float + Debug + NumAssign> Activation<F> for Mish {
+    fn forward(
+        &self,
+        input: &Array<F, scirs2_core::ndarray::IxDyn>,
+    ) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
         let mut output = input.clone();
         // Compute x * tanh(softplus(x)) = x * tanh(ln(1 + e^x))
         Zip::from(&mut output).for_each(|x| {
@@ -47,7 +50,7 @@ impl<F: Float + Debug> Activation<F> for Mish {
                 (F::one() + x.exp()).ln()
             };
             // Apply tanh(softplus(x))
-            *x = *x * sp.tanh();
+            *x *= sp.tanh();
         });
         Ok(output)
     }

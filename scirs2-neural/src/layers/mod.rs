@@ -6,7 +6,7 @@
 
 use crate::error::Result;
 use scirs2_core::ndarray::{Array, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 
 /// Base trait for neural network layers
@@ -14,7 +14,7 @@ use std::fmt::Debug;
 /// This trait defines the core interface that all neural network layers must implement.
 /// It supports forward propagation, backpropagation, parameter management, and
 /// training/evaluation mode switching.
-pub trait Layer<F: Float + Debug + ScalarOperand>: Send + Sync {
+pub trait Layer<F: Float + Debug + ScalarOperand + NumAssign>: Send + Sync {
     /// Forward pass of the layer
     ///
     /// Computes the output of the layer given an input tensor.
@@ -107,7 +107,7 @@ pub trait Layer<F: Float + Debug + ScalarOperand>: Send + Sync {
 }
 
 /// Trait for layers with parameters (weights, biases)
-pub trait ParamLayer<F: Float + Debug + ScalarOperand>: Layer<F> {
+pub trait ParamLayer<F: Float + Debug + ScalarOperand + NumAssign>: Layer<F> {
     /// Get the parameters of the layer as a vector of arrays
     fn get_parameters(&self) -> Vec<Array<F, scirs2_core::ndarray::IxDyn>>;
 
@@ -139,12 +139,12 @@ pub struct LayerInfo {
 ///
 /// A Sequential model is a linear stack of layers where data flows through
 /// each layer in order.
-pub struct Sequential<F: Float + Debug + ScalarOperand> {
+pub struct Sequential<F: Float + Debug + ScalarOperand + NumAssign> {
     layers: Vec<Box<dyn Layer<F> + Send + Sync>>,
     training: bool,
 }
 
-impl<F: Float + Debug + ScalarOperand> std::fmt::Debug for Sequential<F> {
+impl<F: Float + Debug + ScalarOperand + NumAssign> std::fmt::Debug for Sequential<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Sequential")
             .field("num_layers", &self.layers.len())
@@ -153,7 +153,7 @@ impl<F: Float + Debug + ScalarOperand> std::fmt::Debug for Sequential<F> {
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + 'static> Clone for Sequential<F> {
+impl<F: Float + Debug + ScalarOperand + NumAssign + 'static> Clone for Sequential<F> {
     fn clone(&self) -> Self {
         // We can't clone the layers, so we just create an empty Sequential
         // with the same training flag
@@ -164,13 +164,13 @@ impl<F: Float + Debug + ScalarOperand + 'static> Clone for Sequential<F> {
     }
 }
 
-impl<F: Float + Debug + ScalarOperand> Default for Sequential<F> {
+impl<F: Float + Debug + ScalarOperand + NumAssign> Default for Sequential<F> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<F: Float + Debug + ScalarOperand> Sequential<F> {
+impl<F: Float + Debug + ScalarOperand + NumAssign> Sequential<F> {
     /// Create a new Sequential container
     pub fn new() -> Self {
         Self {
@@ -219,7 +219,7 @@ impl<F: Float + Debug + ScalarOperand> Sequential<F> {
     }
 }
 
-impl<F: Float + Debug + ScalarOperand> Layer<F> for Sequential<F> {
+impl<F: Float + Debug + ScalarOperand + NumAssign> Layer<F> for Sequential<F> {
     fn forward(
         &self,
         input: &Array<F, scirs2_core::ndarray::IxDyn>,
@@ -318,6 +318,7 @@ mod attention;
 mod embedding;
 mod flash_attention;
 mod regularization;
+pub mod rnn_thread_safe;
 
 // Re-export all modules
 pub use attention::{AttentionConfig, AttentionMask, MultiHeadAttention, SelfAttention};
@@ -327,7 +328,11 @@ pub use dropout::Dropout;
 pub use embedding::{Embedding, EmbeddingConfig, PositionalEmbedding};
 pub use flash_attention::{flash_attention_compute, FlashAttention, FlashAttentionConfig};
 pub use normalization::{BatchNorm, LayerNorm};
-pub use recurrent::LSTM;
+pub use recurrent::rnn::{RNNConfig, RecurrentActivation as RecurrentActivationRNN};
+pub use recurrent::{LSTM, RNN};
 pub use regularization::{
     ActivityRegularization, L1ActivityRegularization, L2ActivityRegularization,
+};
+pub use rnn_thread_safe::{
+    RecurrentActivation as ThreadSafeRecurrentActivation, ThreadSafeBidirectional, ThreadSafeRNN,
 };

@@ -5,9 +5,10 @@
 // entirely in memory, or where memory usage needs to be carefully controlled.
 
 use crate::error::{SignalError, SignalResult};
-use scirs2_core::numeric::Complex;
-use rustfft::FftPlanner;
+
+use scirs2_core::numeric::{Complex, Complex64};
 use scirs2_core::parallel_ops::*;
+use std::f64::consts::PI;
 use std::fs;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
@@ -35,10 +36,15 @@ pub struct MemoryConfig {
 
 impl Default for MemoryConfig {
     fn default() -> Self {
+        #[cfg(target_pointer_width = "32")]
+        let max_memory_bytes = 256 * 1024 * 1024; // 256MB for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let max_memory_bytes = 1024 * 1024 * 1024; // 1GB for 64-bit
+
         Self {
-            max_memory_bytes: 1024 * 1024 * 1024, // 1GB
-            chunk_size: 65536,                    // 64K samples
-            overlap_size: 1024,                   // 1K overlap
+            max_memory_bytes,
+            chunk_size: 65536,  // 64K samples
+            overlap_size: 1024, // 1K overlap
             use_mmap: true,
             temp_dir: None, // Use system temp
             compress_temp: false,
@@ -197,21 +203,24 @@ pub fn memory_optimized_fir_filter(
             let mut output_sample = 0.0;
 
             for (j, &coeff) in coefficients.iter().enumerate() {
-                let input_idx = if i >= j {
-                    i - j
+                let input_value = if i >= j {
+                    // Current chunk
+                    let input_idx = i - j;
+                    if input_idx < input_buffer.len() {
+                        input_buffer[input_idx]
+                    } else {
+                        0.0
+                    }
                 } else {
-                    // Use previous chunk data or zero
+                    // Use previous chunk data (filter memory) or zero
                     if j - i - 1 < filter_memory.len() {
-                        filter_memory[filter_memory.len() - (j - i)];
-                        continue;
+                        filter_memory[filter_memory.len() - (j - i)]
                     } else {
                         0.0
                     }
                 };
 
-                if input_idx < input_buffer.len() {
-                    output_sample += input_buffer[input_idx] * coeff;
-                }
+                output_sample += input_value * coeff;
             }
 
             output_buffer[i] = output_sample;
@@ -277,7 +286,7 @@ pub fn memory_optimized_fir_filter(
 
     Ok(MemoryOptimizedResult {
         data: MemoryOptimizedData::OnDisk {
-            _file_path: output_file.to_string(),
+            file_path: output_file.to_string(),
             length: samples_count,
             chunk_size,
         },
@@ -295,7 +304,7 @@ pub fn memory_optimized_fft(
     input_file: &str,
     output_file: &str,
     config: &MemoryConfig,
-) -> SignalResult<MemoryOptimizedResult<scirs2_core::numeric::Complex<f64>>> {
+) -> SignalResult<MemoryOptimizedResult<scirs2_core::numeric::Complex64>> {
     let _start_time = Instant::now();
 
     // Open input _file and validate size
@@ -307,7 +316,7 @@ pub fn memory_optimized_fft(
         .map_err(|e| SignalError::ComputationError(format!("Cannot get _file size: {}", e)))?
         .len() as usize;
 
-    let complex_size = std::mem::size_of::<Complex<f64>>();
+    let complex_size = std::mem::size_of::<Complex64>();
     let n = file_size / complex_size;
 
     // Validate that n is a power of 2
@@ -339,7 +348,7 @@ fn memory_fft_in_core(
     output_file: &str,
     n: usize,
     _config: &MemoryConfig,
-) -> SignalResult<MemoryOptimizedResult<scirs2_core::numeric::Complex<f64>>> {
+) -> SignalResult<MemoryOptimizedResult<scirs2_core::numeric::Complex64>> {
     let start_time = Instant::now();
     let io_start = Instant::now();
 
@@ -348,7 +357,7 @@ fn memory_fft_in_core(
         .map_err(|e| SignalError::ComputationError(format!("Cannot open input file: {}", e)))?;
 
     let mut input_reader = BufReader::new(input_file_handle);
-    let mut data = vec![Complex::new(0.0, 0.0); n];
+    let mut data = vec![Complex64::new(0.0, 0.0); n];
 
     // Read _complex data
     for i in 0..n {
@@ -364,16 +373,18 @@ fn memory_fft_in_core(
 
         let real = f64::from_le_bytes(real_bytes);
         let imag = f64::from_le_bytes(imag_bytes);
-        data[i] = Complex::new(real, imag);
+        data[i] = Complex64::new(real, imag);
     }
 
     let io_time = io_start.elapsed().as_millis();
     let compute_start = Instant::now();
 
-    // Compute FFT
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(n);
-    fft.process(&mut data);
+    // Compute FFT using scirs2_fft
+    let fft_result = scirs2_fft::fft(&data, Some(data.len()))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
+    for (i, c) in fft_result.iter().enumerate() {
+        data[i] = *c;
+    }
 
     let compute_time = compute_start.elapsed().as_millis();
     let io_start = Instant::now();
@@ -401,8 +412,8 @@ fn memory_fft_in_core(
     let total_time = start_time.elapsed().as_millis();
 
     let memory_stats = MemoryStats {
-        peak_memory: n * std::mem::size_of::<Complex<f64>>(),
-        avg_memory: n * std::mem::size_of::<Complex<f64>>() / 2,
+        peak_memory: n * std::mem::size_of::<Complex64>(),
+        avg_memory: n * std::mem::size_of::<Complex64>() / 2,
         cache_hits: 0,
         cache_misses: 0,
         disk_operations: 2, // Read and write
@@ -417,7 +428,7 @@ fn memory_fft_in_core(
 
     Ok(MemoryOptimizedResult {
         data: MemoryOptimizedData::OnDisk {
-            _file_path: output_file.to_string(),
+            file_path: output_file.to_string(),
             length: n,
             chunk_size: n,
         },
@@ -434,7 +445,7 @@ fn memory_fft_out_of_core(
     n: usize,
     log2n: usize,
     config: &MemoryConfig,
-) -> SignalResult<MemoryOptimizedResult<scirs2_core::numeric::Complex<f64>>> {
+) -> SignalResult<MemoryOptimizedResult<scirs2_core::numeric::Complex64>> {
     let start_time = Instant::now();
     let mut memory_stats = MemoryStats {
         peak_memory: 0,
@@ -445,7 +456,7 @@ fn memory_fft_out_of_core(
     };
 
     // Calculate stage parameters
-    let complex_size = std::mem::size_of::<Complex<f64>>();
+    let complex_size = std::mem::size_of::<Complex64>();
     let max_samples_in_memory = config.max_memory_bytes / complex_size / 4;
 
     // Determine how many stages we can do in memory vs. on disk
@@ -524,7 +535,7 @@ fn memory_fft_out_of_core(
 
     Ok(MemoryOptimizedResult {
         data: MemoryOptimizedData::OnDisk {
-            _file_path: output_file.to_string(),
+            file_path: output_file.to_string(),
             length: n,
             chunk_size: config.chunk_size,
         },
@@ -541,7 +552,7 @@ fn process_fft_stage_disk(
     n: usize,
     stage: usize,
     config: &MemoryConfig,
-) -> SignalResult<MemoryOptimizedResult<scirs2_core::numeric::Complex<f64>>> {
+) -> SignalResult<MemoryOptimizedResult<scirs2_core::numeric::Complex64>> {
     let start_time = std::time::Instant::now();
     let mut disk_ops = 0;
 
@@ -559,7 +570,7 @@ fn process_fft_stage_disk(
     let half_stage = stage_size / 2;
     let num_groups = n / stage_size;
 
-    let complex_size = std::mem::size_of::<Complex<f64>>();
+    let complex_size = std::mem::size_of::<Complex64>();
     let max_groups_in_memory = config.max_memory_bytes / (stage_size * complex_size);
     let groups_per_chunk = max_groups_in_memory.max(1);
 
@@ -574,7 +585,7 @@ fn process_fft_stage_disk(
         let chunk_samples = chunk_groups * stage_size;
 
         // Read chunk
-        let mut data = vec![Complex::new(0.0, 0.0); chunk_samples];
+        let mut data = vec![Complex64::new(0.0, 0.0); chunk_samples];
 
         // Seek to the correct position
         let byte_offset = chunk_start * stage_size * complex_size;
@@ -593,7 +604,7 @@ fn process_fft_stage_disk(
                 .read_exact(&mut imag_bytes)
                 .map_err(|e| SignalError::ComputationError(format!("Read error: {}", e)))?;
 
-            data[i] = Complex::new(
+            data[i] = Complex64::new(
                 f64::from_le_bytes(real_bytes),
                 f64::from_le_bytes(imag_bytes),
             );
@@ -611,7 +622,7 @@ fn process_fft_stage_disk(
             for i in 0..half_stage {
                 let j = i + half_stage;
                 let twiddle_angle = -2.0 * PI * (i as f64) / (stage_size as f64);
-                let twiddle = Complex::new(twiddle_angle.cos(), twiddle_angle.sin());
+                let twiddle = Complex64::new(twiddle_angle.cos(), twiddle_angle.sin());
 
                 let idx1 = group_offset + i;
                 let idx2 = group_offset + j;
@@ -669,7 +680,7 @@ fn process_fft_stage_disk(
 
     Ok(MemoryOptimizedResult {
         data: MemoryOptimizedData::OnDisk {
-            _file_path: output_file.to_string(),
+            file_path: output_file.to_string(),
             length: n,
             chunk_size: config.chunk_size,
         },
@@ -687,7 +698,7 @@ fn process_fft_stages_memory(
     _start_stage: usize,
     _stages: usize,
     config: &MemoryConfig,
-) -> SignalResult<MemoryOptimizedResult<scirs2_core::numeric::Complex<f64>>> {
+) -> SignalResult<MemoryOptimizedResult<scirs2_core::numeric::Complex64>> {
     // For simplicity, delegate to in-core implementation
     // In a full implementation, this would do the remaining radix-2 _stages
     memory_fft_in_core(input_file, output_file, n, config)
@@ -738,10 +749,6 @@ pub fn memory_optimized_spectrogram(
     let mut input_reader = BufReader::new(input_handle);
     let mut output_writer = BufWriter::new(output_handle);
 
-    // Initialize FFT
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(window_size);
-
     // Create window function (Hann window)
     let window: Vec<f64> = (0..window_size)
         .map(|i| {
@@ -751,7 +758,7 @@ pub fn memory_optimized_spectrogram(
         .collect();
 
     let mut buffer = vec![0.0; window_size];
-    let mut fft_buffer = vec![Complex::new(0.0, 0.0); window_size];
+    let mut fft_buffer = vec![Complex64::new(0.0, 0.0); window_size];
     let mut magnitude_buffer = vec![0.0; n_freqs];
 
     let mut total_io_time = 0;
@@ -785,11 +792,15 @@ pub fn memory_optimized_spectrogram(
 
         // Apply window and prepare FFT buffer
         for i in 0..window_size {
-            fft_buffer[i] = Complex::new(buffer[i] * window[i], 0.0);
+            fft_buffer[i] = Complex64::new(buffer[i] * window[i], 0.0);
         }
 
-        // Compute FFT
-        fft.process(&mut fft_buffer);
+        // Compute FFT using scirs2_fft
+        let fft_result = scirs2_fft::fft(&fft_buffer, Some(fft_buffer.len()))
+            .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
+        for (i, c) in fft_result.iter().enumerate() {
+            fft_buffer[i] = *c;
+        }
 
         // Compute magnitude spectrum (one-sided)
         for i in 0..n_freqs {
@@ -837,7 +848,7 @@ pub fn memory_optimized_spectrogram(
 
     Ok(MemoryOptimizedResult {
         data: MemoryOptimizedData::OnDisk {
-            _file_path: output_file.to_string(),
+            file_path: output_file.to_string(),
             length: n_frames * n_freqs,
             chunk_size: n_freqs,
         },
@@ -860,7 +871,7 @@ mod tests {
     #[test]
     fn test_memory_optimized_data_variants() {
         let in_memory = MemoryOptimizedData::InMemory(vec![1.0, 2.0, 3.0]);
-        let on_disk = MemoryOptimizedData::OnDisk {
+        let on_disk: MemoryOptimizedData<f64> = MemoryOptimizedData::OnDisk {
             file_path: "/tmp/test.dat".to_string(),
             length: 1000,
             chunk_size: 256,
@@ -890,7 +901,8 @@ mod tests {
         let mut file = File::create(test_file).expect("Operation failed");
         for i in 0..n_samples {
             let sample = (i as f64 * 0.1).sin();
-            file.write_all(&sample.to_le_bytes()).expect("Operation failed");
+            file.write_all(&sample.to_le_bytes())
+                .expect("Operation failed");
         }
         file.flush().expect("Operation failed");
 

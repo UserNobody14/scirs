@@ -3,7 +3,7 @@
 use crate::error::{NeuralError, Result};
 use crate::losses::Loss;
 use scirs2_core::ndarray::Array;
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 
 /// Triplet loss function.
@@ -63,7 +63,7 @@ impl Default for TripletLoss {
     }
 }
 
-impl<F: Float + Debug> Loss<F> for TripletLoss {
+impl<F: Float + Debug + NumAssign> Loss<F> for TripletLoss {
     fn forward(
         &self,
         predictions: &Array<F, scirs2_core::ndarray::IxDyn>,
@@ -100,10 +100,10 @@ impl<F: Float + Debug> Loss<F> for TripletLoss {
             for j in 0..embedding_dim {
                 // Anchor-positive distance
                 let pos_diff = anchor[j] - positive[j];
-                pos_distance_squared = pos_distance_squared + pos_diff * pos_diff;
+                pos_distance_squared += pos_diff * pos_diff;
                 // Anchor-negative distance
                 let neg_diff = anchor[j] - negative[j];
-                neg_distance_squared = neg_distance_squared + neg_diff * neg_diff;
+                neg_distance_squared += neg_diff * neg_diff;
             }
             let pos_distance = pos_distance_squared.sqrt();
             let neg_distance = neg_distance_squared.sqrt();
@@ -112,7 +112,7 @@ impl<F: Float + Debug> Loss<F> for TripletLoss {
             // max(0, pos_distance - neg_distance + margin)
             let zero = F::zero();
             let triplet_loss = (pos_distance - neg_distance + margin).max(zero);
-            total_loss = total_loss + triplet_loss;
+            total_loss += triplet_loss;
         }
 
         // Average loss over the batch
@@ -147,9 +147,9 @@ impl<F: Float + Debug> Loss<F> for TripletLoss {
             let mut neg_distance_squared = F::zero();
             for j in 0..embedding_dim {
                 let pos_diff = anchor[j] - positive[j];
-                pos_distance_squared = pos_distance_squared + pos_diff * pos_diff;
+                pos_distance_squared += pos_diff * pos_diff;
                 let neg_diff = anchor[j] - negative[j];
-                neg_distance_squared = neg_distance_squared + neg_diff * neg_diff;
+                neg_distance_squared += neg_diff * neg_diff;
             }
             let pos_distance = pos_distance_squared.sqrt();
             let neg_distance = neg_distance_squared.sqrt();

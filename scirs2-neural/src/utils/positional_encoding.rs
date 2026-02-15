@@ -29,13 +29,13 @@
 
 use crate::error::{NeuralError, Result};
 use scirs2_core::ndarray::{s, Array, Array2, Array3, Axis, IxDyn, Zip};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::Rng;
 use std::f64::consts::PI;
 use std::fmt::Debug;
 
 /// Trait for positional encoding implementations
-pub trait PositionalEncoding<F: Float + Debug> {
+pub trait PositionalEncoding<F: Float + Debug + NumAssign> {
     /// Encode positions for a sequence of given length
     ///
     /// # Arguments
@@ -53,6 +53,51 @@ pub trait PositionalEncoding<F: Float + Debug> {
     /// # Returns
     /// Tensor with positional encoding added
     fn apply(&self, input: &Array3<F>) -> Result<Array3<F>>;
+
+    /// Forward pass with dynamic array
+    ///
+    /// # Arguments
+    /// * `input` - Input tensor of dynamic shape [batch_size, seq_len, d_model]
+    ///
+    /// # Returns
+    /// Tensor with positional encoding added
+    fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
+        // Convert IxDyn to Array3
+        if input.ndim() != 3 {
+            return Err(NeuralError::InvalidArchitecture(format!(
+                "Expected 3D input, got {}D",
+                input.ndim()
+            )));
+        }
+
+        let shape = input.shape();
+        let input_3d = input
+            .view()
+            .into_dimensionality::<scirs2_core::ndarray::Ix3>()
+            .map_err(|e| {
+                NeuralError::InvalidArchitecture(format!("Failed to convert to 3D: {}", e))
+            })?;
+
+        let output_3d = self.apply(&input_3d.to_owned())?;
+        Ok(output_3d.into_dyn())
+    }
+
+    /// Update trainable parameters (for learned encodings)
+    ///
+    /// # Arguments
+    /// * `_learning_rate` - Learning rate for parameter updates
+    ///
+    /// # Returns
+    /// Result indicating success or failure
+    fn update(&mut self, _learning_rate: F) -> Result<()> {
+        // Default implementation: no-op for non-trainable encodings
+        Ok(())
+    }
+
+    /// Clone the positional encoding into a boxed trait object
+    fn clone_box(&self) -> Box<dyn PositionalEncoding<F> + Send + Sync>
+    where
+        F: Send + Sync + 'static;
 
     /// Get the model dimension
     fn d_model(&self) -> usize;
@@ -73,7 +118,7 @@ pub trait PositionalEncoding<F: Float + Debug> {
 /// - Can extrapolate to longer sequences than seen during training
 /// - Allows the model to attend to relative positions
 #[derive(Debug, Clone)]
-pub struct SinusoidalPositionalEncoding<F: Float + Debug> {
+pub struct SinusoidalPositionalEncoding<F: Float + Debug + NumAssign> {
     d_model: usize,
     max_len: usize,
     /// Pre-computed positional encodings
@@ -82,7 +127,7 @@ pub struct SinusoidalPositionalEncoding<F: Float + Debug> {
     dropout: Option<F>,
 }
 
-impl<F: Float + Debug> SinusoidalPositionalEncoding<F> {
+impl<F: Float + Debug + NumAssign> SinusoidalPositionalEncoding<F> {
     /// Create a new sinusoidal positional encoding
     ///
     /// # Arguments
@@ -133,9 +178,19 @@ impl<F: Float + Debug> SinusoidalPositionalEncoding<F> {
 
         encodings
     }
+
+    /// Get parameters (sinusoidal encoding has no trainable parameters)
+    pub fn params(&self) -> Vec<&Array<F, IxDyn>> {
+        Vec::new()
+    }
+
+    /// Set training mode (no-op for sinusoidal encoding as it has no trainable parameters)
+    pub fn set_training(&mut self, _training: bool) {
+        // No-op: sinusoidal encoding is not trainable
+    }
 }
 
-impl<F: Float + Debug> PositionalEncoding<F> for SinusoidalPositionalEncoding<F> {
+impl<F: Float + Debug + NumAssign> PositionalEncoding<F> for SinusoidalPositionalEncoding<F> {
     fn encode(&self, seq_len: usize) -> Array2<F> {
         assert!(
             seq_len <= self.max_len,
@@ -162,10 +217,17 @@ impl<F: Float + Debug> PositionalEncoding<F> for SinusoidalPositionalEncoding<F>
         for mut batch in output.axis_iter_mut(Axis(0)) {
             Zip::from(&mut batch)
                 .and(&encoding)
-                .for_each(|b, &e| *b = *b + e);
+                .for_each(|b, &e| *b += e);
         }
 
         Ok(output)
+    }
+
+    fn clone_box(&self) -> Box<dyn PositionalEncoding<F> + Send + Sync>
+    where
+        F: Send + Sync + 'static,
+    {
+        Box::new(self.clone())
     }
 
     fn d_model(&self) -> usize {
@@ -183,14 +245,14 @@ impl<F: Float + Debug> PositionalEncoding<F> for SinusoidalPositionalEncoding<F>
 /// More flexible than sinusoidal but requires training data and
 /// doesn't extrapolate to longer sequences.
 #[derive(Debug, Clone)]
-pub struct LearnedPositionalEncoding<F: Float + Debug> {
+pub struct LearnedPositionalEncoding<F: Float + Debug + NumAssign> {
     d_model: usize,
     max_len: usize,
     /// Learnable position embeddings
     embeddings: Array2<F>,
 }
 
-impl<F: Float + Debug> LearnedPositionalEncoding<F> {
+impl<F: Float + Debug + NumAssign> LearnedPositionalEncoding<F> {
     /// Create a new learned positional encoding with random initialization
     ///
     /// # Arguments
@@ -238,7 +300,7 @@ impl<F: Float + Debug> LearnedPositionalEncoding<F> {
     }
 }
 
-impl<F: Float + Debug> PositionalEncoding<F> for LearnedPositionalEncoding<F> {
+impl<F: Float + Debug + NumAssign> PositionalEncoding<F> for LearnedPositionalEncoding<F> {
     fn encode(&self, seq_len: usize) -> Array2<F> {
         assert!(
             seq_len <= self.max_len,
@@ -264,10 +326,17 @@ impl<F: Float + Debug> PositionalEncoding<F> for LearnedPositionalEncoding<F> {
         for mut batch in output.axis_iter_mut(Axis(0)) {
             Zip::from(&mut batch)
                 .and(&encoding)
-                .for_each(|b, &e| *b = *b + e);
+                .for_each(|b, &e| *b += e);
         }
 
         Ok(output)
+    }
+
+    fn clone_box(&self) -> Box<dyn PositionalEncoding<F> + Send + Sync>
+    where
+        F: Send + Sync + 'static,
+    {
+        Box::new(self.clone())
     }
 
     fn d_model(&self) -> usize {
@@ -289,7 +358,7 @@ impl<F: Float + Debug> PositionalEncoding<F> for LearnedPositionalEncoding<F> {
 /// - Better length extrapolation than absolute position encodings
 /// - Used in modern LLMs like LLaMA, GPT-NeoX, etc.
 #[derive(Debug, Clone)]
-pub struct RotaryPositionalEncoding<F: Float + Debug> {
+pub struct RotaryPositionalEncoding<F: Float + Debug + NumAssign> {
     d_model: usize,
     max_len: usize,
     base: f64,
@@ -299,7 +368,7 @@ pub struct RotaryPositionalEncoding<F: Float + Debug> {
     cos_cached: Array2<F>,
 }
 
-impl<F: Float + Debug> RotaryPositionalEncoding<F> {
+impl<F: Float + Debug + NumAssign> RotaryPositionalEncoding<F> {
     /// Create a new RoPE encoding
     ///
     /// # Arguments
@@ -399,7 +468,7 @@ impl<F: Float + Debug> RotaryPositionalEncoding<F> {
     }
 }
 
-impl<F: Float + Debug> PositionalEncoding<F> for RotaryPositionalEncoding<F> {
+impl<F: Float + Debug + NumAssign> PositionalEncoding<F> for RotaryPositionalEncoding<F> {
     fn encode(&self, seq_len: usize) -> Array2<F> {
         // Return combined sin/cos for compatibility
         // In practice, use rotate() method directly
@@ -421,6 +490,13 @@ impl<F: Float + Debug> PositionalEncoding<F> for RotaryPositionalEncoding<F> {
         self.rotate(input, 0)
     }
 
+    fn clone_box(&self) -> Box<dyn PositionalEncoding<F> + Send + Sync>
+    where
+        F: Send + Sync + 'static,
+    {
+        Box::new(self.clone())
+    }
+
     fn d_model(&self) -> usize {
         self.d_model
     }
@@ -436,7 +512,7 @@ impl<F: Float + Debug> PositionalEncoding<F> for RotaryPositionalEncoding<F> {
 /// positions rather than absolute positions. This allows better generalization
 /// to longer sequences.
 #[derive(Debug, Clone)]
-pub struct RelativePositionalEncoding<F: Float + Debug> {
+pub struct RelativePositionalEncoding<F: Float + Debug + NumAssign> {
     d_model: usize,
     max_len: usize,
     /// Relative position embeddings: [2*max_len-1, d_model]
@@ -444,7 +520,7 @@ pub struct RelativePositionalEncoding<F: Float + Debug> {
     rel_embeddings: Array2<F>,
 }
 
-impl<F: Float + Debug> RelativePositionalEncoding<F> {
+impl<F: Float + Debug + NumAssign> RelativePositionalEncoding<F> {
     /// Create a new relative positional encoding
     ///
     /// # Arguments
@@ -523,7 +599,7 @@ impl<F: Float + Debug> RelativePositionalEncoding<F> {
     }
 }
 
-impl<F: Float + Debug> PositionalEncoding<F> for RelativePositionalEncoding<F> {
+impl<F: Float + Debug + NumAssign> PositionalEncoding<F> for RelativePositionalEncoding<F> {
     fn encode(&self, seq_len: usize) -> Array2<F> {
         // For relative PE, return the central positions (around 0 relative position)
         let start = self.max_len - 1;
@@ -549,10 +625,17 @@ impl<F: Float + Debug> PositionalEncoding<F> for RelativePositionalEncoding<F> {
         for mut batch in output.axis_iter_mut(Axis(0)) {
             Zip::from(&mut batch)
                 .and(&encoding)
-                .for_each(|b, &e| *b = *b + e);
+                .for_each(|b, &e| *b += e);
         }
 
         Ok(output)
+    }
+
+    fn clone_box(&self) -> Box<dyn PositionalEncoding<F> + Send + Sync>
+    where
+        F: Send + Sync + 'static,
+    {
+        Box::new(self.clone())
     }
 
     fn d_model(&self) -> usize {
@@ -589,7 +672,7 @@ impl PositionalEncodingFactory {
         rng: &mut R,
     ) -> Box<dyn PositionalEncoding<F> + Send + Sync>
     where
-        F: Float + Debug + Send + Sync + 'static,
+        F: Float + Debug + NumAssign + Send + Sync + 'static,
         R: Rng,
     {
         match pe_type {

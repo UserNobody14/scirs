@@ -4,7 +4,7 @@
 //! for efficient frequency-domain processing of signals.
 
 use crate::error::{SignalError, SignalResult};
-use rustfft::{num_complex::Complex, FftPlanner};
+use scirs2_core::numeric::Complex64;
 use scirs2_core::parallel_ops::*;
 
 /// Helper for parallel operations (temporary replacement)
@@ -59,20 +59,12 @@ pub fn parallel_fft_filter(
 
     let useful_size = fft_size - ir_len + 1;
 
-    // Prepare FFT planner
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(fft_size);
-    let ifft = planner.plan_fft_inverse(fft_size);
+    // Zero-pad and FFT the impulse response using scirs2_fft
+    let mut ir_padded: Vec<f64> = impulse_response.to_vec();
+    ir_padded.resize(fft_size, 0.0);
 
-    // Zero-pad and FFT the impulse response
-    let mut ir_padded: Vec<Complex<f64>> = impulse_response
-        .iter()
-        .map(|&x| Complex::new(x, 0.0))
-        .collect();
-    ir_padded.resize(fft_size, Complex::new(0.0, 0.0));
-
-    let mut ir_fft = ir_padded.clone();
-    fft.process(&mut ir_fft);
+    let ir_fft = scirs2_fft::fft(&ir_padded, Some(fft_size))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
     // Calculate number of chunks needed
     let n_chunks = signal.len().div_ceil(useful_size);
@@ -86,24 +78,26 @@ pub fn parallel_fft_filter(
             let end = (start + useful_size).min(signal.len());
 
             // Prepare input chunk
-            let mut chunk_data: Vec<Complex<f64>> =
-                (start..end).map(|i| Complex::new(signal[i], 0.0)).collect();
-            chunk_data.resize(fft_size, Complex::new(0.0, 0.0));
+            let mut chunk_data: Vec<f64> = (start..end).map(|i| signal[i]).collect();
+            chunk_data.resize(fft_size, 0.0);
 
             // FFT of input chunk
-            let mut chunk_fft = chunk_data;
-            fft.process(&mut chunk_fft);
+            let chunk_fft = scirs2_fft::fft(&chunk_data, Some(fft_size))
+                .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
             // Frequency domain multiplication
-            for i in 0..fft_size {
-                chunk_fft[i] *= ir_fft[i];
-            }
+            let product: Vec<Complex64> = chunk_fft
+                .iter()
+                .zip(ir_fft.iter())
+                .map(|(a, b)| a * b)
+                .collect();
 
             // IFFT to get time domain result
-            ifft.process(&mut chunk_fft);
+            let chunk_ifft = scirs2_fft::ifft(&product, Some(fft_size))
+                .map_err(|e| SignalError::ComputationError(format!("IFFT failed: {}", e)))?;
 
-            // Extract real part and normalize
-            let chunk_result: Vec<f64> = chunk_fft.iter().map(|c| c.re / fft_size as f64).collect();
+            // Extract real part (ifft already normalizes)
+            let chunk_result: Vec<f64> = chunk_ifft.iter().map(|c| c.re).collect();
 
             Ok(chunk_result)
         },
@@ -145,7 +139,7 @@ pub fn parallel_fft_filter(
 ///
 /// * FIR filter coefficients
 pub fn parallel_fft_filter_design(
-    frequency_response: &[Complex<f64>],
+    frequency_response: &[Complex64],
     filter_length: usize,
     window_type: &str,
 ) -> SignalResult<Vec<f64>> {
@@ -157,20 +151,13 @@ pub fn parallel_fft_filter_design(
 
     let fft_size = frequency_response.len();
 
-    // Prepare IFFT planner
-    let mut planner = FftPlanner::new();
-    let ifft = planner.plan_fft_inverse(fft_size);
+    // IFFT using scirs2_fft
+    let freq_data = scirs2_fft::ifft(frequency_response, Some(fft_size))
+        .map_err(|e| SignalError::ComputationError(format!("IFFT failed: {}", e)))?;
 
-    // Copy frequency response for IFFT
-    let mut freq_data = frequency_response.to_vec();
-    ifft.process(&mut freq_data);
-
-    // Extract real part and normalize
-    let mut impulse_response: Vec<f64> = freq_data
-        .iter()
-        .take(filter_length)
-        .map(|c| c.re / fft_size as f64)
-        .collect();
+    // Extract real part (ifft already normalizes)
+    let mut impulse_response: Vec<f64> =
+        freq_data.iter().take(filter_length).map(|c| c.re).collect();
 
     // Apply window function
     apply_window(&mut impulse_response, window_type)?;
@@ -205,18 +192,12 @@ pub fn parallel_overlap_add_convolution(
         ));
     }
 
-    // Prepare FFT planners
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(fft_size);
-    let ifft = planner.plan_fft_inverse(fft_size);
+    // Zero-pad and FFT the kernel using scirs2_fft
+    let mut kernel_padded: Vec<f64> = kernel.to_vec();
+    kernel_padded.resize(fft_size, 0.0);
 
-    // Zero-pad and FFT the kernel
-    let mut kernel_padded: Vec<Complex<f64>> =
-        kernel.iter().map(|&x| Complex::new(x, 0.0)).collect();
-    kernel_padded.resize(fft_size, Complex::new(0.0, 0.0));
-
-    let mut kernel_fft = kernel_padded;
-    fft.process(&mut kernel_fft);
+    let kernel_fft = scirs2_fft::fft(&kernel_padded, Some(fft_size))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
     // Calculate number of chunks
     let n_chunks = signal.len().div_ceil(useful_size);
@@ -230,24 +211,26 @@ pub fn parallel_overlap_add_convolution(
             let end = (start + useful_size).min(signal.len());
 
             // Prepare input chunk
-            let mut chunk_data: Vec<Complex<f64>> =
-                (start..end).map(|i| Complex::new(signal[i], 0.0)).collect();
-            chunk_data.resize(fft_size, Complex::new(0.0, 0.0));
+            let mut chunk_data: Vec<f64> = (start..end).map(|i| signal[i]).collect();
+            chunk_data.resize(fft_size, 0.0);
 
             // FFT of input chunk
-            let mut chunk_fft = chunk_data;
-            fft.process(&mut chunk_fft);
+            let chunk_fft = scirs2_fft::fft(&chunk_data, Some(fft_size))
+                .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
             // Frequency domain multiplication
-            for i in 0..fft_size {
-                chunk_fft[i] *= kernel_fft[i];
-            }
+            let product: Vec<Complex64> = chunk_fft
+                .iter()
+                .zip(kernel_fft.iter())
+                .map(|(a, b)| a * b)
+                .collect();
 
             // IFFT to get result
-            ifft.process(&mut chunk_fft);
+            let chunk_ifft = scirs2_fft::ifft(&product, Some(fft_size))
+                .map_err(|e| SignalError::ComputationError(format!("IFFT failed: {}", e)))?;
 
-            // Extract real part and normalize
-            let chunk_result: Vec<f64> = chunk_fft.iter().map(|c| c.re / fft_size as f64).collect();
+            // Extract real part (ifft already normalizes)
+            let chunk_result: Vec<f64> = chunk_ifft.iter().map(|c| c.re).collect();
 
             Ok(chunk_result)
         },
@@ -301,18 +284,12 @@ pub fn parallel_overlap_save_convolution(
         ));
     }
 
-    // Prepare FFT planners
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(fft_size);
-    let ifft = planner.plan_fft_inverse(fft_size);
+    // Zero-pad and FFT the kernel using scirs2_fft
+    let mut kernel_padded: Vec<f64> = kernel.to_vec();
+    kernel_padded.resize(fft_size, 0.0);
 
-    // Zero-pad and FFT the kernel
-    let mut kernel_padded: Vec<Complex<f64>> =
-        kernel.iter().map(|&x| Complex::new(x, 0.0)).collect();
-    kernel_padded.resize(fft_size, Complex::new(0.0, 0.0));
-
-    let mut kernel_fft = kernel_padded;
-    fft.process(&mut kernel_fft);
+    let kernel_fft = scirs2_fft::fft(&kernel_padded, Some(fft_size))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
     // Calculate number of chunks
     let n_chunks = signal.len().div_ceil(useful_size);
@@ -326,34 +303,37 @@ pub fn parallel_overlap_save_convolution(
             let end = (start + fft_size).min(signal.len() + overlap_len);
 
             // Prepare input chunk with overlap
-            let mut chunk_data = vec![Complex::new(0.0, 0.0); fft_size];
+            let mut chunk_data = vec![0.0; fft_size];
             for i in 0..fft_size {
                 let signal_idx = start + i;
                 if signal_idx < signal.len() && signal_idx >= chunk_idx * useful_size {
-                    chunk_data[i] = Complex::new(signal[signal_idx], 0.0);
+                    chunk_data[i] = signal[signal_idx];
                 } else if signal_idx < signal.len() {
-                    chunk_data[i] = Complex::new(signal[signal_idx], 0.0);
+                    chunk_data[i] = signal[signal_idx];
                 }
             }
 
             // FFT of input chunk
-            let mut chunk_fft = chunk_data;
-            fft.process(&mut chunk_fft);
+            let chunk_fft = scirs2_fft::fft(&chunk_data, Some(fft_size))
+                .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
             // Frequency domain multiplication
-            for i in 0..fft_size {
-                chunk_fft[i] *= kernel_fft[i];
-            }
+            let product: Vec<Complex64> = chunk_fft
+                .iter()
+                .zip(kernel_fft.iter())
+                .map(|(a, b)| a * b)
+                .collect();
 
             // IFFT to get result
-            ifft.process(&mut chunk_fft);
+            let chunk_ifft = scirs2_fft::ifft(&product, Some(fft_size))
+                .map_err(|e| SignalError::ComputationError(format!("IFFT failed: {}", e)))?;
 
             // Extract useful part (discard overlap)
             let useful_start = if chunk_idx == 0 { 0 } else { overlap_len };
-            let chunk_result: Vec<f64> = chunk_fft[useful_start..]
+            let chunk_result: Vec<f64> = chunk_ifft[useful_start..]
                 .iter()
                 .take(useful_size)
-                .map(|c| c.re / fft_size as f64)
+                .map(|c| c.re)
                 .collect();
 
             Ok(chunk_result)
@@ -439,11 +419,11 @@ mod tests {
         let fft_size = 64;
 
         // Create a simple lowpass frequency response
-        let mut frequency_response = vec![Complex::new(0.0, 0.0); fft_size];
+        let mut frequency_response = vec![Complex64::new(0.0, 0.0); fft_size];
         // Set lowpass response (keep low frequencies, zero high frequencies)
         for i in 0..fft_size / 8 {
-            frequency_response[i] = Complex::new(1.0, 0.0);
-            frequency_response[fft_size - i - 1] = Complex::new(1.0, 0.0);
+            frequency_response[i] = Complex64::new(1.0, 0.0);
+            frequency_response[fft_size - i - 1] = Complex64::new(1.0, 0.0);
         }
 
         let result = parallel_fft_filter_design(&frequency_response, 16, "hamming");

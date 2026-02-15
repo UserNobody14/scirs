@@ -45,7 +45,14 @@ where
     /// Analyze allocation request context
     fn analyze_allocation_request(&self, size: usize) -> StatsResult<AllocationContext> {
         let current_thread = std::thread::current().id();
-        let thread_id = unsafe { std::mem::transmute::<_, usize>(current_thread) };
+
+        // Use hash-based approach instead of transmute for platform compatibility
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        current_thread.hash(&mut hasher);
+        let thread_id = hasher.finish() as usize;
+
         let current_pressure = self.pressure_monitor.get_current_pressure();
         let predicted_usage = self
             .predictive_engine

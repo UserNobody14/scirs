@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Time series analysis module for SciRS2 (scirs2-series)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["time-series", "forecasting", "scientific", "ai", "machine-learning"]

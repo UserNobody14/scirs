@@ -2,7 +2,7 @@
 //!
 //! This module implements the Mamba architecture as described in:
 //! "Mamba: Linear-Time Sequence Modeling with Selective State Spaces"
-//! by Albert Gu and Tri Dao (https://arxiv.org/abs/2312.00752)
+//! by Albert Gu and Tri Dao (<https://arxiv.org/abs/2312.00752>)
 //!
 //! Mamba is a selective state space model (SSM) that achieves linear-time
 //! sequence modeling with competitive performance to Transformers while
@@ -12,8 +12,9 @@ use crate::activations::Activation;
 use crate::error::{NeuralError, Result};
 use crate::layers::{Dense, Dropout, Layer, LayerNorm};
 use scirs2_core::ndarray::{s, Array, Array1, Array2, Array3, IxDyn, ScalarOperand, Zip};
-use scirs2_core::numeric::Float;
-use scirs2_core::random::Rng;
+use scirs2_core::numeric::{Float, NumAssign};
+use scirs2_core::random::{Rng, SeedableRng};
+use scirs2_core::simd_ops::SimdUnifiedOps;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
@@ -116,8 +117,7 @@ impl MambaConfig {
 
     /// Get the dt_rank (auto-computed if not set)
     pub fn get_dt_rank(&self) -> usize {
-        self.dt_rank
-            .unwrap_or_else(|| (self.d_model + 15) / 16) // ceil division
+        self.dt_rank.unwrap_or_else(|| self.d_model.div_ceil(16)) // ceil division
     }
 }
 
@@ -130,7 +130,7 @@ impl MambaConfig {
 /// Where A_bar and B_bar are computed from continuous-time parameters
 /// using the zero-order hold (ZOH) discretization.
 #[derive(Debug)]
-pub struct SelectiveSSM<F: Float + Debug + ScalarOperand + Send + Sync> {
+pub struct SelectiveSSM<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign> {
     /// State dimension
     d_state: usize,
     /// Inner dimension
@@ -149,9 +149,14 @@ pub struct SelectiveSSM<F: Float + Debug + ScalarOperand + Send + Sync> {
     x_proj_dt: Dense<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> SelectiveSSM<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> SelectiveSSM<F> {
     /// Create a new SelectiveSSM
-    pub fn new<R: Rng>(d_inner: usize, d_state: usize, dt_rank: usize, rng: &mut R) -> Result<Self> {
+    pub fn new<R: Rng>(
+        d_inner: usize,
+        d_state: usize,
+        dt_rank: usize,
+        rng: &mut R,
+    ) -> Result<Self> {
         // Initialize A with the S4D-Real initialization
         // A = -exp(uniformly spaced values from ln(1) to ln(state_dim))
         let mut a_log = Array2::<F>::zeros((d_inner, d_state));
@@ -230,7 +235,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> SelectiveSSM<F> {
         let delta_proj = self.dt_proj.forward(&dt_proj_input)?;
 
         // Apply softplus to delta: delta = softplus(delta_proj)
-        let delta = delta_proj.mapv(|v| {
+        let delta = delta_proj.mapv(|v: F| {
             if v > F::from(20.0).expect("Failed to convert constant to float") {
                 v
             } else {
@@ -292,7 +297,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> SelectiveSSM<F> {
                 for i in 0..d_inner {
                     let mut y_i = F::zero();
                     for j in 0..self.d_state {
-                        y_i = y_i + c_t[j] * h[[i, j]];
+                        y_i += c_t[j] * h[[i, j]];
                     }
                     // Add skip connection
                     output[[batch_idx, t, i]] = y_i + self.d[[i]] * x_t[i];
@@ -306,7 +311,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> SelectiveSSM<F> {
 
 /// 1D Convolution layer for Mamba
 #[derive(Debug)]
-struct Conv1D<F: Float + Debug + ScalarOperand + Send + Sync> {
+struct Conv1D<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign> {
     /// Convolution weights [out_channels, kernel_size]
     weights: Array2<F>,
     /// Bias [out_channels]
@@ -317,9 +322,11 @@ struct Conv1D<F: Float + Debug + ScalarOperand + Send + Sync> {
     channels: usize,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Conv1D<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> Conv1D<F> {
     fn new<R: Rng>(channels: usize, kernel_size: usize, rng: &mut R) -> Result<Self> {
-        let std = (F::from(2.0).expect("Failed to convert constant to float") / F::from(channels * kernel_size).expect("Failed to convert to float")).sqrt();
+        let std = (F::from(2.0).expect("Failed to convert constant to float")
+            / F::from(channels * kernel_size).expect("Failed to convert to float"))
+        .sqrt();
 
         let mut weights = Array2::<F>::zeros((channels, kernel_size));
         for w in weights.iter_mut() {
@@ -364,7 +371,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Conv1D<F> {
                     for k in 0..self.kernel_size {
                         let input_idx = t as isize + k as isize - pad as isize;
                         if input_idx >= 0 && (input_idx as usize) < seq_len {
-                            sum = sum + self.weights[[c, k]] * x[[b, input_idx as usize, c]];
+                            sum += self.weights[[c, k]] * x[[b, input_idx as usize, c]];
                         }
                     }
                     output[[b, t, c]] = sum;
@@ -388,7 +395,10 @@ impl SiLU {
 
 /// A single Mamba block
 #[derive(Debug)]
-pub struct MambaBlock<F: Float + Debug + ScalarOperand + Send + Sync> {
+pub struct MambaBlock<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign>
+where
+    F: SimdUnifiedOps,
+{
     /// Configuration
     d_model: usize,
     d_inner: usize,
@@ -404,7 +414,9 @@ pub struct MambaBlock<F: Float + Debug + ScalarOperand + Send + Sync> {
     norm: LayerNorm<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MambaBlock<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static>
+    MambaBlock<F>
+{
     /// Create a new MambaBlock
     pub fn new<R: Rng>(config: &MambaConfig, rng: &mut R) -> Result<Self> {
         let d_inner = config.d_inner();
@@ -423,7 +435,8 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MambaBlock<F> {
         let out_proj = Dense::<F>::new(d_inner, config.d_model, Some("out_proj"), rng)?;
 
         // Layer norm
-        let norm = LayerNorm::<F>::new(config.d_model, F::from(1e-5).expect("Failed to convert constant to float"), Some("norm"))?;
+        let mut rng = scirs2_core::random::rngs::SmallRng::from_seed([42; 32]);
+        let norm = LayerNorm::<F>::new(config.d_model, 1e-5, &mut rng)?;
 
         Ok(Self {
             d_model: config.d_model,
@@ -532,7 +545,10 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MambaBlock<F> {
 /// let output = mamba.forward(&input).expect("Operation failed");
 /// ```
 #[derive(Debug)]
-pub struct Mamba<F: Float + Debug + ScalarOperand + Send + Sync> {
+pub struct Mamba<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign>
+where
+    F: SimdUnifiedOps,
+{
     /// Configuration
     config: MambaConfig,
     /// Stack of Mamba blocks
@@ -543,7 +559,9 @@ pub struct Mamba<F: Float + Debug + ScalarOperand + Send + Sync> {
     classifier: Option<Dense<F>>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Mamba<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static>
+    Mamba<F>
+{
     /// Create a new Mamba model
     pub fn new<R: Rng>(config: MambaConfig, rng: &mut R) -> Result<Self> {
         // Create Mamba blocks
@@ -553,8 +571,8 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Mamba<F> {
         }
 
         // Final layer norm
-        let final_norm =
-            LayerNorm::<F>::new(config.d_model, F::from(1e-5).expect("Failed to convert constant to float"), Some("final_norm"))?;
+        let mut rng_final = scirs2_core::random::rngs::SmallRng::from_seed([43; 32]);
+        let final_norm = LayerNorm::<F>::new(config.d_model, 1e-5, &mut rng_final)?;
 
         // Optional classifier
         let classifier = if let Some(num_classes) = config.num_classes {
@@ -589,7 +607,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Mamba<F> {
 
 impl<F> Layer<F> for Mamba<F>
 where
-    F: Float + Debug + ScalarOperand + Send + Sync + 'static,
+    F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static + SimdUnifiedOps,
 {
     fn as_any(&self) -> &dyn std::any::Any {
         self
@@ -639,7 +657,7 @@ where
                 for d in 0..self.config.d_model {
                     let mut sum = F::zero();
                     for t in 0..seq_len {
-                        sum = sum + normed[[b, t, d]];
+                        sum += normed[[b, t, d]];
                     }
                     pooled[[b, d]] = sum / seq_len_f;
                 }
@@ -671,7 +689,7 @@ where
 /// This implements a basic structured state space model without
 /// the selective mechanism. Useful for comparison and simpler use cases.
 #[derive(Debug)]
-pub struct S4Layer<F: Float + Debug + ScalarOperand + Send + Sync> {
+pub struct S4Layer<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign> {
     /// Dimension
     d_model: usize,
     /// State dimension
@@ -688,7 +706,7 @@ pub struct S4Layer<F: Float + Debug + ScalarOperand + Send + Sync> {
     delta: F,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> S4Layer<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> S4Layer<F> {
     /// Create a new S4 layer with HiPPO initialization
     pub fn new<R: Rng>(d_model: usize, d_state: usize, rng: &mut R) -> Result<Self> {
         // HiPPO matrix initialization for A
@@ -774,7 +792,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> S4Layer<F> {
         let mut a_bar = Array2::<F>::eye(self.d_state);
         for i in 0..self.d_state {
             for j in 0..self.d_state {
-                a_bar[[i, j]] = a_bar[[i, j]] + self.delta * self.a[[i, j]];
+                a_bar[[i, j]] += self.delta * self.a[[i, j]];
             }
         }
 
@@ -887,7 +905,8 @@ mod tests {
         let d_state = 4;
         let dt_rank = 2;
 
-        let ssm = SelectiveSSM::<f64>::new(d_inner, d_state, dt_rank, &mut rng).expect("Operation failed");
+        let ssm = SelectiveSSM::<f64>::new(d_inner, d_state, dt_rank, &mut rng)
+            .expect("Operation failed");
 
         let input = Array3::<f64>::from_elem((2, 4, d_inner), 0.1).into_dyn();
         let output = ssm.forward(&input);

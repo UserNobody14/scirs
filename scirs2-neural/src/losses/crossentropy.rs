@@ -3,7 +3,7 @@
 use crate::error::{NeuralError, Result};
 use crate::losses::Loss;
 use scirs2_core::ndarray::{Array, Zip};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 /// Cross-entropy loss function.
 ///
@@ -51,7 +51,7 @@ impl Default for CrossEntropyLoss {
     }
 }
 
-impl<F: Float + Debug> Loss<F> for CrossEntropyLoss {
+impl<F: Float + Debug + NumAssign> Loss<F> for CrossEntropyLoss {
     fn forward(
         &self,
         predictions: &Array<F, scirs2_core::ndarray::IxDyn>,
@@ -87,19 +87,19 @@ impl<F: Float + Debug> Loss<F> for CrossEntropyLoss {
                     let y_true = targets[[i, j]];
                     // Only add to loss if target is non-zero (for sparse targets)
                     if y_true > F::zero() {
-                        sample_loss = sample_loss - y_true * y_pred.ln();
+                        sample_loss -= y_true * y_pred.ln();
                     }
                 }
-                loss = loss + sample_loss;
+                loss += sample_loss;
             }
             // Average over batch
-            loss = loss / n;
+            loss /= n;
         } else {
             // Single sample case
             Zip::from(predictions).and(targets).for_each(|&p, &t| {
                 let p_safe = p.max(epsilon).min(F::one() - epsilon);
                 if t > F::zero() {
-                    loss = loss - t * p_safe.ln();
+                    loss -= t * p_safe.ln();
                 }
             });
         }

@@ -385,7 +385,12 @@ pub fn linear_interpolate<F: crate::traits::InterpolationFloat>(
     x_new: &ArrayView1<F>,
 ) -> InterpolateResult<Array1<F>> {
     use super::{ExtrapolateMode, Interp1d, InterpolationMethod};
-    let interp = Interp1d::new(x, y, InterpolationMethod::Linear, ExtrapolateMode::Error)?;
+    let interp = Interp1d::new(
+        x,
+        y,
+        InterpolationMethod::Linear,
+        ExtrapolateMode::Extrapolate,
+    )?;
     interp.evaluate_array(x_new)
 }
 
@@ -428,7 +433,12 @@ pub fn cubic_interpolate<F: crate::traits::InterpolationFloat>(
     x_new: &ArrayView1<F>,
 ) -> InterpolateResult<Array1<F>> {
     use super::{ExtrapolateMode, Interp1d, InterpolationMethod};
-    let interp = Interp1d::new(x, y, InterpolationMethod::Cubic, ExtrapolateMode::Error)?;
+    let interp = Interp1d::new(
+        x,
+        y,
+        InterpolationMethod::Cubic,
+        ExtrapolateMode::Extrapolate,
+    )?;
     interp.evaluate_array(x_new)
 }
 

@@ -30,7 +30,7 @@ use std::fmt::Debug;
 /// let input = Array::from_vec(vec![-2.0, -1.0, 0.0, 1.0, 2.0]).into_dyn();
 /// let output = relu(&input).expect("ReLU failed");
 /// ```
-pub fn relu<F: Float + Debug>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
+pub fn relu<F: Float + Debug + NumAssign>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
     let mut output = input.clone();
     let zero = F::zero();
     Zip::from(&mut output).for_each(|x| {
@@ -62,7 +62,7 @@ pub fn relu<F: Float + Debug>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>
 /// let input = Array::from_vec(vec![-1.0, 0.0, 1.0]).into_dyn();
 /// let output = sigmoid(&input).expect("Sigmoid failed");
 /// ```
-pub fn sigmoid<F: Float + Debug>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
+pub fn sigmoid<F: Float + Debug + NumAssign>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
     let mut output = input.clone();
     let one = F::one();
     Zip::from(&mut output).for_each(|x| {
@@ -92,7 +92,7 @@ pub fn sigmoid<F: Float + Debug>(input: &Array<F, IxDyn>) -> Result<Array<F, IxD
 /// let input = Array::from_vec(vec![-1.0, 0.0, 1.0]).into_dyn();
 /// let output = tanh(&input).expect("Tanh failed");
 /// ```
-pub fn tanh<F: Float + Debug>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
+pub fn tanh<F: Float + Debug + NumAssign>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
     let mut output = input.clone();
     Zip::from(&mut output).for_each(|x| {
         *x = x.tanh();
@@ -121,7 +121,7 @@ pub fn tanh<F: Float + Debug>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>
 /// let input = Array::from_vec(vec![-1.0, 0.0, 1.0]).into_dyn();
 /// let output = gelu(&input).expect("GELU failed");
 /// ```
-pub fn gelu<F: Float + Debug>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
+pub fn gelu<F: Float + Debug + NumAssign>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
     let mut output = input.clone();
     let half = F::from(0.5).ok_or_else(|| {
         crate::error::NeuralError::ComputationError("Failed to convert constant".to_string())
@@ -164,7 +164,7 @@ pub fn gelu<F: Float + Debug>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>
 /// let input = Array::from_vec(vec![-2.0, -1.0, 0.0, 1.0, 2.0]).into_dyn();
 /// let output = leaky_relu(&input, 0.01).expect("Leaky ReLU failed");
 /// ```
-pub fn leaky_relu<F: Float + Debug>(
+pub fn leaky_relu<F: Float + Debug + NumAssign>(
     input: &Array<F, IxDyn>,
     negative_slope: F,
 ) -> Result<Array<F, IxDyn>> {
@@ -199,7 +199,7 @@ pub fn leaky_relu<F: Float + Debug>(
 /// let input = Array::from_vec(vec![-1.0, 0.0, 1.0]).into_dyn();
 /// let output = swish(&input).expect("Swish failed");
 /// ```
-pub fn swish<F: Float + Debug>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
+pub fn swish<F: Float + Debug + NumAssign>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
     let sigmoid_output = sigmoid(input)?;
     let mut output = input.clone();
     Zip::from(&mut output)
@@ -231,7 +231,7 @@ pub fn swish<F: Float + Debug>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn
 /// let input = Array::from_vec(vec![-1.0, 0.0, 1.0]).into_dyn();
 /// let output = mish(&input).expect("Mish failed");
 /// ```
-pub fn mish<F: Float + Debug>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
+pub fn mish<F: Float + Debug + NumAssign>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
     let mut output = input.clone();
     let one = F::one();
     Zip::from(&mut output).for_each(|x| {
@@ -264,7 +264,7 @@ pub fn mish<F: Float + Debug>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>
 /// let input = Array::from_vec(vec![1.0, 2.0, 3.0]).into_dyn();
 /// let output = softmax(&input, -1).expect("Softmax failed");
 /// ```
-pub fn softmax<F: Float + Debug>(input: &Array<F, IxDyn>, axis: isize) -> Result<Array<F, IxDyn>> {
+pub fn softmax<F: Float + Debug + NumAssign>(input: &Array<F, IxDyn>, axis: isize) -> Result<Array<F, IxDyn>> {
     // For simple 1D case or applying to last axis
     let mut output = input.clone();
 
@@ -331,7 +331,7 @@ pub fn softmax<F: Float + Debug>(input: &Array<F, IxDyn>, axis: isize) -> Result
 /// let input = Array::from_vec(vec![-2.0, -1.0, 0.0, 1.0, 2.0]).into_dyn();
 /// let output = elu(&input, 1.0).expect("ELU failed");
 /// ```
-pub fn elu<F: Float + Debug>(input: &Array<F, IxDyn>, alpha: F) -> Result<Array<F, IxDyn>> {
+pub fn elu<F: Float + Debug + NumAssign>(input: &Array<F, IxDyn>, alpha: F) -> Result<Array<F, IxDyn>> {
     let mut output = input.clone();
     let zero = F::zero();
     let one = F::one();
@@ -369,7 +369,7 @@ pub fn elu<F: Float + Debug>(input: &Array<F, IxDyn>, alpha: F) -> Result<Array<
 /// let input = Array::from_vec(vec![-2.0, -1.0, 0.0, 1.0, 2.0]).into_dyn();
 /// let output = selu(&input).expect("SELU failed");
 /// ```
-pub fn selu<F: Float + Debug>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
+pub fn selu<F: Float + Debug + NumAssign>(input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
     let scale = F::from(1.0507009873554804934193349852946).ok_or_else(|| {
         crate::error::NeuralError::ComputationError("Failed to convert constant".to_string())
     })?;

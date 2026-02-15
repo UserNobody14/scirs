@@ -57,7 +57,7 @@ pub enum AttentionAggregation {
     Weighted(Vec<f64>),
 /// Attention visualizer for transformer models
 #[derive(Debug, Clone)]
-pub struct AttentionVisualizer<F: Float + Debug> {
+pub struct AttentionVisualizer<F: Float + Debug + NumAssign> {
     /// Number of attention heads
     pub num_heads: usize,
     /// Sequence length
@@ -69,7 +69,7 @@ pub struct AttentionVisualizer<F: Float + Debug> {
     /// Layer names to visualize
     pub target_layers: Vec<String>,
 /// Visualization result containing processed data
-pub struct VisualizationResult<F: Float + Debug> {
+pub struct VisualizationResult<F: Float + Debug + NumAssign> {
     /// Visualization method used
     pub method: VisualizationMethod,
     /// Generated visualization data

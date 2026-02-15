@@ -117,6 +117,7 @@ pub mod enhanced_vectorize;
 pub mod error;
 pub mod huggingface_compat;
 pub mod information_extraction;
+pub mod language_model;
 pub mod ml_integration;
 pub mod ml_sentiment;
 pub mod model_registry;
@@ -165,7 +166,11 @@ pub use domain_processors::{
     MedicalTextProcessor, NewsTextProcessor, PatentTextProcessor, ProcessedDomainText,
     ScientificTextProcessor, SocialMediaTextProcessor, UnifiedDomainProcessor,
 };
-pub use embeddings::{Word2Vec, Word2VecAlgorithm, Word2VecConfig};
+pub use embeddings::{
+    fasttext::{FastText, FastTextConfig},
+    glove::GloVe,
+    Word2Vec, Word2VecAlgorithm, Word2VecConfig,
+};
 pub use enhanced_vectorize::{EnhancedCountVectorizer, EnhancedTfidfVectorizer};
 pub use error::{Result, TextError};
 pub use huggingface_compat::{
@@ -182,6 +187,7 @@ pub use information_extraction::{
     MentionType, PatternExtractor, Relation, RelationExtractor, RuleBasedNER,
     StructuredDocumentInformation, TemporalExtractor, Topic,
 };
+pub use language_model::{NgramModel, SmoothingMethod};
 pub use ml_integration::{
     BatchTextProcessor, FeatureExtractionMode, MLTextPreprocessor, TextFeatures, TextMLPipeline,
 };

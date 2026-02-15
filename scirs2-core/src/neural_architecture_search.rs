@@ -1108,7 +1108,7 @@ impl Default for OptimizationObjectives {
 impl Default for HardwareConstraints {
     fn default() -> Self {
         Self {
-            max_memory: Some(8 * 1024 * 1024 * 1024), // 8GB
+            max_memory: Some((8u64 * 1024 * 1024 * 1024) as usize), // 8GB
             max_latency: Some(Duration::from_millis(100)),
             max_energy: Some(10.0),            // 10 joules
             max_parameters: Some(100_000_000), // 100M parameters

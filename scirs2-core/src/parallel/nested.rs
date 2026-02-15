@@ -57,7 +57,7 @@ impl Default for ResourceLimits {
             max_total_threads: num_cpus * 2,
             max_nesting_depth: 3,
             threads_per_level: vec![num_cpus, num_cpus / 2, 1],
-            max_memory_bytes: 4 * 1024 * 1024 * 1024, // 4GB
+            max_memory_bytes: (4u64 * 1024 * 1024 * 1024) as usize, // 4GB
             max_cpu_usage: 0.9,
             enable_thread_pooling: true,
             enable_cross_level_stealing: false,

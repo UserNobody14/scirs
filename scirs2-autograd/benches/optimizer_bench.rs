@@ -7,10 +7,11 @@
 //! - Optimizer update speed: 4 optimizers × 4 sizes = 16 benchmarks
 //! - Optimizer comparison: Additional benchmarks
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use scirs2_autograd as ag;
 use scirs2_autograd::tensor_ops as T;
 use scirs2_core::ndarray::Array2;
+use std::hint::black_box;
 
 /// Optimizer update speed benchmarks (16 benchmarks)
 fn optimizer_update_benchmark(c: &mut Criterion) {

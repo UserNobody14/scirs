@@ -4,12 +4,12 @@
 //! designed for autoregressive language modeling. Unlike BERT which is bidirectional,
 //! GPT uses a unidirectional (left-to-right) transformer architecture.
 //! Reference: "Improving Language Understanding by Generative Pre-Training", Radford et al. (2018)
-//! https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf
+//! <https://cdn.openai.com/research-covers/language-unsupervised/language_understanding_paper.pdf>
 
 use crate::error::{NeuralError, Result};
-use crate::layers::{Dense, Dropout, Embedding, Layer, LayerNorm};
+use crate::layers::{Dense, Dropout, Embedding, EmbeddingConfig, Layer, LayerNorm};
 use scirs2_core::ndarray::{Array, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::SeedableRng;
 use scirs2_core::simd_ops::SimdUnifiedOps;
 use std::fmt::Debug;
@@ -117,7 +117,9 @@ impl GPTConfig {
 }
 
 /// GPT embedding combining token and position embeddings
-struct GPTEmbeddings<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> {
+struct GPTEmbeddings<
+    F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static,
+> {
     /// Token embeddings
     token_embeddings: Embedding<F>,
     /// Position embeddings
@@ -126,7 +128,7 @@ struct GPTEmbeddings<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifie
     dropout: Dropout<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Clone
     for GPTEmbeddings<F>
 {
     fn clone(&self) -> Self {
@@ -138,15 +140,28 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> GPTEmbeddings<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static>
+    GPTEmbeddings<F>
+{
     /// Create GPT embeddings
     pub fn new(config: &GPTConfig) -> Result<Self> {
-        let mut rng1 = scirs2_core::random::rngs::SmallRng::from_seed([42; 32]);
-        let token_embeddings = Embedding::new(config.vocab_size, config.hidden_size, &mut rng1)?;
+        let token_embeddings = Embedding::new(EmbeddingConfig {
+            num_embeddings: config.vocab_size,
+            embedding_dim: config.hidden_size,
+            padding_idx: None,
+            max_norm: None,
+            norm_type: 2.0,
+            scale_grad_by_freq: false,
+        })?;
 
-        let mut rng2 = scirs2_core::random::rngs::SmallRng::from_seed([43; 32]);
-        let position_embeddings =
-            Embedding::new(config.max_position_embeddings, config.hidden_size, &mut rng2)?;
+        let position_embeddings = Embedding::new(EmbeddingConfig {
+            num_embeddings: config.max_position_embeddings,
+            embedding_dim: config.hidden_size,
+            padding_idx: None,
+            max_norm: None,
+            norm_type: 2.0,
+            scale_grad_by_freq: false,
+        })?;
 
         let mut rng3 = scirs2_core::random::rngs::SmallRng::from_seed([44; 32]);
         let dropout = Dropout::new(config.hidden_dropout_prob, &mut rng3)?;
@@ -159,7 +174,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Layer<F>
     for GPTEmbeddings<F>
 {
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
@@ -221,7 +236,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
 }
 
 /// GPT MLP (feed-forward network)
-struct GPTMlp<F: Float + Debug + ScalarOperand + Send + Sync + 'static> {
+struct GPTMlp<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> {
     /// First dense layer
     fc1: Dense<F>,
     /// Second dense layer
@@ -230,7 +245,7 @@ struct GPTMlp<F: Float + Debug + ScalarOperand + Send + Sync + 'static> {
     dropout: Dropout<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Clone
     for GPTMlp<F>
 {
     fn clone(&self) -> Self {
@@ -242,14 +257,26 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> GPTMlp<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static>
+    GPTMlp<F>
+{
     /// Create GPT MLP
     pub fn new(config: &GPTConfig) -> Result<Self> {
         let mut rng1 = scirs2_core::random::rngs::SmallRng::from_seed([45; 32]);
-        let fc1 = Dense::new(config.hidden_size, config.intermediate_size, None, &mut rng1)?;
+        let fc1 = Dense::new(
+            config.hidden_size,
+            config.intermediate_size,
+            None,
+            &mut rng1,
+        )?;
 
         let mut rng2 = scirs2_core::random::rngs::SmallRng::from_seed([46; 32]);
-        let fc2 = Dense::new(config.intermediate_size, config.hidden_size, None, &mut rng2)?;
+        let fc2 = Dense::new(
+            config.intermediate_size,
+            config.hidden_size,
+            None,
+            &mut rng2,
+        )?;
 
         let mut rng3 = scirs2_core::random::rngs::SmallRng::from_seed([47; 32]);
         let dropout = Dropout::new(config.hidden_dropout_prob, &mut rng3)?;
@@ -258,7 +285,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Layer<F>
     for GPTMlp<F>
 {
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
@@ -266,10 +293,12 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
         let hidden_states = self.fc1.forward(input)?;
 
         // Apply GELU activation
-        let hidden_states = hidden_states.mapv(|x| {
+        let hidden_states = hidden_states.mapv(|x: F| {
             let x3 = x * x * x;
             x * F::from(0.5).expect("Failed to convert constant to float")
-                * (F::one() + (x + F::from(0.044715).expect("Failed to convert constant to float") * x3).tanh())
+                * (F::one()
+                    + (x + F::from(0.044715).expect("Failed to convert constant to float") * x3)
+                        .tanh())
         });
 
         // Apply second dense layer
@@ -305,7 +334,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
 }
 
 /// GPT attention layer (masked multi-head attention)
-struct GPTAttention<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> {
+struct GPTAttention<
+    F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static,
+> {
     /// Number of attention heads
     num_attention_heads: usize,
     /// Size of each attention head
@@ -326,7 +357,7 @@ struct GPTAttention<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnified
     scale: F,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Clone
     for GPTAttention<F>
 {
     fn clone(&self) -> Self {
@@ -344,7 +375,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> GPTAttention<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static>
+    GPTAttention<F>
+{
     /// Create GPT attention layer
     pub fn new(config: &GPTConfig) -> Result<Self> {
         let hidden_size = config.hidden_size;
@@ -385,7 +418,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Layer<F>
     for GPTAttention<F>
 {
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
@@ -446,7 +479,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
 }
 
 /// GPT block (attention + MLP)
-struct GPTBlock<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> {
+struct GPTBlock<
+    F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static,
+> {
     /// Layer normalization for attention
     ln_1: LayerNorm<F>,
     /// Attention layer
@@ -457,7 +492,7 @@ struct GPTBlock<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps 
     mlp: GPTMlp<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Clone
     for GPTBlock<F>
 {
     fn clone(&self) -> Self {
@@ -470,7 +505,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> GPTBlock<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static>
+    GPTBlock<F>
+{
     /// Create GPT block
     pub fn new(config: &GPTConfig) -> Result<Self> {
         let mut rng1 = scirs2_core::random::rngs::SmallRng::from_seed([54; 32]);
@@ -492,7 +529,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Layer<F>
     for GPTBlock<F>
 {
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
@@ -535,7 +572,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
 }
 
 /// GPT model implementation
-pub struct GPTModel<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> {
+pub struct GPTModel<
+    F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static,
+> {
     /// Embeddings layer
     embeddings: GPTEmbeddings<F>,
     /// Transformer blocks
@@ -546,7 +585,7 @@ pub struct GPTModel<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnified
     config: GPTConfig,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Clone
     for GPTModel<F>
 {
     fn clone(&self) -> Self {
@@ -559,7 +598,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> GPTModel<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static>
+    GPTModel<F>
+{
     /// Create a new GPT model
     pub fn new(config: GPTConfig) -> Result<Self> {
         let embeddings = GPTEmbeddings::new(&config)?;
@@ -607,8 +648,12 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
         num_hidden_layers: usize,
         num_attention_heads: usize,
     ) -> Result<Self> {
-        let config =
-            GPTConfig::custom(vocab_size, hidden_size, num_hidden_layers, num_attention_heads);
+        let config = GPTConfig::custom(
+            vocab_size,
+            hidden_size,
+            num_hidden_layers,
+            num_attention_heads,
+        );
         Self::new(config)
     }
 
@@ -618,7 +663,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + NumAssign + 'static> Layer<F>
     for GPTModel<F>
 {
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {

@@ -652,8 +652,8 @@ mod tests {
         let df = 5.0;
         let wishart = Wishart::new(scale.clone(), df).expect("Operation failed");
 
-        // Generate samples
-        let n_samples_ = 100;
+        // Generate samples (increased from 100 to 1000 for robustness)
+        let n_samples_ = 1000;
         let samples = wishart.rvs(n_samples_).expect("Operation failed");
 
         // Check number of samples

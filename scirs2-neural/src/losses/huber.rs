@@ -7,7 +7,7 @@
 use crate::error::Result;
 use crate::losses::Loss;
 use scirs2_core::ndarray::{Array, IxDyn};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 
 /// Huber Loss (Smooth L1 Loss)
@@ -44,12 +44,12 @@ use std::fmt::Debug;
 /// # }
 /// ```
 #[derive(Debug, Clone, Copy)]
-pub struct HuberLoss<F: Float> {
+pub struct HuberLoss<F: Float + NumAssign> {
     /// Delta threshold for switching between quadratic and linear
     delta: F,
 }
 
-impl<F: Float> HuberLoss<F> {
+impl<F: Float + NumAssign> HuberLoss<F> {
     /// Create a new HuberLoss with the specified delta threshold
     ///
     /// # Arguments
@@ -67,13 +67,13 @@ impl<F: Float> HuberLoss<F> {
     }
 }
 
-impl<F: Float> Default for HuberLoss<F> {
+impl<F: Float + NumAssign> Default for HuberLoss<F> {
     fn default() -> Self {
         Self::default_delta()
     }
 }
 
-impl<F: Float + Debug> Loss<F> for HuberLoss<F> {
+impl<F: Float + Debug + NumAssign> Loss<F> for HuberLoss<F> {
     /// Calculate the Huber loss
     ///
     /// # Arguments

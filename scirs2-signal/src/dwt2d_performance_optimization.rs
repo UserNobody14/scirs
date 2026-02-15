@@ -202,7 +202,12 @@ impl Default for PerformanceConfig {
                 memory_bandwidth_gbs: 50.0,     // 50GB/s default
             },
             memory_constraints: MemoryConstraints {
-                max_memory_bytes: 1024 * 1024 * 1024, // 1GB default
+                max_memory_bytes: {
+                    #[cfg(target_pointer_width = "32")]
+                    { 256 * 1024 * 1024 } // 256MB default for 32-bit
+                    #[cfg(target_pointer_width = "64")]
+                    { 1024 * 1024 * 1024 } // 1GB default for 64-bit
+                },
                 prefer_inplace: true,
                 use_memory_mapping: false,
                 compression_level: 0,

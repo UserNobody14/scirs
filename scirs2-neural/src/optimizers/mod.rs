@@ -9,13 +9,14 @@ use crate::error::Result;
 use crate::layers::ParamLayer;
 use scirs2_core::ndarray::{Array, ScalarOperand};
 use scirs2_core::numeric::Float;
+use scirs2_core::NumAssign;
 use std::fmt::Debug;
 // Re-export scirs2-optim's optimizers when the feature is enabled
 // Note: scirs2_optim crate may not exist yet - commented out for compilation
 // #[cfg(feature = "optim")]
 // pub use scirs2_optim::optimizers as optim_optimizers;
 /// Trait for neural network optimizers
-pub trait Optimizer<F: Float + Debug + ScalarOperand> {
+pub trait Optimizer<F: Float + Debug + ScalarOperand + NumAssign> {
     /// Update parameters based on gradients
     fn update(
         &mut self,
@@ -47,16 +48,30 @@ pub trait Optimizer<F: Float + Debug + ScalarOperand> {
     /// Get the optimizer's name
     fn name(&self) -> &'static str {
         "Unknown"
+    }
 }
+
 /// Extension trait for optimizers that can work with model layers
-pub trait OptimizerStep<F: Float + Debug + ScalarOperand> {
+pub trait OptimizerStep<F: Float + Debug + ScalarOperand + NumAssign> {
     /// Update model parameters using the optimizer
-    fn step<L: ParamLayer<F> + ?Sized>(&mut self, model: &mut L) -> Result<()>;
+    fn step<L: ParamLayer<F>>(&mut self, model: &mut L) -> Result<()>;
+}
+
 /// Blanket implementation for all optimizers
-impl<F: Float + Debug + ScalarOperand, O: Optimizer<F>> OptimizerStep<F> for O {
-    fn step<L: ParamLayer<F> + ?Sized>(&mut self, model: &mut L) -> Result<()> {
+impl<F: Float + Debug + ScalarOperand + NumAssign, O: Optimizer<F>> OptimizerStep<F> for O {
+    fn step<L: ParamLayer<F>>(&mut self, model: &mut L) -> Result<()> {
+        self.step_model(model)
+    }
+}
+
 /// Implementation for trait objects
-impl<F: Float + Debug + ScalarOperand> OptimizerStep<F> for dyn Optimizer<F> + Send + Sync {
+impl<F: Float + Debug + ScalarOperand + NumAssign> OptimizerStep<F>
+    for dyn Optimizer<F> + Send + Sync
+{
+    fn step<L: ParamLayer<F>>(&mut self, model: &mut L) -> Result<()> {
+        self.step_model(model)
+    }
+}
 // Standard optimizer implementations
 pub mod adagrad;
 pub mod adam;

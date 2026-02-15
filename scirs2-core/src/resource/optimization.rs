@@ -267,7 +267,8 @@ impl IoParams {
         let optimal_buffersize = storage.optimal_io_size.max(network.mtu);
         let concurrent_operations = storage.queue_depth.min(16);
         let enable_async_io = storage.supports_async_io();
-        let enable_io_cache = !storage.is_ssd() || storage.capacity > 512 * 1024 * 1024 * 1024; // Cache for HDD or large SSDs
+        let enable_io_cache =
+            !storage.is_ssd() || storage.capacity > (512u64 * 1024 * 1024 * 1024) as usize; // Cache for HDD or large SSDs
 
         Self {
             optimal_buffersize,

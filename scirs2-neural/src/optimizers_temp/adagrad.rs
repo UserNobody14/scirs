@@ -25,13 +25,13 @@ use scirs2_optim::optimizers as optim_optimizers;
 /// let grads = vec![Array::from_vec(vec![0.1, 0.2, 0.3]).into_dyn()];
 /// // Update parameters
 /// adagrad.update(&mut params, &grads).unwrap();
-pub struct Adagrad<F: Float + Debug> {
+pub struct Adagrad<F: Float + Debug + NumAssign> {
     /// Inner Adagrad optimizer from scirs2-optim
     inner: optim, optimizers: Adagrad<F>,
     /// Weight decay (L2 regularization)
     weight_decay: F,
 }
-impl<F: Float + Debug> Adagrad<F> {
+impl<F: Float + Debug + NumAssign> Adagrad<F> {
     /// Create a new Adagrad optimizer with default parameters
     ///
     /// # Arguments
@@ -72,7 +72,7 @@ impl<F: Float + Debug> Adagrad<F> {
     /// Reset the optimizer state
     pub fn reset(&mut self) {
         self.inner.reset();
-impl<F: Float + Debug> Optimizer<F> for Adagrad<F> {
+impl<F: Float + Debug + NumAssign> Optimizer<F> for Adagrad<F> {
     fn update(&mut self, params: &mut [Array<F, scirs2_core::ndarray::IxDyn>], 
               grads: &[Array<F, scirs2_core::ndarray::IxDyn>]) -> Result<()> {
         if params.len() != grads.len() {

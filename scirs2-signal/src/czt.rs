@@ -10,7 +10,7 @@
 use crate::error::{SignalError, SignalResult};
 use scirs2_core::numeric::Complex64;
 use scirs2_core::numeric::{Float, NumCast};
-use rustfft::{num_complex::Complex as RustComplex, FftPlanner};
+
 use std::fmt::Debug;
 
 #[allow(unused_imports)]
@@ -237,7 +237,7 @@ fn next_power_of_two(n: usize) -> usize {
 
 /// Compute Fast Fourier Transform (FFT) of a complex sequence
 ///
-/// This is an implementation for complex inputs using rustfft directly
+/// This is an implementation for complex inputs using scirs2_fft
 #[allow(dead_code)]
 fn fft(x: &[Complex64]) -> SignalResult<Vec<Complex64>> {
     if x.is_empty() {
@@ -246,29 +246,16 @@ fn fft(x: &[Complex64]) -> SignalResult<Vec<Complex64>> {
 
     let n = x.len();
 
-    // Set up rustfft for computation
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(n);
-
-    // Convert to rustfft's Complex type
-    let mut buffer: Vec<RustComplex<f64>> =
-        x.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
-
-    // Perform the FFT
-    fft.process(&mut buffer);
-
-    // Convert back to scirs2_core::numeric::Complex64
-    let result: Vec<Complex64> = buffer
-        .into_iter()
-        .map(|c| Complex64::new(c.re, c.im))
-        .collect();
+    // Perform the FFT using scirs2_fft
+    let result = scirs2_fft::fft(x, Some(n))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
     Ok(result)
 }
 
 /// Compute Inverse Fast Fourier Transform (IFFT) of a complex sequence
 ///
-/// This is an implementation for complex inputs using rustfft directly
+/// This is an implementation for complex inputs using scirs2_fft
 #[allow(dead_code)]
 fn ifft(x: &[Complex64]) -> SignalResult<Vec<Complex64>> {
     if x.is_empty() {
@@ -277,23 +264,9 @@ fn ifft(x: &[Complex64]) -> SignalResult<Vec<Complex64>> {
 
     let n = x.len();
 
-    // Set up rustfft for computation
-    let mut planner = FftPlanner::new();
-    let ifft = planner.plan_fft_inverse(n);
-
-    // Convert to rustfft's Complex type
-    let mut buffer: Vec<RustComplex<f64>> =
-        x.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
-
-    // Perform the IFFT
-    ifft.process(&mut buffer);
-
-    // Convert back to scirs2_core::numeric::Complex64 and normalize
-    let inv_n = 1.0 / n as f64;
-    let result: Vec<Complex64> = buffer
-        .into_iter()
-        .map(|c| Complex64::new(c.re * inv_n, c.im * inv_n))
-        .collect();
+    // Perform the IFFT using scirs2_fft (already normalizes by 1/N internally)
+    let result = scirs2_fft::ifft(x, Some(n))
+        .map_err(|e| SignalError::ComputationError(format!("IFFT failed: {}", e)))?;
 
     Ok(result)
 }

@@ -69,6 +69,7 @@ pub mod complex;
 pub mod constants;
 pub mod core;
 pub mod digamma;
+pub mod enhanced;
 pub mod utils;
 
 // Re-export all public functions for backward compatibility
@@ -80,3 +81,8 @@ pub use utils::polygamma;
 
 // Also re-export betaln which is defined in core
 pub use core::betaln;
+
+// Re-export enhanced gamma functions
+pub use enhanced::{
+    gamma_enhanced, gamma_ratio, gammaln_enhanced, lgamma_with_sign, pochhammer_enhanced, rgamma,
+};

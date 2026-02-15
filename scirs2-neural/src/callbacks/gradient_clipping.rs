@@ -6,8 +6,9 @@ use super::{Callback, CallbackContext, CallbackTiming};
 use crate::error::Result;
 use crate::layers::Layer;
 use scirs2_core::ndarray::{Array, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::{Debug, Display};
+
 /// Gradient clipping method
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GradientClippingMethod {
@@ -16,9 +17,10 @@ pub enum GradientClippingMethod {
     /// Clip by value (clip each value to be within [-max_value, max_value])
     ClipByValue,
 }
+
 /// Gradient clipping callback
 #[derive(Debug)]
-pub struct GradientClipping<F: Float + Debug + ScalarOperand + Display> {
+pub struct GradientClipping<F: Float + NumAssign + Debug + ScalarOperand + Display> {
     /// Maximum norm for gradient clipping
     pub max_norm: F,
     /// Clipping method
@@ -29,9 +31,11 @@ pub struct GradientClipping<F: Float + Debug + ScalarOperand + Display> {
     clipping_applied: bool,
     /// Clipping ratio in the last step (if global norm method is used)
     clipping_ratio: Option<F>,
-impl<F: Float + Debug + ScalarOperand + Display> GradientClipping<F> {
+}
+
+impl<F: Float + NumAssign + Debug + ScalarOperand + Display> GradientClipping<F> {
     /// Create a new gradient clipping callback using global norm
-    pub fn by_global_norm(_max_norm: F, logstats: bool) -> Self {
+    pub fn by_global_norm(max_norm: F, log_stats: bool) -> Self {
         Self {
             max_norm,
             method: GradientClippingMethod::ClipByGlobalNorm,
@@ -40,54 +44,85 @@ impl<F: Float + Debug + ScalarOperand + Display> GradientClipping<F> {
             clipping_ratio: None,
         }
     }
+
     /// Create a new gradient clipping callback using value clipping
-    pub fn by_value(_max_value: F, logstats: bool) -> Self {
+    pub fn by_value(max_value: F, log_stats: bool) -> Self {
+        Self {
             max_norm: max_value,
             method: GradientClippingMethod::ClipByValue,
+            log_stats,
+            clipping_applied: false,
+            clipping_ratio: None,
+        }
+    }
+
     /// Returns whether clipping was applied in the last step
     pub fn was_clipping_applied(&self) -> bool {
         self.clipping_applied
+    }
+
     /// Returns the clipping ratio from the last step (if global norm method was used)
     pub fn get_clipping_ratio(&self) -> Option<F> {
         self.clipping_ratio
+    }
+
     /// Clip gradients by global norm
     fn clip_by_global_norm<L: Layer<F> + ?Sized>(&mut self, model: &mut L) -> Result<()> {
         let gradients = model.gradients();
+
         // Compute global norm
         let mut global_norm_sq = F::zero();
         for grad in &gradients {
             for &val in grad.iter() {
-                global_norm_sq = global_norm_sq + val * val;
+                global_norm_sq += val * val;
             }
+        }
         let global_norm = global_norm_sq.sqrt();
+
         // Clip if necessary
         if global_norm > self.max_norm {
             let scale = self.max_norm / global_norm;
             self.clipping_applied = true;
             self.clipping_ratio = Some(scale);
+
             let clipped_gradients: Vec<Array<F, IxDyn>> =
                 gradients.iter().map(|grad| grad.clone() * scale).collect();
+
             // Apply clipped gradients
             model.set_gradients(&clipped_gradients)?;
+
             if self.log_stats {
                 println!(
                     "Gradient clipping applied - global norm: {:.4}, scale: {:.4}",
                     global_norm, scale
                 );
+            }
         } else {
             self.clipping_applied = false;
             self.clipping_ratio = None;
+        }
+
         Ok(())
+    }
+
     /// Clip gradients by value
     fn clip_by_value<L: Layer<F> + ?Sized>(&mut self, model: &mut L) -> Result<()> {
+        let gradients = model.gradients();
+
         // Check if any value exceeds the maximum
         let mut clipping_needed = false;
+        for grad in &gradients {
+            for &val in grad.iter() {
                 if val.abs() > self.max_norm {
                     clipping_needed = true;
                     break;
                 }
+            }
             if clipping_needed {
                 break;
+            }
+        }
+
         if clipping_needed {
             let clipped_gradients: Vec<Array<F, IxDyn>> = gradients
                 .iter()
@@ -103,9 +138,26 @@ impl<F: Float + Debug + ScalarOperand + Display> GradientClipping<F> {
                     clipped
                 })
                 .collect();
+
+            model.set_gradients(&clipped_gradients)?;
+
+            self.clipping_applied = true;
+
+            if self.log_stats {
+                println!(
                     "Gradient value clipping applied - max value: {:.4}",
                     self.max_norm
-impl<F: Float + Debug + ScalarOperand + Display> Callback<F> for GradientClipping<F> {
+                );
+            }
+        } else {
+            self.clipping_applied = false;
+        }
+
+        Ok(())
+    }
+}
+
+impl<F: Float + NumAssign + Debug + ScalarOperand + Display> Callback<F> for GradientClipping<F> {
     fn on_event(&mut self, timing: CallbackTiming, context: &mut CallbackContext<F>) -> Result<()> {
         // The callback should be executed after each batch, before optimization
         if timing == CallbackTiming::AfterBatch {
@@ -115,13 +167,25 @@ impl<F: Float + Debug + ScalarOperand + Display> Callback<F> for GradientClippin
                     match self.method {
                         GradientClippingMethod::ClipByGlobalNorm => {
                             if let Err(e) = self.clip_by_global_norm(&mut **model) {
-                                eprintln!("Error in clip_by_globalnorm: {}", e);
+                                eprintln!("Error in clip_by_global_norm: {}", e);
                             }
+                        }
                         GradientClippingMethod::ClipByValue => {
                             if let Err(e) = self.clip_by_value(&mut **model) {
-                                eprintln!("Error in clip_byvalue: {}", e);
+                                eprintln!("Error in clip_by_value: {}", e);
+                            }
+                        }
+                    }
                 } else {
                     // Fallback behavior if model is not available
                     if self.log_stats {
                         println!("Gradient clipping: model not available in context");
+                    }
                     self.clipping_applied = false;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}

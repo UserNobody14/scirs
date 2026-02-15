@@ -77,7 +77,7 @@ pub mod micro_kernels;
 pub mod packing;
 
 // Re-export public API
-pub use blocked::{blocked_gemm_f32, should_use_blocked};
+pub use blocked::{blocked_gemm_f32, blocked_gemm_f64, should_use_blocked};
 pub use config::MatMulConfig;
 
 #[cfg(test)]
@@ -309,6 +309,249 @@ mod tests {
                 expected,
                 c[i]
             );
+        }
+    }
+
+    // ==================== f64 GEMM Tests ====================
+
+    #[test]
+    fn test_identity_multiply_f64() {
+        // Test C = A * I where I is identity
+        let n = 64;
+        let a: Vec<f64> = (0..n * n).map(|i| i as f64).collect();
+
+        // Identity matrix
+        let mut b = vec![0.0f64; n * n];
+        for i in 0..n {
+            b[i * n + i] = 1.0;
+        }
+
+        let mut c = vec![0.0f64; n * n];
+        let config = MatMulConfig::for_f64();
+
+        unsafe {
+            blocked_gemm_f64(
+                n,
+                n,
+                n,
+                1.0,
+                a.as_ptr(),
+                n,
+                b.as_ptr(),
+                n,
+                0.0,
+                c.as_mut_ptr(),
+                n,
+                &config,
+            );
+        }
+
+        // C should equal A
+        for i in 0..n * n {
+            assert!(
+                (c[i] - a[i]).abs() < 1e-10,
+                "Mismatch at index {}: expected {}, got {}",
+                i,
+                a[i],
+                c[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_rectangular_multiply_f64() {
+        // Test non-square matrices: C[3x5] = A[3x4] * B[4x5]
+        let m = 3;
+        let k = 4;
+        let n = 5;
+
+        let a: Vec<f64> = (1..=12).map(|i| i as f64).collect();
+        let b: Vec<f64> = (1..=20).map(|i| i as f64).collect();
+        let mut c = vec![0.0f64; m * n];
+
+        let config = MatMulConfig::for_f64();
+
+        unsafe {
+            blocked_gemm_f64(
+                m,
+                k,
+                n,
+                1.0,
+                a.as_ptr(),
+                k,
+                b.as_ptr(),
+                n,
+                0.0,
+                c.as_mut_ptr(),
+                n,
+                &config,
+            );
+        }
+
+        // Manually computed expected result for first row
+        // C[0,0] = 1*1 + 2*6 + 3*11 + 4*16 = 1+12+33+64 = 110
+        assert!(
+            (c[0] - 110.0).abs() < 1e-10,
+            "C[0,0] expected 110.0, got {}",
+            c[0]
+        );
+
+        // C[0,1] = 1*2 + 2*7 + 3*12 + 4*17 = 2+14+36+68 = 120
+        assert!(
+            (c[1] - 120.0).abs() < 1e-10,
+            "C[0,1] expected 120.0, got {}",
+            c[1]
+        );
+    }
+
+    #[test]
+    fn test_gemm_with_alpha_beta_f64() {
+        let m = 2;
+        let k = 2;
+        let n = 2;
+
+        let a: Vec<f64> = vec![1.0, 2.0, 3.0, 4.0];
+        let b: Vec<f64> = vec![5.0, 6.0, 7.0, 8.0];
+        let mut c = vec![1.0, 1.0, 1.0, 1.0];
+
+        let config = MatMulConfig::for_f64();
+
+        unsafe {
+            blocked_gemm_f64(
+                m,
+                k,
+                n,
+                2.0, // alpha
+                a.as_ptr(),
+                k,
+                b.as_ptr(),
+                n,
+                3.0, // beta
+                c.as_mut_ptr(),
+                n,
+                &config,
+            );
+        }
+
+        // C = beta*C + alpha*A*B
+        // A*B = [[19, 22], [43, 50]]
+        // C = 3*[1,1,1,1] + 2*[[19,22],[43,50]]
+        // C = [3,3,3,3] + [38,44,86,100] = [41,47,89,103]
+
+        let expected = [41.0, 47.0, 89.0, 103.0];
+        for i in 0..4 {
+            assert!(
+                (c[i] - expected[i]).abs() < 1e-10,
+                "Mismatch at index {}: expected {}, got {}",
+                i,
+                expected[i],
+                c[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_large_matrix_correctness_f64() {
+        // Test a larger matrix to ensure blocked algorithm is correct
+        let n = 128;
+
+        // A = all ones
+        let a = vec![1.0f64; n * n];
+
+        // B = all twos
+        let b = vec![2.0f64; n * n];
+
+        let mut c = vec![0.0f64; n * n];
+        let config = MatMulConfig::for_f64();
+
+        unsafe {
+            blocked_gemm_f64(
+                n,
+                n,
+                n,
+                1.0,
+                a.as_ptr(),
+                n,
+                b.as_ptr(),
+                n,
+                0.0,
+                c.as_mut_ptr(),
+                n,
+                &config,
+            );
+        }
+
+        // Each element should be 2*n (sum of 1*2 for n iterations)
+        let expected = 2.0 * n as f64;
+        for i in 0..n * n {
+            assert!(
+                (c[i] - expected).abs() < 1e-8,
+                "Mismatch at index {}: expected {}, got {}",
+                i,
+                expected,
+                c[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_gemm_with_strided_access_f64() {
+        // Test with non-contiguous matrices (stride > actual width)
+        let m = 4;
+        let k = 4;
+        let n = 4;
+
+        let lda = 8; // A has extra columns
+        let ldb = 8; // B has extra columns
+        let ldc = 8; // C has extra columns
+
+        let mut a = vec![0.0f64; m * lda];
+        let mut b = vec![0.0f64; k * ldb];
+        let mut c = vec![0.0f64; m * ldc];
+
+        // Fill A with identity in first 4x4 block
+        for i in 0..m {
+            a[i * lda + i] = 1.0;
+        }
+
+        // Fill B with identity in first 4x4 block
+        for i in 0..k {
+            b[i * ldb + i] = 1.0;
+        }
+
+        let config = MatMulConfig::for_f64();
+
+        unsafe {
+            blocked_gemm_f64(
+                m,
+                k,
+                n,
+                1.0,
+                a.as_ptr(),
+                lda,
+                b.as_ptr(),
+                ldb,
+                0.0,
+                c.as_mut_ptr(),
+                ldc,
+                &config,
+            );
+        }
+
+        // Result should be identity in first 4x4 block
+        for i in 0..m {
+            for j in 0..n {
+                let expected = if i == j { 1.0 } else { 0.0 };
+                let actual = c[i * ldc + j];
+                assert!(
+                    (actual - expected).abs() < 1e-10,
+                    "Mismatch at ({},{}): expected {}, got {}",
+                    i,
+                    j,
+                    expected,
+                    actual
+                );
+            }
         }
     }
 }

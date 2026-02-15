@@ -6,7 +6,7 @@
 use crate::gpu::{GpuBackend, GpuError};
 use std::process::Command;
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", feature = "serialization"))]
 use serde_json;
 
 #[cfg(feature = "validation")]
@@ -269,8 +269,6 @@ fn detect_cuda_devices() -> Result<Vec<GpuInfo>, GpuError> {
 #[cfg(target_os = "macos")]
 #[allow(dead_code)]
 fn detect_metal_devices() -> Result<Vec<GpuInfo>, GpuError> {
-    use std::str::FromStr;
-
     let mut devices = Vec::new();
 
     // Try to detect Metal devices using system_profiler
@@ -280,68 +278,80 @@ fn detect_metal_devices() -> Result<Vec<GpuInfo>, GpuError> {
         .output()
     {
         Ok(output) if output.status.success() => {
-            let output_str = String::from_utf8_lossy(&output.stdout);
+            // Try to parse JSON output (requires serialization feature for serde_json)
+            #[cfg(feature = "serialization")]
+            {
+                use std::str::FromStr;
+                let output_str = String::from_utf8_lossy(&output.stdout);
 
-            // Try to parse JSON output
-            if let Ok(json_value) = serde_json::Value::from_str(&output_str) {
-                if let Some(displays) = json_value
-                    .get("SPDisplaysDataType")
-                    .and_then(|v| v.as_array())
-                {
-                    // Pre-compile regex outside loop for performance
-                    #[cfg(feature = "validation")]
-                    let vram_regex = Regex::new(r"(\d+)\s*(GB|MB)").ok();
+                if let Ok(json_value) = serde_json::Value::from_str(&output_str) {
+                    if let Some(displays) = json_value
+                        .get("SPDisplaysDataType")
+                        .and_then(|v: &serde_json::Value| v.as_array())
+                    {
+                        // Pre-compile regex outside loop for performance
+                        #[cfg(feature = "validation")]
+                        let vram_regex = Regex::new(r"(\d+)\s*(GB|MB)").ok();
 
-                    for display in displays {
-                        // Extract GPU information from each display
-                        if let Some(model) = display.get("sppci_model").and_then(|v| v.as_str()) {
-                            let mut gpu_info = GpuInfo {
-                                backend: GpuBackend::Metal,
-                                device_name: model.to_string(),
-                                memory_bytes: None,
-                                compute_capability: None,
-                                supports_tensors: true,
-                            };
-
-                            // Try to extract VRAM if available
-                            if let Some(vram_str) = display
-                                .get("vram_pcie")
-                                .and_then(|v| v.as_str())
-                                .or_else(|| display.get("vram").and_then(|v| v.as_str()))
+                        for display in displays {
+                            // Extract GPU information from each display
+                            if let Some(model) = display
+                                .get("sppci_model")
+                                .and_then(|v: &serde_json::Value| v.as_str())
                             {
-                                // Parse VRAM string like "8 GB" or "8192 MB"
-                                #[cfg(feature = "validation")]
-                                if let Some(captures) =
-                                    vram_regex.as_ref().and_then(|re| re.captures(vram_str))
+                                let mut gpu_info = GpuInfo {
+                                    backend: GpuBackend::Metal,
+                                    device_name: model.to_string(),
+                                    memory_bytes: None,
+                                    compute_capability: None,
+                                    supports_tensors: true,
+                                };
+
+                                // Try to extract VRAM if available
+                                if let Some(vram_str) = display
+                                    .get("vram_pcie")
+                                    .and_then(|v: &serde_json::Value| v.as_str())
+                                    .or_else(|| {
+                                        display
+                                            .get("vram")
+                                            .and_then(|v: &serde_json::Value| v.as_str())
+                                    })
                                 {
-                                    if let (Some(value), Some(unit)) =
-                                        (captures.get(1), captures.get(2))
+                                    // Parse VRAM string like "8 GB" or "8192 MB"
+                                    #[cfg(feature = "validation")]
+                                    if let Some(captures) =
+                                        vram_regex.as_ref().and_then(|re| re.captures(vram_str))
                                     {
-                                        if let Ok(num) = u64::from_str(value.as_str()) {
-                                            gpu_info.memory_bytes = Some(match unit.as_str() {
-                                                "GB" => num * 1024 * 1024 * 1024,
-                                                "MB" => num * 1024 * 1024,
-                                                _ => 0,
-                                            });
+                                        if let (Some(value), Some(unit)) =
+                                            (captures.get(1), captures.get(2))
+                                        {
+                                            if let Ok(num) = u64::from_str(value.as_str()) {
+                                                gpu_info.memory_bytes = Some(match unit.as_str() {
+                                                    "GB" => num * 1024 * 1024 * 1024,
+                                                    "MB" => num * 1024 * 1024,
+                                                    _ => 0,
+                                                });
+                                            }
                                         }
                                     }
                                 }
-                            }
 
-                            // Extract Metal family support
-                            if let Some(metal_family) =
-                                display.get("sppci_metal_family").and_then(|v| v.as_str())
-                            {
-                                gpu_info.compute_capability = Some(metal_family.to_string());
-                            }
+                                // Extract Metal family support
+                                if let Some(metal_family) = display
+                                    .get("sppci_metal_family")
+                                    .and_then(|v: &serde_json::Value| v.as_str())
+                                {
+                                    gpu_info.compute_capability = Some(metal_family.to_string());
+                                }
 
-                            devices.push(gpu_info);
+                                devices.push(gpu_info);
+                            }
                         }
                     }
                 }
             }
 
-            // If JSON parsing failed or no devices found, try to detect via Metal API
+            // If JSON parsing failed, was skipped, or no devices found, try to detect via Metal API
             if devices.is_empty() {
                 // Check if Metal is available
                 #[cfg(feature = "metal")]

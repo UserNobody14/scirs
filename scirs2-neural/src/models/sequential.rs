@@ -3,22 +3,22 @@
 //! This module provides a sequential model implementation that chains
 //! layers together in a linear sequence.
 
-use scirs2_core::ndarray::{Array, ScalarOperand};
-use scirs2_core::numeric::{Float, FromPrimitive};
-use std::fmt::{Debug, Display};
 use crate::error::{NeuralError, Result};
 use crate::layers::{Layer, ParamLayer};
 use crate::losses::Loss;
 use crate::models::{History, Model, TrainingConfig};
 use crate::optimizers::Optimizer;
+use scirs2_core::ndarray::{Array, ScalarOperand};
+use scirs2_core::numeric::{Float, FromPrimitive, NumAssign};
+use std::fmt::{Debug, Display};
 /// A sequential model that chains layers together in a linear sequence
-pub struct Sequential<F: Float + Debug + ScalarOperand + 'static> {
+pub struct Sequential<F: Float + Debug + ScalarOperand + NumAssign + 'static> {
     layers: Vec<Box<dyn Layer<F> + Send + Sync>>,
     layer_outputs: Vec<Array<F, scirs2_core::ndarray::IxDyn>>,
     input: Option<Array<F, scirs2_core::ndarray::IxDyn>>,
     history: History<F>,
 }
-impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Default
+impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + NumAssign + 'static> Default
     for Sequential<F>
 {
     fn default() -> Self {
@@ -26,7 +26,9 @@ impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Defau
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Clone for Sequential<F> {
+impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + NumAssign + 'static> Clone
+    for Sequential<F>
+{
     fn clone(&self) -> Self {
         // Note: We can't clone the layer trait objects directly
         // This creates a new empty model - the Clone trait is mainly for testing
@@ -39,7 +41,9 @@ impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Clone
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Sequential<F> {
+impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + NumAssign + 'static>
+    Sequential<F>
+{
     /// Create a new empty sequential model
     pub fn new() -> Self {
         Self {
@@ -69,18 +73,27 @@ impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Seque
     /// Get the number of layers in the model
     pub fn num_layers(&self) -> usize {
         self.layers.len()
+    }
+
     /// Get the layers in the model
     pub fn layers(&self) -> &[Box<dyn Layer<F> + Send + Sync>] {
         &self.layers
+    }
+
     /// Get a mutable reference to the layers in the model
     pub fn layers_mut(&mut self) -> &mut Vec<Box<dyn Layer<F> + Send + Sync>> {
         &mut self.layers
+    }
+
     /// Get the training history
     pub fn training_history(&self) -> &History<F> {
         &self.history
+    }
+
     /// Get a mutable reference to the training history
     pub fn training_history_mut(&mut self) -> &mut History<F> {
         &mut self.history
+    }
     /// Predict on batched input data
     pub fn predict_batched(
         &self,
@@ -98,6 +111,8 @@ impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Seque
                 .into_dyn();
             let batch_output = self.forward(&batch)?;
             outputs.push(batch_output);
+        }
+
         // Concatenate all batch outputs
         if outputs.len() == 1 {
             Ok(outputs.into_iter().next().expect("Operation failed"))
@@ -105,9 +120,16 @@ impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Seque
             // For multiple batches, concatenate along the first axis
             let mut concatenated = outputs[0].clone();
             for output in outputs.into_iter().skip(1) {
-                concatenated = scirs2_core::ndarray::concatenate![scirs2_core::ndarray::Axis(0), concatenated, output];
+                concatenated = scirs2_core::ndarray::concatenate![
+                    scirs2_core::ndarray::Axis(0),
+                    concatenated,
+                    output
+                ];
             }
             Ok(concatenated)
+        }
+    }
+
     /// Fit the model to training data
     pub fn fit(
         &mut self,
@@ -120,21 +142,36 @@ impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Seque
         let num_samples = x_train.shape()[0];
         let val_split_idx = if config.validation_split > 0.0 {
             ((1.0 - config.validation_split) * num_samples as f64) as usize
+        } else {
             num_samples
         };
         // Split data into training and validation sets
         let (x_train_split, x_val) = if config.validation_split > 0.0 {
             let x_train_split = x_train
                 .slice(scirs2_core::ndarray::s![0..val_split_idx, ..])
+                .to_owned()
+                .into_dyn();
             let x_val = x_train
                 .slice(scirs2_core::ndarray::s![val_split_idx.., ..])
+                .to_owned()
+                .into_dyn();
             (x_train_split, Some(x_val))
+        } else {
             (x_train.clone(), None)
+        };
         let (y_train_split, y_val) = if config.validation_split > 0.0 {
             let y_train_split = y_train
+                .slice(scirs2_core::ndarray::s![0..val_split_idx, ..])
+                .to_owned()
+                .into_dyn();
             let y_val = y_train
+                .slice(scirs2_core::ndarray::s![val_split_idx.., ..])
+                .to_owned()
+                .into_dyn();
             (y_train_split, Some(y_val))
+        } else {
             (y_train.clone(), None)
+        };
         // Training loop
         for epoch in 0..config.epochs {
             let mut epoch_loss = F::zero();
@@ -149,8 +186,12 @@ impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Seque
                     .to_owned()
                     .into_dyn();
                 let batch_y = y_train_split
+                    .slice(scirs2_core::ndarray::s![start_idx..end_idx, ..])
+                    .to_owned()
+                    .into_dyn();
                 let batch_loss = self.train_batch(&batch_x, &batch_y, loss_fn, optimizer)?;
-                epoch_loss = epoch_loss + batch_loss;
+                epoch_loss += batch_loss;
+            }
             let avg_train_loss =
                 epoch_loss / F::from_usize(num_batches).unwrap_or_else(|| F::one());
             self.history.train_loss.push(avg_train_loss);
@@ -161,6 +202,8 @@ impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Seque
             } else {
                 // If no validation split, use training loss as validation loss
                 self.history.val_loss.push(avg_train_loss);
+            }
+
             if config.verbose > 0 {
                 println!(
                     "Epoch {}/{} - loss: {:.4}",
@@ -168,20 +211,36 @@ impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Seque
                     config.epochs,
                     avg_train_loss
                 );
+            }
+        }
+
         Ok(())
-impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Model<F>
-    fn forward(&self, input: &Array<F, scirs2_core::ndarray::IxDyn>) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
+    }
+}
+
+impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + NumAssign + 'static> Model<F>
+    for Sequential<F>
+{
+    fn forward(
+        &self,
+        input: &Array<F, scirs2_core::ndarray::IxDyn>,
+    ) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
         let mut current_output = input.clone();
         for layer in &self.layers {
             current_output = layer.forward(&current_output)?;
+        }
         Ok(current_output)
+    }
     fn backward(
+        &self,
         input: &Array<F, scirs2_core::ndarray::IxDyn>,
         grad_output: &Array<F, scirs2_core::ndarray::IxDyn>,
+    ) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
         if self.layer_outputs.is_empty() {
             return Err(NeuralError::InferenceError(
                 "No forward pass performed before backward pass".to_string(),
             ));
+        }
         let mut grad_input = grad_output.clone();
         // Iterate through layers in reverse
         for (i, layer) in self.layers.iter().enumerate().rev() {
@@ -190,21 +249,34 @@ impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Model
                 &self.layer_outputs[i - 1]
             } else if let Some(saved_input) = &self.input {
                 saved_input
+            } else {
                 // Fallback to the provided input if nothing is saved
                 input
             };
             grad_input = layer.backward(layer_input, &grad_input)?;
+        }
         Ok(grad_input)
+    }
     fn update(&mut self, learningrate: F) -> Result<()> {
         for layer in &mut self.layers {
             layer.update(learningrate)?;
+        }
+        Ok(())
+    }
     fn train_batch(
+        &mut self,
+        inputs: &Array<F, scirs2_core::ndarray::IxDyn>,
         targets: &Array<F, scirs2_core::ndarray::IxDyn>,
+        loss_fn: &dyn Loss<F>,
+        optimizer: &mut dyn Optimizer<F>,
     ) -> Result<F> {
         // Forward pass
         let mut layer_outputs = Vec::with_capacity(self.layers.len());
         let mut current_output = inputs.clone();
+        for layer in &self.layers {
+            current_output = layer.forward(&current_output)?;
             layer_outputs.push(current_output.clone());
+        }
         // Save outputs for backward pass
         self.input = Some(inputs.clone());
         self.layer_outputs = layer_outputs;
@@ -218,7 +290,13 @@ impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Model
         let loss_grad = loss_fn.backward(predictions, targets)?;
         let mut grad_input = loss_grad;
         for (i, layer) in self.layers.iter_mut().enumerate().rev() {
+            let layer_input = if i > 0 {
+                &self.layer_outputs[i - 1]
+            } else {
                 inputs
+            };
+            grad_input = layer.backward(layer_input, &grad_input)?;
+        }
         // Update parameters using optimizer
         let mut all_params = Vec::new();
         let mut all_grads = Vec::new();
@@ -237,6 +315,9 @@ impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Model
                 }
                 for grad in param_layer.get_gradients() {
                     all_grads.push(grad.clone());
+                }
+            }
+        }
         optimizer.update(&mut all_params, &all_grads)?;
         // Update the layers with the optimized parameters
         let mut param_idx = 0;
@@ -244,17 +325,34 @@ impl<F: Float + Debug + ScalarOperand + FromPrimitive + Display + 'static> Model
             if let Some(param_layer) = self.layers[i]
                 .as_any_mut()
                 .downcast_mut::<Box<dyn ParamLayer<F> + Send + Sync>>()
+            {
                 let num_params = param_layer.get_parameters().len();
                 if param_idx + num_params <= all_params.len() {
                     let layer_params = all_params[param_idx..param_idx + num_params].to_vec();
                     param_layer.set_parameters(layer_params)?;
                     param_idx += num_params;
+                }
+            }
+        }
         Ok(loss)
-    fn predict(&self, inputs: &Array<F, scirs2_core::ndarray::IxDyn>) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
+    }
+    fn predict(
+        &self,
+        inputs: &Array<F, scirs2_core::ndarray::IxDyn>,
+    ) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
         self.forward(inputs)
+    }
+
     fn evaluate(
+        &self,
+        inputs: &Array<F, scirs2_core::ndarray::IxDyn>,
+        targets: &Array<F, scirs2_core::ndarray::IxDyn>,
+        loss_fn: &dyn Loss<F>,
+    ) -> Result<F> {
         let predictions = self.forward(inputs)?;
         loss_fn.forward(&predictions, targets)
+    }
+}
 // #[cfg(test)]
 // mod tests {
 //     use super::*;

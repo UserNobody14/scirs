@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Machine Learning evaluation metrics module for SciRS2 (scirs2-metrics)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["metrics", "evaluation", "scientific", "ai", "machine-learning"]
@@ -69,7 +70,12 @@ dashboard_server = ["dep:tokio"]
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["html_reports"] }
+proptest = { workspace = true }
 
 [[bench]]
 name = "performance_regression"
+harness = false
+
+[[bench]]
+name = "v020_validation"
 harness = false

@@ -1037,6 +1037,7 @@ mod tests {
     use scirs2_core::ndarray::array;
     use std::f64::consts::PI;
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_quantum_gpu_processor() {
         let mut processor = QuantumGpuProcessor::new()
@@ -1062,6 +1063,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_quantum_clustering() {
         let mut processor = QuantumGpuProcessor::new().with_quantum_coherence_preservation(true);
@@ -1088,6 +1090,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_photonic_accelerator() {
         let mut photonic = PhotonicAccelerator::new()

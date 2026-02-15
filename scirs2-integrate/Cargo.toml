@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Numerical integration module for SciRS2 (scirs2-integrate)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["integration", "quadrature", "scientific", "scipy", "numerical"]

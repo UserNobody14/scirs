@@ -169,7 +169,14 @@ impl HardwareDetector {
     fn detect_memory_size() -> usize {
         // Simple heuristic based on available system memory
         // In practice, you'd use platform-specific APIs
-        8 * 1024 * 1024 * 1024 // Default to 8GB
+        #[cfg(target_pointer_width = "32")]
+        {
+            512 * 1024 * 1024
+        } // Default to 512MB for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        {
+            8usize * 1024 * 1024 * 1024
+        } // Default to 8GB for 64-bit
     }
 
     /// Detect available SIMD features

@@ -397,11 +397,11 @@ pub fn betainc_regularized<
     }
 
     // Use transformation for better numerical stability
-    // If x <= (a/(a+b)), use the continued fraction
+    // Following Numerical Recipes: use direct formula when x < (a+1)/(a+b+2)
     // Otherwise use the symmetry relationship I(x;a,b) = 1 - I(1-x;b,a)
-    let threshold = a / (a + b);
+    let threshold = (a + F::one()) / (a + b + const_f64::<F>(2.0));
 
-    if x <= threshold {
+    if x < threshold {
         improved_continued_fraction_betainc(x, a, b)
     } else {
         let result = F::one() - improved_continued_fraction_betainc(F::one() - x, b, a)?;
@@ -598,13 +598,15 @@ fn improved_continued_fraction_betainc<
         return Ok(F::infinity());
     };
 
-    // Initialize variables for Lentz's algorithm with improved starting values
-    let mut c = const_f64::<F>(1.0); // c₁
-    let mut d = const_f64::<F>(1.0) / (F::one() - (a + b) * x / (a + F::one())); // d₁
+    // Initialize variables for Lentz's algorithm with beta function specific initialization
+    // Following Numerical Recipes approach
+    let mut c = const_f64::<F>(1.0);
+    let mut d = const_f64::<F>(1.0) - (a + b) * x / (a + const_f64::<F>(1.0));
     if d.abs() < const_f64::<F>(1e-30) {
-        d = const_f64::<F>(1e-30); // Avoid division by zero
+        d = const_f64::<F>(1e-30);
     }
-    let mut h = d; // h₁
+    d = const_f64::<F>(1.0) / d;
+    let mut h = d;
 
     for m in 1..max_iterations {
         let m_f = F::from(m).expect("Failed to convert to float");
@@ -645,12 +647,12 @@ fn improved_continued_fraction_betainc<
 
         // Check for convergence with increased robustness
         if (del - F::one()).abs() < epsilon {
-            return Ok(factor / (a * h));
+            return Ok(factor * h / (const_f64::<F>(2.0) * a));
         }
 
         // Additional convergence check for difficult cases
         if m > 50 && (del - F::one()).abs() < const_f64::<F>(1e-10) {
-            return Ok(factor / (a * h));
+            return Ok(factor * h / (const_f64::<F>(2.0) * a));
         }
     }
 

@@ -62,11 +62,12 @@ pub mod cuda_impl {
     }
 
     fn cuda_mem_get_info() -> (CudaResult, usize, usize) {
-        (
-            CUDA_SUCCESS,
-            8 * 1024 * 1024 * 1024,
-            16 * 1024 * 1024 * 1024,
-        ) // Mock 8GB free, 16GB total
+        #[cfg(target_pointer_width = "32")]
+        let (free, total) = (512 * 1024 * 1024, 1024 * 1024 * 1024); // Mock 512MB free, 1GB total for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let (free, total) = (8usize * 1024 * 1024 * 1024, 16usize * 1024 * 1024 * 1024); // Mock 8GB free, 16GB total for 64-bit
+
+        (CUDA_SUCCESS, free, total)
     }
 
     /// Comprehensive CUDA backend with advanced features
@@ -251,8 +252,17 @@ pub mod cuda_impl {
                             cuda_device.compute_capability.0,
                             cuda_device.compute_capability.1
                         ),
-                        total_memory: 11 * 1024 * 1024 * 1024, // Mock 11GB VRAM
-                        compute_units: 68,                     // Mock SM count for RTX 2080 Ti
+                        total_memory: {
+                            #[cfg(target_pointer_width = "32")]
+                            {
+                                512 * 1024 * 1024
+                            } // Mock 512MB VRAM for 32-bit
+                            #[cfg(target_pointer_width = "64")]
+                            {
+                                11usize * 1024 * 1024 * 1024
+                            } // Mock 11GB VRAM for 64-bit
+                        },
+                        compute_units: 68, // Mock SM count for RTX 2080 Ti
                         clock_frequency: (cuda_device.clock_rate / 1000) as u32, // Convert to MHz
                         supports_fp64: cuda_device.compute_capability.0 >= 2, // Fermi and later
                         supports_fp16: cuda_device.compute_capability.0 >= 5
@@ -406,7 +416,16 @@ pub mod cuda_impl {
                             self.device_info.compute_capability.0,
                             self.device_info.compute_capability.1
                         ),
-                        total_memory: 11 * 1024 * 1024 * 1024,
+                        total_memory: {
+                            #[cfg(target_pointer_width = "32")]
+                            {
+                                512 * 1024 * 1024
+                            } // Mock 512MB VRAM for 32-bit
+                            #[cfg(target_pointer_width = "64")]
+                            {
+                                11usize * 1024 * 1024 * 1024
+                            } // Mock 11GB VRAM for 64-bit
+                        },
                         compute_units: 68,
                         clock_frequency: (self.device_info.clock_rate / 1000) as u32,
                         supports_fp64: self.device_info.compute_capability.0 >= 2,

@@ -30,8 +30,13 @@ pub struct MemoryConfig {
 
 impl Default for MemoryConfig {
     fn default() -> Self {
+        #[cfg(target_pointer_width = "32")]
+        let max_memory_bytes = 256 * 1024 * 1024; // 256MB default for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let max_memory_bytes = 1024 * 1024 * 1024; // 1GB default for 64-bit
+
         Self {
-            max_memory_bytes: 1024 * 1024 * 1024, // 1GB default
+            max_memory_bytes,
             chunk_size: 8192,
             overlap: 512,
             use_memory_mapping: false,

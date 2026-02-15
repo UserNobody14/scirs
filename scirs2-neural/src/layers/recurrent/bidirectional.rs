@@ -3,7 +3,7 @@
 use crate::error::{NeuralError, Result};
 use crate::layers::Layer;
 use scirs2_core::ndarray::{concatenate, Array, Axis, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 use std::sync::{Arc, RwLock};
 
@@ -38,7 +38,7 @@ use std::sync::{Arc, RwLock};
 /// // Output should have dimensions [batch_size, seq_len, hidden_size*2]
 /// assert_eq!(output.shape(), &[batch_size, seq_len, 40]);
 /// ```
-pub struct Bidirectional<F: Float + Debug + Send + Sync> {
+pub struct Bidirectional<F: Float + Debug + Send + Sync + NumAssign> {
     /// Forward direction layer
     forward_layer: Box<dyn Layer<F> + Send + Sync>,
     /// Backward direction layer (using the same layer type)
@@ -49,7 +49,7 @@ pub struct Bidirectional<F: Float + Debug + Send + Sync> {
     input_cache: Arc<RwLock<Option<Array<F, IxDyn>>>>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Bidirectional<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> Bidirectional<F> {
     /// Create a new bidirectional wrapper
     ///
     /// # Arguments
@@ -87,7 +87,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Bidirectional<F> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for Bidirectional<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> Layer<F>
+    for Bidirectional<F>
+{
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
         // Cache input for backward pass
         *self.input_cache.write().expect("Operation failed") = Some(input.clone());

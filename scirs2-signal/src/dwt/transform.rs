@@ -74,14 +74,18 @@ where
     let mut detail = vec![0.0; output_len];
 
     // Perform the convolution and downsample
+    // Start at offset 1 in the extended signal so the first filter window
+    // is aligned with the beginning of the original signal data.
+    // Use true convolution (reversed filter indices) for correct phase.
+    let start_offset = 1;
     for i in 0..output_len {
-        let idx = 2 * i;
+        let idx = start_offset + 2 * i;
 
         // Convolve with low-pass filter for approximation coefficients
         let mut approx_sum = 0.0;
         for j in 0..filter_len {
             if idx + j < extended.len() {
-                approx_sum += extended[idx + j] * filters.dec_lo[j];
+                approx_sum += extended[idx + j] * filters.dec_lo[filter_len - 1 - j];
             }
         }
         approx[i] = approx_sum;
@@ -90,19 +94,10 @@ where
         let mut detail_sum = 0.0;
         for j in 0..filter_len {
             if idx + j < extended.len() {
-                detail_sum += extended[idx + j] * filters.dec_hi[j];
+                detail_sum += extended[idx + j] * filters.dec_hi[filter_len - 1 - j];
             }
         }
         detail[i] = detail_sum;
-    }
-
-    // For Haar transform, apply the scaling factor of sqrt(2) to match expected results
-    if let Wavelet::Haar = wavelet {
-        let scale_factor = 2.0_f64.sqrt();
-        for i in 0..output_len {
-            approx[i] *= scale_factor;
-            detail[i] *= scale_factor;
-        }
     }
 
     Ok((approx, detail))
@@ -155,47 +150,40 @@ pub fn dwt_reconstruct(
     // Get wavelet filters
     let filters = wavelet.filters()?;
     let filter_len = filters.rec_lo.len();
-
-    // Apply inverse scaling for Haar wavelet to match the expected output
-    let mut scaled_approx = _approx.to_vec();
-    let mut scaled_detail = detail.to_vec();
-
-    if let Wavelet::Haar = wavelet {
-        let scale_factor = 1.0 / 2.0_f64.sqrt();
-        for i in 0.._approx.len() {
-            scaled_approx[i] *= scale_factor;
-            scaled_detail[i] *= scale_factor;
-        }
-    }
+    let pad = filter_len - 1;
 
     // Calculate output length
     let input_len = _approx.len();
-    let output_len = 2 * input_len;
+    // The full transposed convolution produces 2*input_len + filter_len - 2 samples
+    let full_len = 2 * input_len + pad;
 
     // Allocate output array
-    let mut result = vec![0.0; output_len];
+    let mut result = vec![0.0; full_len];
 
-    // Upsample and convolve
+    // Upsample and convolve (transpose of decimated convolution)
+    // This mirrors the analysis step: analysis did extended[2i+j] * dec[j]
+    // Synthesis does: result[2i+j] += coeff[i] * rec[j]
     for i in 0..input_len {
-        // Apply the reconstruction filters
         for j in 0..filter_len {
             let idx = 2 * i + j;
-            if idx < output_len {
-                result[idx] +=
-                    scaled_approx[i] * filters.rec_lo[j] + scaled_detail[i] * filters.rec_hi[j];
+            if idx < full_len {
+                result[idx] += _approx[i] * filters.rec_lo[j] + detail[i] * filters.rec_hi[j];
             }
         }
     }
 
-    // Adjust output to account for filter delay
-    let filter_delay = (filter_len / 2) - 1;
-    let start_idx = if filter_delay < output_len {
-        filter_delay
-    } else {
-        0
-    };
-    let end_idx = output_len;
-    let trimmed_result = result[start_idx..end_idx].to_vec();
+    // The analysis used start_offset=1 and true convolution (reversed filter).
+    // The reconstruction group delay is (filter_len - 2), so we skip that many
+    // samples from the beginning to align with the original signal.
+    let skip = if pad > 0 { pad - 1 } else { 0 };
+    let max_output = 2 * input_len;
+    let available = if skip < full_len { full_len - skip } else { 0 };
+    let take = max_output.min(available);
 
-    Ok(trimmed_result)
+    if take > 0 && skip < full_len {
+        Ok(result[skip..skip + take].to_vec())
+    } else {
+        // Fallback: return full result
+        Ok(result)
+    }
 }

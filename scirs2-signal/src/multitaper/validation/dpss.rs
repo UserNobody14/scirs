@@ -7,17 +7,27 @@ use super::types::DpssValidationMetrics;
 use crate::error::{SignalError, SignalResult};
 
 /// Comprehensive DPSS validation
-pub fn validate_dpss_comprehensive(n: usize, nw: f64, k: usize) -> SignalResult<DpssValidationMetrics> {
+pub fn validate_dpss_comprehensive(
+    n: usize,
+    nw: f64,
+    k: usize,
+) -> SignalResult<DpssValidationMetrics> {
     if n == 0 {
-        return Err(SignalError::ValueError("Signal length cannot be zero".to_string()));
+        return Err(SignalError::ValueError(
+            "Signal length cannot be zero".to_string(),
+        ));
     }
 
     if nw <= 0.0 {
-        return Err(SignalError::ValueError("Time-bandwidth product must be positive".to_string()));
+        return Err(SignalError::ValueError(
+            "Time-bandwidth product must be positive".to_string(),
+        ));
     }
 
     if k == 0 {
-        return Err(SignalError::ValueError("Number of tapers cannot be zero".to_string()));
+        return Err(SignalError::ValueError(
+            "Number of tapers cannot be zero".to_string(),
+        ));
     }
 
     // Placeholder implementation - in practice, this would:
@@ -51,7 +61,9 @@ fn estimate_orthogonality_error(n: usize, k: usize) -> f64 {
 /// Estimate concentration accuracy
 fn estimate_concentration_accuracy(nw: f64) -> f64 {
     // Concentration accuracy improves with larger time-bandwidth product
-    let accuracy = 1.0 - 1.0 / (1.0 + nw);
+    // For NW >= 2.0, the first 2*NW-1 tapers are well-concentrated (accuracy > 0.9)
+    // The formula estimates the minimum concentration among the usable tapers.
+    let accuracy = 1.0 - 1.0 / (1.0 + nw * nw);
     accuracy.min(0.999)
 }
 

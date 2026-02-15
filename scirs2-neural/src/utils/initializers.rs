@@ -2,7 +2,7 @@
 
 use crate::error::{NeuralError, Result};
 use scirs2_core::ndarray::{Array, Dimension, IxDyn};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::Rng;
 use std::fmt::Debug;
 /// Initialization strategies for neural network weights
@@ -161,7 +161,7 @@ impl Initializer {
 /// # Returns
 /// * Initialized weights array
 #[allow(dead_code)]
-pub fn xavier_uniform<F: Float + Debug>(shape: IxDyn) -> Result<Array<F, IxDyn>> {
+pub fn xavier_uniform<F: Float + Debug + NumAssign>(shape: IxDyn) -> Result<Array<F, IxDyn>> {
     let fan_in = match shape.ndim() {
         0 => 1,
         1 => shape[0],

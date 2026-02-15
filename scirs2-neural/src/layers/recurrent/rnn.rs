@@ -3,7 +3,7 @@
 use crate::error::{NeuralError, Result};
 use crate::layers::{Layer, ParamLayer};
 use scirs2_core::ndarray::{Array, ArrayView, ArrayView1, Ix2, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::Rng;
 use scirs2_core::simd_ops::SimdUnifiedOps;
 use std::fmt::Debug;
@@ -78,7 +78,7 @@ impl RecurrentActivation {
 /// let output = rnn.forward(&input).expect("Operation failed");
 /// // Output should have dimensions [batch_size, seq_len, hidden_size]
 /// assert_eq!(output.shape(), &[batch_size, seq_len, 20]);
-pub struct RNN<F: Float + Debug + Send + Sync> {
+pub struct RNN<F: Float + Debug + Send + Sync + NumAssign> {
     /// Input size (number of input features)
     input_size: usize,
     /// Hidden size (number of hidden units)
@@ -106,7 +106,7 @@ pub struct RNN<F: Float + Debug + Send + Sync> {
     hidden_states_cache: Arc<RwLock<Option<Array<F, IxDyn>>>>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> RNN<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static + NumAssign> RNN<F> {
     /// Create a new RNN layer
     ///
     /// # Arguments
@@ -293,11 +293,11 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
             for i in 0..self.hidden_size {
                 let mut ih_sum = self.bias_ih[i];
                 for j in 0..self.input_size {
-                    ih_sum = ih_sum + self.weight_ih[[i, j]] * x[[b, j]];
+                    ih_sum += self.weight_ih[[i, j]] * x[[b, j]];
                 }
                 let mut hh_sum = self.bias_hh[i];
                 for j in 0..self.hidden_size {
-                    hh_sum = hh_sum + self.weight_hh[[i, j]] * h[[b, j]];
+                    hh_sum += self.weight_hh[[i, j]] * h[[b, j]];
                 }
                 new_h[[b, i]] = self.activation.apply(ih_sum + hh_sum);
             }
@@ -307,7 +307,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static + NumAssign> Layer<F>
     for RNN<F>
 {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -417,23 +417,23 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
         let lr = small_change * learningrate;
         // Update weights and biases
         for w in self.weight_ih.iter_mut() {
-            *w = *w - lr;
+            *w -= lr;
         }
         for w in self.weight_hh.iter_mut() {
-            *w = *w - lr;
+            *w -= lr;
         }
         for b in self.bias_ih.iter_mut() {
-            *b = *b - lr;
+            *b -= lr;
         }
         for b in self.bias_hh.iter_mut() {
-            *b = *b - lr;
+            *b -= lr;
         }
         Ok(())
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> ParamLayer<F>
-    for RNN<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static + NumAssign>
+    ParamLayer<F> for RNN<F>
 {
     fn get_parameters(&self) -> Vec<Array<F, scirs2_core::ndarray::IxDyn>> {
         vec![

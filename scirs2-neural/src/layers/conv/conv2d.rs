@@ -40,8 +40,8 @@ use std::sync::{Arc, RwLock};
 /// assert_eq!(output.shape()[0], 2);   // batch size
 /// assert_eq!(output.shape()[1], 16);  // out_channels
 /// ```
-#[derive(Debug)]
-pub struct Conv2D<F: Float + Debug + Send + Sync> {
+#[derive(Debug, Clone)]
+pub struct Conv2D<F: Float + Debug + Send + Sync + NumAssign> {
     /// Number of input channels
     in_channels: usize,
     /// Number of output channels (filters)

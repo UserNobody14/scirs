@@ -2,7 +2,8 @@ use crate::convolve;
 use crate::error::{SignalError, SignalResult};
 use scirs2_core::ndarray::s;
 use scirs2_core::ndarray::{Array1, Array2, Array3};
-use rustfft::{num_complex::Complex, FftPlanner};
+use scirs2_core::numeric::Complex64;
+use oxifft::{Complex as OxiComplex, Direction, Flags, Plan};
 
 // Signal deconvolution module
 //
@@ -118,51 +119,36 @@ pub fn wiener_deconvolution_1d(
         padded_signal.clone()
     };
 
-    // Convert to complex arrays for FFT
-    let mut signal_complex = vec![Complex::new(0.0, 0.0); pad_len];
-    let mut psf_complex = vec![Complex::new(0.0, 0.0); pad_len];
-
-    for i in 0..pad_len {
-        signal_complex[i] = Complex::new(filtered_signal[i], 0.0);
-        psf_complex[i] = Complex::new(padded_psf[i], 0.0);
-    }
-
-    // Create FFT planner
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(pad_len);
-    let ifft = planner.plan_fft_inverse(pad_len);
-
-    // Forward FFT of signal and PSF
-    fft.process(&mut signal_complex);
-    fft.process(&mut psf_complex);
+    // Compute FFT of signal and PSF using scirs2_fft
+    let signal_complex = scirs2_fft::fft(&filtered_signal, Some(pad_len))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
+    let psf_complex = scirs2_fft::fft(&padded_psf, Some(pad_len))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
     // Apply Wiener deconvolution in frequency domain
-    let mut result_complex = vec![Complex::new(0.0, 0.0); pad_len];
-
-    for i in 0..pad_len {
-        let h = psf_complex[i];
-        let h_conj = h.conj();
-        let h_abs_sq = h.norm_sqr();
-
-        // Wiener filter
-        let denom = h_abs_sq + noise_level;
-        if denom > 1e-10 {
-            result_complex[i] = signal_complex[i] * h_conj / denom;
-        } else {
-            result_complex[i] = Complex::new(0.0, 0.0);
-        }
-    }
+    let result_complex: Vec<Complex64> = signal_complex.iter().zip(psf_complex.iter())
+        .map(|(&sig, &psf)| {
+            let h_conj = psf.conj();
+            let h_abs_sq = psf.norm_sqr();
+            let denom = h_abs_sq + noise_level;
+            if denom > 1e-10 {
+                sig * h_conj / denom
+            } else {
+                Complex64::new(0.0, 0.0)
+            }
+        })
+        .collect();
 
     // Inverse FFT to get the deconvolved signal
-    ifft.process(&mut result_complex);
+    let result_ifft = scirs2_fft::ifft(&result_complex, Some(pad_len))
+        .map_err(|e| SignalError::ComputationError(format!("IFFT failed: {}", e)))?;
 
-    // Scale and convert back to real
-    let scale = 1.0 / (pad_len as f64);
+    // Convert back to real (ifft already normalizes)
     let mut deconvolved = Array1::<f64>::zeros(n);
 
     if config.pad_signal {
         for i in 0..n {
-            let val = result_complex[i + pad_amount].re * scale;
+            let val = result_ifft[i + pad_amount].re;
             deconvolved[i] = if config.positivity_constraint {
                 val.max(0.0)
             } else {
@@ -171,7 +157,7 @@ pub fn wiener_deconvolution_1d(
         }
     } else {
         for i in 0..n {
-            let val = result_complex[i].re * scale;
+            let val = result_ifft[i].re;
             deconvolved[i] = if config.positivity_constraint {
                 val.max(0.0)
             } else {
@@ -252,33 +238,31 @@ pub fn tikhonov_deconvolution_1d(
     };
 
     // Convert to complex arrays for FFT
-    let mut signal_complex = vec![Complex::new(0.0, 0.0); pad_len];
-    let mut psf_complex = vec![Complex::new(0.0, 0.0); pad_len];
-    let mut l_complex = vec![Complex::new(0.0, 0.0); pad_len];
+    let mut signal_complex = vec![Complex64::new(0.0, 0.0); pad_len];
+    let mut psf_complex = vec![Complex64::new(0.0, 0.0); pad_len];
+    let mut l_complex = vec![Complex64::new(0.0, 0.0); pad_len];
 
     for i in 0..pad_len {
-        signal_complex[i] = Complex::new(filtered_signal[i], 0.0);
-        psf_complex[i] = Complex::new(padded_psf[i], 0.0);
+        signal_complex[i] = Complex64::new(filtered_signal[i], 0.0);
+        psf_complex[i] = Complex64::new(padded_psf[i], 0.0);
     }
 
     // Create second derivative operator for regularization
     // This is a simple approximation to the Laplacian
-    l_complex[0] = Complex::new(1.0, 0.0);
-    l_complex[1] = Complex::new(-2.0, 0.0);
-    l_complex[2] = Complex::new(1.0, 0.0);
+    l_complex[0] = Complex64::new(1.0, 0.0);
+    l_complex[1] = Complex64::new(-2.0, 0.0);
+    l_complex[2] = Complex64::new(1.0, 0.0);
 
-    // Create FFT planner
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(pad_len);
-    let ifft = planner.plan_fft_inverse(pad_len);
-
-    // Forward FFT of signal, PSF, and regularization operator
-    fft.process(&mut signal_complex);
-    fft.process(&mut psf_complex);
-    fft.process(&mut l_complex);
+    // Forward FFT of signal, PSF, and regularization operator using scirs2_fft
+    let signal_complex = scirs2_fft::fft(&signal_complex, Some(pad_len))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
+    let psf_complex = scirs2_fft::fft(&psf_complex, Some(pad_len))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
+    let l_complex = scirs2_fft::fft(&l_complex, Some(pad_len))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
     // Apply Tikhonov regularized deconvolution in frequency domain
-    let mut result_complex = vec![Complex::new(0.0, 0.0); pad_len];
+    let mut result_complex = vec![Complex64::new(0.0, 0.0); pad_len];
 
     for i in 0..pad_len {
         let h = psf_complex[i];
@@ -291,20 +275,20 @@ pub fn tikhonov_deconvolution_1d(
         if denom > 1e-10 {
             result_complex[i] = signal_complex[i] * h_conj / denom;
         } else {
-            result_complex[i] = Complex::new(0.0, 0.0);
+            result_complex[i] = Complex64::new(0.0, 0.0);
         }
     }
 
     // Inverse FFT to get the deconvolved signal
-    ifft.process(&mut result_complex);
+    let result_ifft = scirs2_fft::ifft(&result_complex, Some(pad_len))
+        .map_err(|e| SignalError::ComputationError(format!("IFFT failed: {}", e)))?;
 
-    // Scale and convert back to real
-    let scale = 1.0 / (pad_len as f64);
+    // Convert back to real (ifft already normalizes)
     let mut deconvolved = Array1::<f64>::zeros(n);
 
     if config.pad_signal {
         for i in 0..n {
-            let val = result_complex[i + pad_amount].re * scale;
+            let val = result_ifft[i + pad_amount].re;
             deconvolved[i] = if config.positivity_constraint {
                 val.max(0.0)
             } else {
@@ -313,7 +297,7 @@ pub fn tikhonov_deconvolution_1d(
         }
     } else {
         for i in 0..n {
-            let val = result_complex[i].re * scale;
+            let val = result_ifft[i].re;
             deconvolved[i] = if config.positivity_constraint {
                 val.max(0.0)
             } else {
@@ -946,28 +930,25 @@ pub fn wiener_deconvolution_2d(
 
     // We'll use the 2D FFT by reshaping data into 1D arrays
     // Convert to complex arrays for FFT
-    let mut image_complex = vec![Complex::new(0.0, 0.0); pad_height * pad_width];
-    let mut psf_complex = vec![Complex::new(0.0, 0.0); pad_height * pad_width];
+    let mut image_complex = vec![Complex64::new(0.0, 0.0); pad_height * pad_width];
+    let mut psf_complex = vec![Complex64::new(0.0, 0.0); pad_height * pad_width];
 
     for i in 0..pad_height {
         for j in 0..pad_width {
             let idx = i * pad_width + j;
-            image_complex[idx] = Complex::new(filtered_image[[i, j]], 0.0);
-            psf_complex[idx] = Complex::new(padded_psf[[i, j]], 0.0);
+            image_complex[idx] = Complex64::new(filtered_image[[i, j]], 0.0);
+            psf_complex[idx] = Complex64::new(padded_psf[[i, j]], 0.0);
         }
     }
 
-    // Create FFT planner
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(pad_height * pad_width);
-    let ifft = planner.plan_fft_inverse(pad_height * pad_width);
-
-    // Forward FFT of image and PSF
-    fft.process(&mut image_complex);
-    fft.process(&mut psf_complex);
+    // Forward FFT of image and PSF using scirs2_fft
+    let image_complex = scirs2_fft::fft(&image_complex, Some(image_complex.len()))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
+    let psf_complex = scirs2_fft::fft(&psf_complex, Some(psf_complex.len()))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
     // Apply Wiener deconvolution in frequency domain
-    let mut result_complex = vec![Complex::new(0.0, 0.0); pad_height * pad_width];
+    let mut result_complex = vec![Complex64::new(0.0, 0.0); pad_height * pad_width];
 
     for i in 0..pad_height * pad_width {
         let h = psf_complex[i];
@@ -979,21 +960,21 @@ pub fn wiener_deconvolution_2d(
         if denom > 1e-10 {
             result_complex[i] = image_complex[i] * h_conj / denom;
         } else {
-            result_complex[i] = Complex::new(0.0, 0.0);
+            result_complex[i] = Complex64::new(0.0, 0.0);
         }
     }
 
     // Inverse FFT to get the deconvolved image
-    ifft.process(&mut result_complex);
+    let result_complex = scirs2_fft::ifft(&result_complex, Some(result_complex.len()))
+        .map_err(|e| SignalError::ComputationError(format!("IFFT failed: {}", e)))?;
 
-    // Scale and convert back to real
-    let scale = 1.0 / (pad_height * pad_width) as f64;
+    // Convert back to real (ifft already normalizes)
     let mut deconvolved = Array2::<f64>::zeros((height, width));
 
     for i in 0..height {
         for j in 0..width {
             let idx = (i + pad_h) * pad_width + (j + pad_w);
-            let val = result_complex[idx].re * scale;
+            let val = result_complex[idx].re;
             deconvolved[[i, j]] = if config.positivity_constraint {
                 val.max(0.0)
             } else {
@@ -1661,29 +1642,26 @@ pub fn estimate_regularization_param(
         .assign(psf);
 
     // Convert to complex arrays for FFT
-    let mut signal_complex = vec![Complex::new(0.0, 0.0); n];
-    let mut psf_complex = vec![Complex::new(0.0, 0.0); n];
+    let mut signal_complex = vec![Complex64::new(0.0, 0.0); n];
+    let mut psf_complex = vec![Complex64::new(0.0, 0.0); n];
 
     for i in 0..n {
-        signal_complex[i] = Complex::new(padded_signal[i], 0.0);
-        psf_complex[i] = Complex::new(padded_psf[i], 0.0);
+        signal_complex[i] = Complex64::new(padded_signal[i], 0.0);
+        psf_complex[i] = Complex64::new(padded_psf[i], 0.0);
     }
 
-    // Create FFT planner
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(n);
-    let ifft = planner.plan_fft_inverse(n);
-
-    // Forward FFT of signal and PSF
-    fft.process(&mut signal_complex);
-    fft.process(&mut psf_complex);
+    // Forward FFT of signal and PSF using scirs2_fft
+    let signal_complex = scirs2_fft::fft(&signal_complex, Some(n))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
+    let psf_complex = scirs2_fft::fft(&psf_complex, Some(n))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
     // Evaluate GCV function for each parameter value
     let mut best_param = min_param;
     let mut min_gcv = f64::INFINITY;
 
     for &_param in &param_values {
-        let mut result_complex = vec![Complex::new(0.0, 0.0); n];
+        let mut result_complex = vec![Complex64::new(0.0, 0.0); n];
         let mut filter_diag = vec![0.0; n];
 
         // Apply Tikhonov regularized filter
@@ -1701,19 +1679,19 @@ pub fn estimate_regularization_param(
             if denom > 1e-10 {
                 result_complex[i] = signal_complex[i] * h_conj / denom;
             } else {
-                result_complex[i] = Complex::new(0.0, 0.0);
+                result_complex[i] = Complex64::new(0.0, 0.0);
             }
         }
 
         // Inverse FFT to get the solution
-        ifft.process(&mut result_complex);
+        let result_ifft = scirs2_fft::ifft(&result_complex, Some(n))
+            .map_err(|e| SignalError::ComputationError(format!("IFFT failed: {}", e)))?;
 
-        // Scale and convert back to real
-        let scale = 1.0 / (n as f64);
+        // Convert back to real (ifft already normalizes)
         let mut solution = Array1::<f64>::zeros(n);
 
         for i in 0..n {
-            solution[i] = result_complex[i].re * scale;
+            solution[i] = result_ifft[i].re;
         }
 
         // Compute residual sum of squares (RSS)

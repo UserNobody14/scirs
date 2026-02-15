@@ -27,11 +27,12 @@ pub use psd::{multitaper_spectrogram, pmtm};
 pub use utils::{coherence, multitaper_filtfilt};
 pub use validation::{
     run_comprehensive_enhanced_validation, validate_multitaper_comprehensive,
-    validate_multitaper_robustness, validate_multitaper_with_simd,
-    validate_numerical_precision_enhanced, validate_parameter_consistency,
-    validate_simd_operations, ConvergenceMetrics, EnhancedMultitaperValidationResult,
-    MultitaperValidationResult, PerformanceScalingMetrics, TestSignalConfig,
+    validate_multitaper_with_simd, validate_simd_operations, MultitaperValidationResult,
+    PerformanceMetrics, TestSignalConfig,
 };
+
+// Import ConvergenceMetrics from scirs2_core
+pub use scirs2_core::tensor_cores::ConvergenceMetrics;
 pub use windows::dpss;
 
 // No direct imports needed for the module - submodules import their own dependencies

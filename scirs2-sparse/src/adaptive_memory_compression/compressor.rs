@@ -843,15 +843,17 @@ impl AdaptiveMemoryCompressor {
             return Ok(Vec::new());
         }
 
-        let length = usize::from_le_bytes([
+        // Use u64 for cross-platform compatibility (wasm32 has 4-byte usize)
+        let length_u64 = u64::from_le_bytes([
             data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
         ]);
+        let length = length_u64 as usize;
         let mut indptr = Vec::with_capacity(length);
 
         let mut offset = 8;
         for _ in 0..length {
             if offset + 8 <= data.len() {
-                let value = usize::from_le_bytes([
+                let value_u64 = u64::from_le_bytes([
                     data[offset],
                     data[offset + 1],
                     data[offset + 2],
@@ -861,7 +863,7 @@ impl AdaptiveMemoryCompressor {
                     data[offset + 6],
                     data[offset + 7],
                 ]);
-                indptr.push(value);
+                indptr.push(value_u64 as usize);
                 offset += 8;
             }
         }
@@ -887,9 +889,11 @@ impl AdaptiveMemoryCompressor {
             return Ok(Vec::new());
         }
 
-        let length = usize::from_le_bytes([
+        // Use u64 for cross-platform compatibility (wasm32 has 4-byte usize)
+        let length_u64 = u64::from_le_bytes([
             data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
         ]);
+        let length = length_u64 as usize;
         let mut values = Vec::with_capacity(length);
 
         let mut offset = 8;

@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Automatic differentiation module for SciRS2 (scirs2-autograd)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["autograd", "machine-learning", "scientific", "ai", "ml"]
@@ -45,6 +46,13 @@ blas = ["scirs2-core/linalg"]  # BLAS/LAPACK via OxiBLAS (pure Rust)
 simd = ["scirs2-core/simd"]
 parallel = [] # Parallel processing support
 
+# v0.2.0 features
+gpu = ["scirs2-core/gpu"]  # GPU acceleration support
+higher_order = []  # Higher-order derivatives (Hessian, etc.)
+symbolic = []  # Symbolic differentiation
+distributed = []  # Distributed training support
+v0_2_0 = ["gpu", "higher_order", "symbolic", "distributed"]
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 
@@ -84,6 +92,10 @@ harness = false
 
 [[bench]]
 name = "memory_efficiency_bench"
+harness = false
+
+[[bench]]
+name = "pytorch_comparison"
 harness = false
 
 [lib]

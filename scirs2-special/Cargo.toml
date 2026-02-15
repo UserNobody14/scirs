@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Special functions module for SciRS2 (scirs2-special)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["special-functions", "gamma", "scientific", "scipy", "numerical"]

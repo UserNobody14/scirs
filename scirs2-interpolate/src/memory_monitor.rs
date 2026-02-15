@@ -554,7 +554,12 @@ impl MemoryMonitor {
             }
         }
 
-        if self.peak_memory_bytes > 1024 * 1024 * 1024 {
+        #[cfg(target_pointer_width = "32")]
+        let high_memory_threshold = 256 * 1024 * 1024; // 256MB for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let high_memory_threshold = 1024 * 1024 * 1024; // 1GB for 64-bit
+
+        if self.peak_memory_bytes > high_memory_threshold {
             recommendations.push(
                 "Very high memory usage - consider using memory-efficient algorithms".to_string(),
             );
@@ -848,9 +853,14 @@ pub struct MemoryPressureIndicators {
 
 impl Default for MemoryPressureIndicators {
     fn default() -> Self {
+        #[cfg(target_pointer_width = "32")]
+        let available_memory = 512 * 1024 * 1024; // 512MB default for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let available_memory = 8usize * 1024 * 1024 * 1024; // 8GB default for 64-bit
+
         Self {
             system_memory_utilization: 0.0,
-            available_memory: 8 * 1024 * 1024 * 1024, // 8GB default
+            available_memory,
             allocation_failure_rate: 0.0,
             gc_frequency: 0.0,
             swap_utilization: 0.0,
@@ -1014,7 +1024,11 @@ impl StressMemoryProfiler {
         // In a real implementation, this would query the operating system
         // For now, simulate pressure based on our current usage
 
-        let total_system_memory: u64 = 16 * 1024 * 1024 * 1024; // 16GB assumed
+        #[cfg(target_pointer_width = "32")]
+        let total_system_memory: u64 = 1024 * 1024 * 1024; // 1GB assumed for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let total_system_memory: u64 = 16u64 * 1024 * 1024 * 1024; // 16GB assumed for 64-bit
+
         let our_usage = self.base_monitor.current_memory_bytes;
 
         self.pressure_indicators.system_memory_utilization =

@@ -1083,9 +1083,14 @@ impl MemoryTracker {
 /// Gather system information
 #[allow(dead_code)]
 fn gather_system_info() -> SystemInfo {
+    #[cfg(target_pointer_width = "32")]
+    let total_memory = 1024 * 1024 * 1024; // Default 1GB for 32-bit
+    #[cfg(target_pointer_width = "64")]
+    let total_memory = 16usize * 1024 * 1024 * 1024; // Default 16GB for 64-bit
+
     SystemInfo {
         cpu_info: "Unknown CPU".to_string(),
-        total_memory: 16 * 1024 * 1024 * 1024, // Default 16GB
+        total_memory,
         os_info: std::env::consts::OS.to_string(),
         rust_version: "1.70.0".to_string(), // Would get from rustc --version
         target_triple: std::env::consts::ARCH.to_string(),

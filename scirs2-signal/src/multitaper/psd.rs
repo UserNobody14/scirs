@@ -106,8 +106,8 @@ where
     let return_onesided_val = return_onesided.unwrap_or(true);
     let return_tapers_val = return_tapers.unwrap_or(false);
 
-    // Compute DPSS _tapers
-    let (_tapers, eigenvalues_opt) = dpss(n, nw_val, k_val, true)?;
+    // Compute DPSS tapers
+    let (tapers, eigenvalues_opt) = dpss(n, nw_val, k_val, true)?;
 
     // Verify eigenvalues are available
     let eigenvalues = match eigenvalues_opt {
@@ -212,7 +212,7 @@ where
 
     // Return results
     if return_tapers_val {
-        Ok((freqs, psd, Some(_tapers), Some(eigenvalues)))
+        Ok((freqs, psd, Some(tapers), Some(eigenvalues)))
     } else {
         Ok((freqs, psd, None, None))
     }

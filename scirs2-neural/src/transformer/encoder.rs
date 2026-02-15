@@ -6,7 +6,7 @@
 use crate::error::{NeuralError, Result};
 use crate::layers::{AttentionConfig, Layer, LayerNorm, ParamLayer, SelfAttention};
 use scirs2_core::ndarray::{Array, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::Rng;
 use scirs2_core::simd_ops::SimdUnifiedOps;
 use std::fmt::Debug;
@@ -18,7 +18,7 @@ use std::sync::{Arc, RwLock};
 /// This consists of two linear transformations with a ReLU activation in between.
 /// FFN(x) = max(0, xW_1 + b_1)W_2 + b_2
 #[derive(Debug)]
-pub struct FeedForward<F: Float + Debug + Send + Sync + SimdUnifiedOps> {
+pub struct FeedForward<F: Float + Debug + Send + Sync + SimdUnifiedOps + NumAssign> {
     /// Input/output dimension
     d_model: usize,
     /// Hidden dimension
@@ -47,7 +47,7 @@ pub struct FeedForward<F: Float + Debug + Send + Sync + SimdUnifiedOps> {
     hidden_cache: Arc<RwLock<Option<Array<F, IxDyn>>>>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign> Clone
     for FeedForward<F>
 {
     fn clone(&self) -> Self {
@@ -63,13 +63,19 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
             dw2: self.dw2.clone(),
             db2: self.db2.clone(),
             dropout: self.dropout,
-            input_cache: Arc::new(RwLock::new(self.input_cache.read().expect("Operation failed").clone())),
-            hidden_cache: Arc::new(RwLock::new(self.hidden_cache.read().expect("Operation failed").clone())),
+            input_cache: Arc::new(RwLock::new(
+                self.input_cache.read().expect("Operation failed").clone(),
+            )),
+            hidden_cache: Arc::new(RwLock::new(
+                self.hidden_cache.read().expect("Operation failed").clone(),
+            )),
         }
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> FeedForward<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign>
+    FeedForward<F>
+{
     /// Create a new feed-forward network for transformers
     ///
     /// # Arguments
@@ -90,18 +96,21 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
         })?;
 
         // Helper function to create weight matrix
-        let create_weight_matrix =
-            |input_size: usize, output_size: usize, scale: F, rng: &mut R| -> Result<Array<F, IxDyn>> {
-                let weights_vec: Vec<F> = (0..(input_size * output_size))
-                    .map(|_| {
-                        let val = F::from(rng.random_range(-1.0..1.0)).unwrap_or(F::zero());
-                        val * scale
-                    })
-                    .collect();
-                Array::from_shape_vec(IxDyn(&[input_size, output_size]), weights_vec).map_err(|e| {
-                    NeuralError::InvalidArchitecture(format!("Failed to create weights array: {}", e))
+        let create_weight_matrix = |input_size: usize,
+                                    output_size: usize,
+                                    scale: F,
+                                    rng: &mut R|
+         -> Result<Array<F, IxDyn>> {
+            let weights_vec: Vec<F> = (0..(input_size * output_size))
+                .map(|_| {
+                    let val = F::from(rng.random_range(-1.0..1.0)).unwrap_or(F::zero());
+                    val * scale
                 })
-            };
+                .collect();
+            Array::from_shape_vec(IxDyn(&[input_size, output_size]), weights_vec).map_err(|e| {
+                NeuralError::InvalidArchitecture(format!("Failed to create weights array: {}", e))
+            })
+        };
 
         // Create weight matrices
         let w1 = create_weight_matrix(d_model, d_ff, scale1, rng)?;
@@ -140,7 +149,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign> Layer<F>
     for FeedForward<F>
 {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -189,7 +198,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
             for j in 0..self.d_ff {
                 let mut sum = F::zero();
                 for k in 0..self.d_model {
-                    sum = sum + reshaped_input[[i, k]] * self.w1[[k, j]];
+                    sum += reshaped_input[[i, k]] * self.w1[[k, j]];
                 }
                 hidden[[i, j]] = sum + self.b1[[j]];
             }
@@ -215,7 +224,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
             let keep_prob = F::one() - self.dropout;
             for i in 0..batch_size {
                 for j in 0..self.d_ff {
-                    hidden[[i, j]] = hidden[[i, j]] / keep_prob;
+                    hidden[[i, j]] /= keep_prob;
                 }
             }
         }
@@ -226,7 +235,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
             for j in 0..self.d_model {
                 let mut sum = F::zero();
                 for k in 0..self.d_ff {
-                    sum = sum + hidden[[i, k]] * self.w2[[k, j]];
+                    sum += hidden[[i, k]] * self.w2[[k, j]];
                 }
                 output[[i, j]] = sum + self.b2[[j]];
             }
@@ -294,7 +303,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
             for k in 0..self.d_ff {
                 let mut sum = F::zero();
                 for j in 0..self.d_model {
-                    sum = sum + grad_output_2d[[i, j]] * self.w2[[k, j]];
+                    sum += grad_output_2d[[i, j]] * self.w2[[k, j]];
                 }
                 grad_hidden[[i, k]] = sum;
             }
@@ -315,7 +324,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
             for k in 0..self.d_model {
                 let mut sum = F::zero();
                 for j in 0..self.d_ff {
-                    sum = sum + grad_hidden[[i, j]] * self.w1[[k, j]];
+                    sum += grad_hidden[[i, j]] * self.w1[[k, j]];
                 }
                 grad_input_2d[[i, k]] = sum;
             }
@@ -339,12 +348,12 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
         // Update all parameters
         for w in [&mut self.w1, &mut self.w2] {
             for elem in w.iter_mut() {
-                *elem = *elem - lr;
+                *elem -= lr;
             }
         }
         for b in [&mut self.b1, &mut self.b2] {
             for elem in b.iter_mut() {
-                *elem = *elem - lr;
+                *elem -= lr;
             }
         }
 
@@ -352,8 +361,8 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> ParamLayer<F>
-    for FeedForward<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign>
+    ParamLayer<F> for FeedForward<F>
 {
     fn get_parameters(&self) -> Vec<Array<F, IxDyn>> {
         vec![
@@ -395,7 +404,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
 /// self-attention followed by a position-wise feed-forward network, with
 /// residual connections and layer normalization.
 #[derive(Debug)]
-pub struct TransformerEncoderLayer<F: Float + Debug + Send + Sync + SimdUnifiedOps> {
+pub struct TransformerEncoderLayer<F: Float + Debug + Send + Sync + SimdUnifiedOps + NumAssign> {
     /// Multi-head self-attention layer
     self_attn: SelfAttention<F>,
     /// Layer normalization after attention
@@ -415,7 +424,7 @@ pub struct TransformerEncoderLayer<F: Float + Debug + Send + Sync + SimdUnifiedO
     norm1_output_cache: Arc<RwLock<Option<Array<F, IxDyn>>>>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign> Clone
     for TransformerEncoderLayer<F>
 {
     fn clone(&self) -> Self {
@@ -427,16 +436,22 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
             dropout: self.dropout,
             d_model: self.d_model,
             attn_output_cache: Arc::new(RwLock::new(
-                self.attn_output_cache.read().expect("Operation failed").clone(),
+                self.attn_output_cache
+                    .read()
+                    .expect("Operation failed")
+                    .clone(),
             )),
             norm1_output_cache: Arc::new(RwLock::new(
-                self.norm1_output_cache.read().expect("Operation failed").clone(),
+                self.norm1_output_cache
+                    .read()
+                    .expect("Operation failed")
+                    .clone(),
             )),
         }
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign>
     TransformerEncoderLayer<F>
 {
     /// Create a new transformer encoder layer
@@ -460,7 +475,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps>
         rng: &mut R,
     ) -> Result<Self> {
         // Verify parameters
-        if d_model % n_heads != 0 {
+        if !d_model.is_multiple_of(n_heads) {
             return Err(NeuralError::InvalidArchitecture(format!(
                 "d_model ({}) must be divisible by n_heads ({})",
                 d_model, n_heads
@@ -503,7 +518,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps>
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign> Layer<F>
     for TransformerEncoderLayer<F>
 {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -579,25 +594,27 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
 /// Stack of transformer encoder layers that processes sequences using
 /// self-attention and feed-forward networks.
 #[derive(Debug)]
-pub struct TransformerEncoder<F: Float + Debug + Send + Sync + SimdUnifiedOps> {
+pub struct TransformerEncoder<F: Float + Debug + Send + Sync + SimdUnifiedOps + NumAssign> {
     /// Stack of encoder layers
     layers: Vec<TransformerEncoderLayer<F>>,
     /// Layer outputs cache for backward pass
     layer_outputs: Arc<RwLock<Vec<Array<F, IxDyn>>>>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign> Clone
     for TransformerEncoder<F>
 {
     fn clone(&self) -> Self {
         Self {
             layers: self.layers.clone(),
-            layer_outputs: Arc::new(RwLock::new(self.layer_outputs.read().expect("Operation failed").clone())),
+            layer_outputs: Arc::new(RwLock::new(
+                self.layer_outputs.read().expect("Operation failed").clone(),
+            )),
         }
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign>
     TransformerEncoder<F>
 {
     /// Create a new transformer encoder
@@ -642,7 +659,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps>
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign> Layer<F>
     for TransformerEncoder<F>
 {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -662,7 +679,10 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
         for layer in &self.layers {
             output = layer.forward(&output)?;
             // Cache layer output for backward pass
-            self.layer_outputs.write().expect("Operation failed").push(output.clone());
+            self.layer_outputs
+                .write()
+                .expect("Operation failed")
+                .push(output.clone());
         }
 
         Ok(output)

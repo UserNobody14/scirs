@@ -4,7 +4,7 @@ use crate::error::{NeuralError, Result};
 use crate::layers::recurrent::{GruForwardOutput, GruGateCache};
 use crate::layers::{Layer, ParamLayer};
 use scirs2_core::ndarray::{Array, ArrayView, ArrayView1, Ix2, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::{Distribution, Uniform};
 use scirs2_core::simd_ops::SimdUnifiedOps;
 use std::fmt::Debug;
@@ -44,7 +44,7 @@ pub struct GRUConfig {
 /// let output = gru.forward(&input).expect("Operation failed");
 /// // Output should have dimensions [batch_size, seq_len, hidden_size]
 /// assert_eq!(output.shape(), &[batch_size, seq_len, 20]);
-pub struct GRU<F: Float + Debug> {
+pub struct GRU<F: Float + Debug + NumAssign> {
     /// Input size (number of input features)
     input_size: usize,
     /// Hidden size (number of hidden units)
@@ -85,7 +85,7 @@ pub struct GRU<F: Float + Debug> {
     gate_cache: GruGateCache<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + SimdUnifiedOps + 'static> GRU<F> {
+impl<F: Float + Debug + ScalarOperand + SimdUnifiedOps + 'static + NumAssign> GRU<F> {
     /// Create a new GRU layer
     ///
     /// # Arguments
@@ -339,29 +339,29 @@ impl<F: Float + Debug + ScalarOperand + SimdUnifiedOps + 'static> GRU<F> {
             for i in 0..self.hidden_size {
                 let mut r_sum = self.bias_ir[i] + self.bias_hr[i];
                 for j in 0..self.input_size {
-                    r_sum = r_sum + self.weight_ir[[i, j]] * x[[b, j]];
+                    r_sum += self.weight_ir[[i, j]] * x[[b, j]];
                 }
                 for j in 0..self.hidden_size {
-                    r_sum = r_sum + self.weight_hr[[i, j]] * h[[b, j]];
+                    r_sum += self.weight_hr[[i, j]] * h[[b, j]];
                 }
                 r_gate[[b, i]] = F::one() / (F::one() + (-r_sum).exp());
 
                 let mut z_sum = self.bias_iz[i] + self.bias_hz[i];
                 for j in 0..self.input_size {
-                    z_sum = z_sum + self.weight_iz[[i, j]] * x[[b, j]];
+                    z_sum += self.weight_iz[[i, j]] * x[[b, j]];
                 }
                 for j in 0..self.hidden_size {
-                    z_sum = z_sum + self.weight_hz[[i, j]] * h[[b, j]];
+                    z_sum += self.weight_hz[[i, j]] * h[[b, j]];
                 }
                 z_gate[[b, i]] = F::one() / (F::one() + (-z_sum).exp());
 
                 let mut n_sum = self.bias_in[i];
                 for j in 0..self.input_size {
-                    n_sum = n_sum + self.weight_in[[i, j]] * x[[b, j]];
+                    n_sum += self.weight_in[[i, j]] * x[[b, j]];
                 }
                 let mut hn_sum = self.bias_hn[i];
                 for j in 0..self.hidden_size {
-                    hn_sum = hn_sum + self.weight_hn[[i, j]] * h[[b, j]];
+                    hn_sum += self.weight_hn[[i, j]] * h[[b, j]];
                 }
                 n_gate[[b, i]] = (n_sum + r_gate[[b, i]] * hn_sum).tanh();
 
@@ -377,7 +377,7 @@ impl<F: Float + Debug + ScalarOperand + SimdUnifiedOps + 'static> GRU<F> {
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static + NumAssign> Layer<F>
     for GRU<F>
 {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -475,7 +475,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
         // Helper function to update a parameter
         let update_param = |param: &mut Array<F, IxDyn>| {
             for w in param.iter_mut() {
-                *w = *w - lr;
+                *w -= lr;
             }
         };
         // Update all parameters
@@ -495,8 +495,8 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> ParamLayer<F>
-    for GRU<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static + NumAssign>
+    ParamLayer<F> for GRU<F>
 {
     fn get_parameters(&self) -> Vec<Array<F, scirs2_core::ndarray::IxDyn>> {
         vec![

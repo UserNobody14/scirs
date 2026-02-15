@@ -6,7 +6,7 @@
 use crate::error::Result;
 use crate::losses::Loss;
 use scirs2_core::ndarray::{Array, IxDyn};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 
 /// Mean Absolute Error (MAE / L1 Loss)
@@ -46,7 +46,7 @@ impl MeanAbsoluteError {
     }
 }
 
-impl<F: Float + Debug> Loss<F> for MeanAbsoluteError {
+impl<F: Float + Debug + NumAssign> Loss<F> for MeanAbsoluteError {
     /// Calculate the mean absolute error loss
     ///
     /// # Arguments

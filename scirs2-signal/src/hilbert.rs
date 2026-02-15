@@ -8,7 +8,6 @@
 // processing applications.
 
 use crate::error::{SignalError, SignalResult};
-use rustfft;
 use scirs2_core::numeric::Complex64;
 use scirs2_core::numeric::{Float, NumCast};
 use std::f64::consts::PI;
@@ -143,26 +142,9 @@ where
         .map(|(&s, &h)| s * h)
         .collect();
 
-    // We need a more robust approach for computing the inverse FFT
-    // Let's use the rustfft library directly, which is what scirs2_fft uses internally
-    let mut planner = rustfft::FftPlanner::<f64>::new();
-    let fft = planner.plan_fft_inverse(n);
-
-    // Convert our filtered_spectrum to the rustfft Complex type
-    let mut buffer: Vec<rustfft::num_complex::Complex<f64>> = filtered_spectrum
-        .iter()
-        .map(|&c| rustfft::num_complex::Complex::<f64>::new(c.re, c.im))
-        .collect();
-
-    // Perform the inverse FFT in-place
-    fft.process(&mut buffer);
-
-    // Scale the output (IFFT normalization)
-    let scale = 1.0 / n as f64;
-    let analytic_signal: Vec<Complex64> = buffer
-        .into_iter()
-        .map(|c| Complex64::new(c.re * scale, c.im * scale))
-        .collect();
+    // Compute inverse FFT using scirs2_fft
+    let analytic_signal = scirs2_fft::ifft(&filtered_spectrum, None)
+        .map_err(|e| SignalError::ComputationError(format!("IFFT computation error: {e}")))?;
 
     Ok(analytic_signal)
 }

@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Datasets module for SciRS2 (scirs2-datasets)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["datasets", "machine-learning", "data", "scientific", "scipy"]
@@ -33,15 +34,39 @@ reqwest = { workspace = true, optional = true, features = ["stream"] }
 futures-util = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["time"] }
 dirs = { workspace = true }
-zip = { workspace = true }
+oxiarc-archive = { workspace = true }  # Pure Rust archive support (COOLJAPAN Policy)
 blake3 = { workspace = true }
 sha2 = { workspace = true }
 lazy_static = { workspace = true }
 ureq = { workspace = true, optional = true }
 tempfile = { workspace = true }
+memmap2 = { workspace = true, optional = true }
+crossbeam-channel = { workspace = true }
+
+# v0.2.0: File format support via scirs2-io integration
+scirs2-io = { workspace = true, optional = true, features = ["parquet", "hdf5", "async"] }
+
+# v0.2.0: Benchmarking
+criterion = { workspace = true, optional = true }
+
+[dev-dependencies]
+criterion = { workspace = true, features = ["html_reports"] }
 
 [features]
-default = ["download-sync"]
+default = ["download-sync", "lazy-loading", "augmentation"]
 download = ["reqwest", "futures-util", "tokio"]
 download-sync = ["ureq"]
 parallel = ["scirs2-core/parallel"]
+
+# v0.2.0 features
+lazy-loading = ["memmap2"]
+augmentation = ["scirs2-core/gpu"]
+formats = ["scirs2-io"]
+distributed = ["tokio"]
+benchmarks = ["criterion"]
+v0_2_0 = ["lazy-loading", "augmentation", "formats", "distributed", "parallel"]
+
+# [[bench]]
+# name = "pytorch_comparison"
+# harness = false
+# required-features = ["benchmarks"]

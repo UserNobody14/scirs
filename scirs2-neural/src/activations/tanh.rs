@@ -4,7 +4,7 @@ use crate::activations::Activation;
 use crate::error::Result;
 use crate::layers::Layer;
 use scirs2_core::ndarray::{Array, IxDyn, ScalarOperand, Zip};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 
 /// Hyperbolic tangent (Tanh) activation function.
@@ -19,7 +19,7 @@ use std::fmt::Debug;
 /// use scirs2_neural::activations::Tanh;
 /// use scirs2_neural::activations::Activation;
 /// use scirs2_core::ndarray::Array;
-/// 
+///
 /// let tanh = Tanh::new();
 /// let input = Array::from_vec(vec![1.0, -1.0, 2.0, -2.0]).into_dyn();
 /// let output = tanh.forward(&input).unwrap();
@@ -40,8 +40,11 @@ impl Default for Tanh {
     }
 }
 
-impl<F: Float + Debug> Activation<F> for Tanh {
-    fn forward(&self, input: &Array<F, scirs2_core::ndarray::IxDyn>) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
+impl<F: Float + Debug + NumAssign> Activation<F> for Tanh {
+    fn forward(
+        &self,
+        input: &Array<F, scirs2_core::ndarray::IxDyn>,
+    ) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
         let mut output = input.clone();
         Zip::from(&mut output).for_each(|x| {
             *x = x.tanh();
@@ -55,7 +58,7 @@ impl<F: Float + Debug> Activation<F> for Tanh {
         input: &Array<F, scirs2_core::ndarray::IxDyn>,
     ) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
         let mut grad_input = Array::zeros(grad_output.raw_dim());
-        
+
         // Derivative of tanh(x) is 1 - tanh^2(x)
         Zip::from(&mut grad_input)
             .and(grad_output)
@@ -70,7 +73,7 @@ impl<F: Float + Debug> Activation<F> for Tanh {
     }
 }
 
-impl<F: Float + Debug + ScalarOperand> Layer<F> for Tanh {
+impl<F: Float + Debug + ScalarOperand + NumAssign> Layer<F> for Tanh {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

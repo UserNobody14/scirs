@@ -6,7 +6,7 @@
 
 use crate::error::{SignalError, SignalResult};
 use scirs2_core::ndarray::Array1;
-use rustfft::{num_complex::Complex, FftPlanner};
+use scirs2_core::numeric::Complex64;
 
 use super::basic::linear_interpolate;
 use super::core::{find_nearest_valid_index, InterpolationConfig, InterpolationMethod};
@@ -183,22 +183,24 @@ pub fn spectral_interpolate(
     let mut prev_result = valid_signal.clone();
 
     // Create FFT planner
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(n);
-    let ifft = planner.plan_fft_inverse(n);
+    // FFT plans removed - using scirs2_fft functions
 
     // Convert to complex for FFT
-    let mut complex_signal = vec![Complex::new(0.0, 0.0); n];
+    let mut complex_signal = vec![Complex64::new(0.0, 0.0); n];
 
     // Iterative spectral interpolation
     for _ in 0..config.max_iterations {
         // Copy current estimate to complex array
         for (i, &val) in result.iter().enumerate().take(n) {
-            complex_signal[i] = Complex::new(val, 0.0);
+            complex_signal[i] = Complex64::new(val, 0.0);
         }
 
         // Forward FFT
-        fft.process(&mut complex_signal);
+        let fft_result = scirs2_fft::fft(&complex_signal, Some(complex_signal.len()))
+            .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
+        for (i, c) in fft_result.iter().enumerate() {
+            complex_signal[i] = *c;
+        }
 
         // Apply frequency constraint if requested
         if config.frequency_constraint {
@@ -206,17 +208,15 @@ pub fn spectral_interpolate(
 
             // Zero out high frequencies
             for value in complex_signal.iter_mut().skip(cutoff).take(n - 2 * cutoff) {
-                *value = Complex::new(0.0, 0.0);
+                *value = Complex64::new(0.0, 0.0);
             }
         }
 
-        // Inverse FFT
-        ifft.process(&mut complex_signal);
-
-        // Scale by 1/n
-        let scale = 1.0 / n as f64;
-        for value in complex_signal.iter_mut().take(n) {
-            *value *= scale;
+        // Inverse FFT (scirs2_fft::ifft already applies 1/N normalization)
+        let ifft_result = scirs2_fft::ifft(&complex_signal, Some(complex_signal.len()))
+            .map_err(|e| SignalError::ComputationError(format!("IFFT failed: {}", e)))?;
+        for (i, c) in ifft_result.iter().enumerate() {
+            complex_signal[i] = *c;
         }
 
         // Copy current estimate and update

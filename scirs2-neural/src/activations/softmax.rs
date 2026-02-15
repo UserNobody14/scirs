@@ -4,7 +4,7 @@ use crate::activations::Activation;
 use crate::error::{NeuralError, Result};
 use crate::layers::Layer;
 use scirs2_core::ndarray::{Array, Axis, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::simd_ops::SimdUnifiedOps;
 use std::fmt::Debug;
 
@@ -18,7 +18,7 @@ use std::fmt::Debug;
 /// use scirs2_neural::activations::Softmax;
 /// use scirs2_neural::activations::Activation;
 /// use scirs2_core::ndarray::Array;
-/// 
+///
 /// let softmax = Softmax::new(0);
 /// let input = Array::from_vec(vec![1.0, 2.0, 3.0]).into_dyn();
 /// let output = softmax.forward(&input).expect("Operation failed");
@@ -45,8 +45,11 @@ impl Default for Softmax {
     }
 }
 
-impl<F: Float + Debug> Activation<F> for Softmax {
-    fn forward(&self, input: &Array<F, scirs2_core::ndarray::IxDyn>) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
+impl<F: Float + Debug + NumAssign> Activation<F> for Softmax {
+    fn forward(
+        &self,
+        input: &Array<F, scirs2_core::ndarray::IxDyn>,
+    ) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
         if input.ndim() <= self.axis {
             return Err(NeuralError::InferenceError(format!(
                 "Softmax axis {} is out of bounds for input with {} dimensions",
@@ -57,59 +60,7 @@ impl<F: Float + Debug> Activation<F> for Softmax {
 
         // Special case for 1D arrays
         if input.ndim() == 1 && self.axis == 0 {
-            // SIMD-accelerated softmax for 1D arrays
-            // Try f64 SIMD path
-            if std::mem::size_of::<F>() == 8 {
-                // Safety: We know F is f64 from size check
-                let input_slice = input.as_slice().expect("Operation failed");
-                let input_f64: Vec<f64> = input_slice
-                    .iter()
-                    .map(|&v| {
-                        let bytes = unsafe { std::mem::transmute::<F, [u8; 8]>(v) };
-                        f64::from_ne_bytes(bytes)
-                    })
-                    .collect();
-
-                let input_view = scirs2_core::ndarray::ArrayView1::from(&input_f64);
-                let result_f64 = f64::simd_softmax(&input_view);
-
-                let result_vec: Vec<F> = result_f64
-                    .iter()
-                    .map(|&v| {
-                        let bytes = v.to_ne_bytes();
-                        unsafe { std::mem::transmute::<[u8; 8], F>(bytes) }
-                    })
-                    .collect();
-
-                return Ok(Array::from_vec(result_vec).into_dyn());
-            }
-            // Try f32 SIMD path
-            else if std::mem::size_of::<F>() == 4 {
-                // Safety: We know F is f32 from size check
-                let input_slice = input.as_slice().expect("Operation failed");
-                let input_f32: Vec<f32> = input_slice
-                    .iter()
-                    .map(|&v| {
-                        let bytes = unsafe { std::mem::transmute::<F, [u8; 4]>(v) };
-                        f32::from_ne_bytes(bytes)
-                    })
-                    .collect();
-
-                let input_view = scirs2_core::ndarray::ArrayView1::from(&input_f32);
-                let result_f32 = f32::simd_softmax(&input_view);
-
-                let result_vec: Vec<F> = result_f32
-                    .iter()
-                    .map(|&v| {
-                        let bytes = v.to_ne_bytes();
-                        unsafe { std::mem::transmute::<[u8; 4], F>(bytes) }
-                    })
-                    .collect();
-
-                return Ok(Array::from_vec(result_vec).into_dyn());
-            }
-
-            // Generic fallback for other types
+            // Generic softmax implementation for 1D arrays
             // Find max for numerical stability
             let max_val = input.fold(F::neg_infinity(), |a, &b| a.max(b));
             // Compute exp(x - max)
@@ -121,7 +72,7 @@ impl<F: Float + Debug> Activation<F> for Softmax {
             let sum = output.fold(F::zero(), |a, &b| a + b);
             // Normalize
             for val in output.iter_mut() {
-                *val = *val / sum;
+                *val /= sum;
             }
             return Ok(output);
         }
@@ -133,7 +84,7 @@ impl<F: Float + Debug> Activation<F> for Softmax {
         });
 
         let mut output = input.clone();
-        
+
         // Apply exp(x - max) for numerical stability
         for (mut out_subview, &max_val) in
             output.axis_iter_mut(Axis(self.axis)).zip(max_vals.iter())
@@ -151,7 +102,7 @@ impl<F: Float + Debug> Activation<F> for Softmax {
             output.axis_iter_mut(Axis(self.axis)).zip(sum_vals.iter())
         {
             for val in out_subview.iter_mut() {
-                *val = *val / sum_val;
+                *val /= sum_val;
             }
         }
 
@@ -192,16 +143,18 @@ impl<F: Float + Debug> Activation<F> for Softmax {
         let mut sumshape = output.shape().to_vec();
         sumshape[self.axis] = 1;
         let weighted_sum_reshaped = weighted_sum.into_shape_with_order(sumshape)?;
-        let weighted_sum_broadcast = weighted_sum_reshaped.broadcast(output.shape()).expect("Operation failed");
+        let weighted_sum_broadcast = weighted_sum_reshaped
+            .broadcast(output.shape())
+            .expect("Operation failed");
 
         // Compute gradient: softmax * (grad_output - weighted_sum)
         let grad_input = output * (grad_output - &weighted_sum_broadcast);
-        
+
         Ok(grad_input)
     }
 }
 
-impl<F: Float + Debug + ScalarOperand> Layer<F> for Softmax {
+impl<F: Float + Debug + ScalarOperand + NumAssign> Layer<F> for Softmax {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -220,7 +173,7 @@ impl<F: Float + Debug + ScalarOperand> Layer<F> for Softmax {
         grad_output: &Array<F, IxDyn>,
     ) -> Result<Array<F, IxDyn>> {
         // For softmax, we need the output, not the input for backward pass
-        let _output = self.forward(input)?;
+        let _output = <Self as Activation<F>>::forward(self, input)?;
         <Self as Activation<F>>::backward(self, grad_output, &_output)
     }
 

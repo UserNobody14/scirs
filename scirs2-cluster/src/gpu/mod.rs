@@ -13,6 +13,8 @@
 //! * **Distance Computations**: Optimized distance matrix calculations
 //! * **Performance Monitoring**: Built-in benchmarking and performance statistics
 //! * **Device Selection**: Automatic or manual GPU device selection strategies
+//! * **Tensor Core Support**: Mixed precision and tensor core acceleration (v0.2.0)
+//! * **Advanced Memory Strategies**: Conservative, aggressive, and adaptive memory management
 //!
 //! # Examples
 //!
@@ -69,9 +71,32 @@
 //! let stats = memory_manager.get_stats();
 //! println!("Pool efficiency: {:.2}%", memory_manager.pool_efficiency() * 100.0);
 //! ```
+//!
+//! ## GPU-Accelerated K-means (v0.2.0)
+//!
+//! ```rust,ignore
+//! use scirs2_cluster::gpu::{GpuKMeans, GpuAccelerationConfig};
+//! use scirs2_core::ndarray::Array2;
+//!
+//! // Create GPU K-means with CUDA backend
+//! let config = GpuAccelerationConfig::cuda();
+//! let mut kmeans = GpuKMeans::<f64>::new(config).unwrap();
+//!
+//! // Create sample data
+//! let data = Array2::from_shape_fn((1000, 10), |(i, j)| (i + j) as f64);
+//!
+//! // Fit K-means with GPU acceleration
+//! let result = kmeans.fit(data.view(), 10, 100, 1e-4).unwrap();
+//!
+//! println!("Converged: {}", result.converged);
+//! println!("Iterations: {}", result.n_iterations);
+//! println!("GPU used: {}", result.metrics.used_gpu);
+//! ```
 
+pub mod acceleration;
 pub mod core;
 pub mod distance;
+pub mod kernels;
 pub mod memory;
 
 // Re-export main types for convenience
@@ -81,6 +106,23 @@ pub use distance::{DistanceMetric, GpuArray, GpuDistanceMatrix};
 
 pub use memory::{
     BandwidthMonitor, GpuMemoryBlock, GpuMemoryManager, MemoryStats, MemoryStrategy, MemoryTransfer,
+};
+
+// Re-export advanced acceleration features (v0.2.0)
+pub use acceleration::{
+    detect_tensor_core_capabilities, AdvancedDeviceSelection, AdvancedGpuMemoryManager,
+    AdvancedMemoryStrategy, AllocationRecord, DeviceBenchmark, DeviceSelector,
+    GpuAccelerationConfig, GpuKMeans, GpuKMeansResult, KMeansMetrics, KernelOptimizations,
+    MemoryUsageStats, PrecisionMode, ProfilingRecord, TensorCoreCapabilities, TensorCoreConfig,
+};
+
+// Re-export kernel types
+pub use kernels::{
+    calculate_kernel_config, generate_cuda_batch_distance_kernel,
+    generate_cuda_distance_matrix_kernel, generate_cuda_kmeans_assign_kernel,
+    generate_metal_distance_kernel, generate_opencl_distance_matrix_kernel,
+    generate_rocm_distance_kernel, get_kernel_source, get_kmeans_kernel_source, DistanceKernelType,
+    KernelConfig, KernelDataType,
 };
 
 // Additional convenience functions and types

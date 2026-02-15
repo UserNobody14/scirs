@@ -55,50 +55,35 @@
 //! ```
 
 // Module organization
-pub mod types;
 pub mod core;
+pub mod cross_validation;
 pub mod dpss;
+pub mod performance;
+pub mod signal_generation;
+pub mod simd;
 pub mod spectral;
 pub mod stability;
-pub mod performance;
-pub mod cross_validation;
-pub mod simd;
-pub mod signal_generation;
+pub mod types;
 
 // Re-export all types for easy access
 pub use types::*;
 
 // Re-export main validation functions
-pub use core::{
-    validate_multitaper_comprehensive,
-    run_comprehensive_enhanced_validation,
-};
+pub use core::{run_comprehensive_enhanced_validation, validate_multitaper_comprehensive};
 
 // Re-export specialized validation functions
+pub use cross_validation::{
+    calculate_correlation, compute_relative_errors, cross_validate_with_multiple_references,
+    cross_validate_with_reference,
+};
 pub use dpss::validate_dpss_comprehensive;
+pub use performance::{benchmark_memory_access, benchmark_performance, profile_computation_phases};
+pub use signal_generation::{
+    add_noise_to_signal, assess_signal_quality, generate_test_signal, generate_validation_signals,
+};
+pub use simd::{validate_multitaper_with_simd, validate_simd_operations};
 pub use spectral::validate_spectral_accuracy;
 pub use stability::test_numerical_stability_enhanced;
-pub use performance::{
-    benchmark_performance,
-    benchmark_memory_access,
-    profile_computation_phases,
-};
-pub use cross_validation::{
-    cross_validate_with_reference,
-    cross_validate_with_multiple_references,
-    calculate_correlation,
-    compute_relative_errors,
-};
-pub use simd::{
-    validate_simd_operations,
-    validate_multitaper_with_simd,
-};
-pub use signal_generation::{
-    generate_test_signal,
-    add_noise_to_signal,
-    assess_signal_quality,
-    generate_validation_signals,
-};
 
 /// Run quick validation with default parameters
 ///
@@ -166,7 +151,9 @@ pub fn validate_signal_type(
 /// # Returns
 ///
 /// * SIMD validation metrics
-pub fn validate_simd_performance(length: usize) -> crate::error::SignalResult<SimdValidationMetrics> {
+pub fn validate_simd_performance(
+    length: usize,
+) -> crate::error::SignalResult<SimdValidationMetrics> {
     let signal_config = TestSignalConfig {
         length,
         test_simd: true,
@@ -224,41 +211,77 @@ pub fn generate_validation_report(
     report.push_str("=== Multitaper Validation Report ===\n\n");
 
     // Overall scores
-    report.push_str(&format!("Overall Score: {:.1}%\n", results.standard_metrics.overall_score));
-    report.push_str(&format!("Enhanced Score: {:.1}%\n\n", results.enhanced_score));
+    report.push_str(&format!(
+        "Overall Score: {:.1}%\n",
+        results.standard_metrics.overall_score
+    ));
+    report.push_str(&format!(
+        "Enhanced Score: {:.1}%\n\n",
+        results.enhanced_score
+    ));
 
     // Standard metrics
     report.push_str("=== Standard Validation Metrics ===\n");
-    report.push_str(&format!("DPSS Orthogonality Error: {:.2e}\n",
-        results.standard_metrics.dpss_validation.orthogonality_error));
-    report.push_str(&format!("Spectral Estimation MSE: {:.2e}\n",
-        results.standard_metrics.spectral_accuracy.mse));
-    report.push_str(&format!("Numerical Condition Number: {:.1}\n",
-        results.standard_metrics.numerical_stability.condition_number));
-    report.push_str(&format!("SIMD Speedup: {:.1}x\n",
-        results.standard_metrics.performance.simd_speedup));
+    report.push_str(&format!(
+        "DPSS Orthogonality Error: {:.2e}\n",
+        results.standard_metrics.dpss_validation.orthogonality_error
+    ));
+    report.push_str(&format!(
+        "Spectral Estimation MSE: {:.2e}\n",
+        results.standard_metrics.spectral_accuracy.mse
+    ));
+    report.push_str(&format!(
+        "Numerical Condition Number: {:.1}\n",
+        results
+            .standard_metrics
+            .numerical_stability
+            .condition_number
+    ));
+    report.push_str(&format!(
+        "SIMD Speedup: {:.1}x\n",
+        results.standard_metrics.performance.simd_speedup
+    ));
 
-    if results.standard_metrics.cross_validation.reference_available {
-        report.push_str(&format!("Reference Correlation: {:.3}\n",
-            results.standard_metrics.cross_validation.reference_correlation));
+    if results
+        .standard_metrics
+        .cross_validation
+        .reference_available
+    {
+        report.push_str(&format!(
+            "Reference Correlation: {:.3}\n",
+            results
+                .standard_metrics
+                .cross_validation
+                .reference_correlation
+        ));
     }
 
     // Robustness metrics
     report.push_str("\n=== Robustness Metrics ===\n");
-    report.push_str(&format!("Extreme Case Stability: {:.1}%\n",
-        results.robustness.extreme_case_stability * 100.0));
-    report.push_str(&format!("Numerical Consistency: {:.1}%\n",
-        results.robustness.numerical_consistency * 100.0));
-    report.push_str(&format!("Memory Scaling: {:.1}%\n",
-        results.robustness.memory_scaling * 100.0));
+    report.push_str(&format!(
+        "Extreme Case Stability: {:.1}%\n",
+        results.robustness.extreme_case_stability * 100.0
+    ));
+    report.push_str(&format!(
+        "Numerical Consistency: {:.1}%\n",
+        results.robustness.numerical_consistency * 100.0
+    ));
+    report.push_str(&format!(
+        "Memory Scaling: {:.1}%\n",
+        results.robustness.memory_scaling * 100.0
+    ));
 
     // SIMD metrics
     if results.simd_metrics.platform_compatible {
         report.push_str("\n=== SIMD Validation ===\n");
-        report.push_str(&format!("SIMD Correctness: {:.1}%\n",
-            results.simd_metrics.correctness_score * 100.0));
-        report.push_str(&format!("Performance Improvement: {:.1}x\n",
-            results.simd_metrics.performance_improvement));
+        report.push_str(&format!(
+            "SIMD Correctness: {:.1}%\n",
+            results.simd_metrics.correctness_score * 100.0
+        ));
+        report.push_str(&format!(
+            "Performance Improvement: {:.1}x\n",
+            results.simd_metrics.performance_improvement
+        ));
     }
 
     // Issues and recommendations
@@ -289,13 +312,8 @@ mod tests {
 
     #[test]
     fn test_validate_signal_type() {
-        let score = validate_signal_type(
-            TestSignalType::Sinusoid(100.0),
-            512,
-            1000.0,
-            4.0,
-            7,
-        ).expect("Operation failed");
+        let score = validate_signal_type(TestSignalType::Sinusoid(100.0), 512, 1000.0, 4.0, 7)
+            .expect("Operation failed");
         assert!(score >= 0.0 && score <= 100.0);
     }
 
@@ -349,7 +367,8 @@ mod tests {
         };
 
         // Test signal generation
-        let signal = generate_test_signal(&TestSignalType::WhiteNoise, &signal_config).expect("Operation failed");
+        let signal = generate_test_signal(&TestSignalType::WhiteNoise, &signal_config)
+            .expect("Operation failed");
         assert_eq!(signal.len(), 128);
 
         // Test quality assessment
@@ -363,7 +382,8 @@ mod tests {
             ..Default::default()
         };
 
-        let result = validate_multitaper_comprehensive(&signal_config, &validation_config).expect("Operation failed");
+        let result = validate_multitaper_comprehensive(&signal_config, &validation_config)
+            .expect("Operation failed");
         assert!(result.overall_score >= 0.0);
     }
 }

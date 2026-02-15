@@ -1,11 +1,11 @@
 SciRS2 - Scientific Computing in Rust
-Copyright 2025 COOLJAPAN OU (Team KitaSan)
+Copyright 2025-2026 COOLJAPAN OU (Team KitaSan)
 
 This software is dual-licensed under MIT License and Apache License 2.0. Please see the LICENSE file for details.
 
 Portions of this software are inspired by or based on SciPy:
 SciPy (https://scipy.org/)
-Copyright © 2001-2025 SciPy developers. All rights reserved.
+Copyright © 2001-2026 SciPy developers. All rights reserved.
 
 This implementation uses several Rust crates from third parties, including:
 - ndarray

@@ -24,6 +24,7 @@ mod qmr;
 mod qmr_simple;
 mod solvers;
 mod spai;
+mod specialized_solvers; // v0.2.0
 mod svd;
 mod tfqmr;
 
@@ -72,5 +73,9 @@ pub use solvers::{
     sparse_lstsq, spsolve,
 };
 pub use spai::{SpaiOptions, SpaiPreconditioner};
+pub use specialized_solvers::{
+    solve_arrow_matrix, solve_banded_system, solve_block_2x2, solve_kronecker_system,
+    solve_saddle_point,
+}; // v0.2.0
 pub use svd::{svd_truncated, svds, SVDOptions, SVDResult};
 pub use tfqmr::{tfqmr, TFQMROptions, TFQMRResult};

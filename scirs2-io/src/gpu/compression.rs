@@ -2,6 +2,11 @@
 //!
 //! This module provides GPU-accelerated compression and decompression
 //! with backend-specific optimizations for maximum throughput and efficiency.
+//!
+//! **Note:** This module currently uses C-backed compression libraries (flate2, lz4, zstd)
+//! because it requires block-level compression APIs that are not yet available in oxiarc-archive.
+//! The gpu feature automatically enables compression-c to ensure these dependencies are available.
+//! TODO: Migrate to Pure Rust oxiarc-archive when block-level compression APIs become available.
 
 use super::backend_management::GpuIoProcessor;
 use crate::compression::{CompressionAlgorithm, ParallelCompressionConfig};

@@ -15,7 +15,7 @@ use super::core::ModelInterpreter;
 use statrs::statistics::Statistics;
 /// Statistical analysis of layer activations
 #[derive(Debug, Clone)]
-pub struct LayerAnalysisStats<F: Float + Debug> {
+pub struct LayerAnalysisStats<F: Float + Debug + NumAssign> {
     /// Mean activation value
     pub mean_activation: F,
     /// Standard deviation of activations
@@ -34,7 +34,7 @@ pub struct LayerAnalysisStats<F: Float + Debug> {
     pub bin_edges: Vec<F>,
 }
 /// Attribution statistics for a single method
-pub struct AttributionStatistics<F: Float + Debug> {
+pub struct AttributionStatistics<F: Float + Debug + NumAssign> {
     /// Mean attribution value
     pub mean: F,
     /// Mean absolute attribution value

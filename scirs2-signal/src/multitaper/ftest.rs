@@ -5,10 +5,10 @@
 // identify spectral lines against a background continuum.
 
 use crate::error::{SignalError, SignalResult};
+use scirs2_core::ndarray::ArrayStatCompat;
 use scirs2_core::ndarray::{Array1, Array2};
 use scirs2_core::numeric::Complex64;
 use scirs2_core::validation::{check_positive, checkshape};
-use scirs2_core::ndarray::ArrayStatCompat;
 use statrs::distribution::{ContinuousCDF, FisherSnedecor};
 use statrs::statistics::Statistics;
 
@@ -42,8 +42,8 @@ pub fn multitaper_ftest(
     p_value: Option<f64>,
 ) -> SignalResult<(Array1<f64>, Array1<f64>, Array1<bool>)> {
     let (k, n_freq) = eigenspectra.dim();
-    checkshape(eigenspectra, (Some(k), None), "eigenspectra")?;
-    checkshape(eigenvalues, (k,), "eigenvalues")?;
+    checkshape(eigenspectra, &[k, n_freq], "eigenspectra")?;
+    checkshape(eigenvalues, &[k], "eigenvalues")?;
 
     let p_threshold = p_value.unwrap_or(0.05);
     check_positive(p_threshold, "p_value")?;
@@ -137,7 +137,11 @@ pub fn multitaper_ftest_complex(
     tapers: &Array2<f64>,
     eigenvalues: &Array1<f64>,
     p_value: Option<f64>,
-) -> SignalResult<(Array1<f64>, Array1<scirs2_core::numeric::Complex64>, Array1<bool>)> {
+) -> SignalResult<(
+    Array1<f64>,
+    Array1<scirs2_core::numeric::Complex64>,
+    Array1<bool>,
+)> {
     let (k, n_freq) = eigenspectra.dim();
     let (k_taper, n_time) = tapers.dim();
 
@@ -305,7 +309,8 @@ pub fn harmonic_ftest(
     let mut best_significance = 1.0;
 
     // Compute F-statistics for all frequencies
-    let (f_stats__) = multitaper_ftest(eigenspectra, eigenvalues, Some(p_threshold))?;
+    let (f_stats, _p_values, _significant) =
+        multitaper_ftest(eigenspectra, eigenvalues, Some(p_threshold))?;
 
     for i in fund_start..fund_end {
         let fundamental = frequencies[i];
@@ -331,8 +336,8 @@ pub fn harmonic_ftest(
 
             // Only include if within reasonable tolerance
             if min_diff < 0.5 * (frequencies[1] - frequencies[0]) {
-                harmonic_amps[h] = f_stats__[closest_idx];
-                combined_f += f_stats__[closest_idx];
+                harmonic_amps[h] = f_stats[closest_idx];
+                combined_f += f_stats[closest_idx];
                 valid_harmonics += 1;
             }
         }

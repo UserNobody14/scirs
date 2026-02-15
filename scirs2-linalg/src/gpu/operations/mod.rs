@@ -6,10 +6,12 @@
 
 // Module declarations
 pub mod advanced;
+pub mod decompositions;
 pub mod dispatcher;
 pub mod hardware;
 pub mod intelligent;
 pub mod kernels;
+pub mod matrix_ops;
 pub mod metrics;
 pub mod optimization;
 pub mod profiling;
@@ -33,3 +35,15 @@ pub use metrics::{
 };
 pub use optimization::{BatchPerformanceRecord, BatchSizeOptimizer};
 pub use profiling::GpuPerformanceProfiler;
+
+// Re-export matrix operations
+pub use matrix_ops::{
+    BatchedGemmConfig, GemmConfig, GpuMatrixOp, GpuMatrixOpConfig, GpuMatrixOperations,
+    NeuralNetworkOps,
+};
+
+// Re-export decomposition operations
+pub use decompositions::{
+    CholeskyDecomposition, EigenDecomposition, GpuDecompositionConfig, GpuDecompositions,
+    LuDecomposition, QrDecomposition, SvdDecomposition,
+};

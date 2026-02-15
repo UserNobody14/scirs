@@ -311,10 +311,15 @@ mod tests {
 
     #[test]
     fn test_extended_device_info_creation() {
+        #[cfg(target_pointer_width = "32")]
+        let total_memory = 512 * 1024 * 1024; // 512MB for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let total_memory = 8usize * 1024 * 1024 * 1024; // 8GB for 64-bit
+
         let basic_info = GpuDeviceInfo {
             device_type: GpuDeviceType::Cuda,
             name: "Test GPU".to_string(),
-            total_memory: 8 * 1024 * 1024 * 1024, // 8GB
+            total_memory,
             compute_units: 80,
             clock_frequency: 1500,
             supports_fp64: true,
@@ -341,10 +346,15 @@ mod tests {
 
     #[test]
     fn test_workload_suitability() {
+        #[cfg(target_pointer_width = "32")]
+        let total_memory = 256 * 1024 * 1024; // 256MB for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let total_memory = 1024 * 1024 * 1024; // 1GB for 64-bit
+
         let basic_info = GpuDeviceInfo {
             device_type: GpuDeviceType::Cuda,
             name: "Test GPU".to_string(),
-            total_memory: 1024 * 1024 * 1024, // 1GB
+            total_memory,
             compute_units: 10,
             clock_frequency: 1000,
             supports_fp64: false,
@@ -376,10 +386,15 @@ mod tests {
 
     #[test]
     fn test_performance_estimation() {
+        #[cfg(target_pointer_width = "32")]
+        let total_memory = 512 * 1024 * 1024; // 512MB for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let total_memory = 8usize * 1024 * 1024 * 1024; // 8GB for 64-bit
+
         let basic_info = GpuDeviceInfo {
             device_type: GpuDeviceType::Cuda,
             name: "Test GPU".to_string(),
-            total_memory: 8 * 1024 * 1024 * 1024,
+            total_memory,
             compute_units: 80,
             clock_frequency: 1500,
             supports_fp64: true,

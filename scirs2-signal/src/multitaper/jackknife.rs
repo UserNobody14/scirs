@@ -37,8 +37,8 @@ pub fn jackknife_confidence_intervals(
     log_transform: Option<bool>,
 ) -> SignalResult<(Array1<f64>, Array1<f64>, Array1<f64>, Array1<f64>)> {
     let (k, n_freq) = eigenspectra.dim();
-    checkshape(eigenspectra, (Some(k), None), "eigenspectra")?;
-    checkshape(eigenvalues, (k,), "eigenvalues")?;
+    checkshape(eigenspectra, &[k, n_freq], "eigenspectra")?;
+    checkshape(eigenvalues, &[k], "eigenvalues")?;
 
     let conf_level = confidence.unwrap_or(0.95);
     if conf_level <= 0.0 || conf_level >= 1.0 {
@@ -173,11 +173,7 @@ pub fn weighted_jackknife(
     confidence: Option<f64>,
 ) -> SignalResult<(Array1<f64>, Array1<f64>, Array1<f64>)> {
     let (k, n_freq) = eigenspectra.dim();
-    checkshape(
-        adaptive_weights,
-        (Some(k), Some(n_freq)),
-        "adaptive_weights",
-    )?;
+    checkshape(adaptive_weights, &[k, n_freq], "adaptive_weights")?;
 
     let conf_level = confidence.unwrap_or(0.95);
 
@@ -293,8 +289,8 @@ pub fn cross_spectrum_jackknife(
     (Array1<f64>, Array1<f64>),
 )> {
     let (k, n_freq) = eigenspectra_x.dim();
-    checkshape(eigenspectra_y, (Some(k), Some(n_freq)), "eigenspectra_y")?;
-    checkshape(eigenvalues, (k,), "eigenvalues")?;
+    checkshape(eigenspectra_y, &[k, n_freq], "eigenspectra_y")?;
+    checkshape(eigenvalues, &[k], "eigenvalues")?;
 
     let conf_level = confidence.unwrap_or(0.95);
 

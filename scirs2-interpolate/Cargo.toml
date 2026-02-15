@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Interpolation module for SciRS2 (scirs2-interpolate)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["interpolation", "spline", "scientific", "scipy", "numerical"]
@@ -70,6 +71,10 @@ harness = false
 
 [[bench]]
 name = "bspline_benchmarks"
+harness = false
+
+[[bench]]
+name = "v020_production_validation"
 harness = false
 
 # scipy_comparison benchmark disabled (Python/PyO3 linking issues on macOS)

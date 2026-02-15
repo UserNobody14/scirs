@@ -3,8 +3,9 @@
 //! This module provides functions to generate various types of test signals
 //! for comprehensive multitaper validation.
 
-use super::types::{TestSignalConfig, TestSignalType, SignalQualityMetrics};
+use super::types::{SignalQualityMetrics, TestSignalConfig, TestSignalType};
 use crate::error::{SignalError, SignalResult};
+use scirs2_core::{random::thread_rng, Rng};
 use std::f64::consts::PI;
 
 /// Generate test signal based on configuration
@@ -13,27 +14,16 @@ pub fn generate_test_signal(
     config: &TestSignalConfig,
 ) -> SignalResult<Vec<f64>> {
     match signal_type {
-        TestSignalType::Sinusoid(freq) => {
-            generate_sinusoid(*freq, config.length, config.fs)
-        }
-        TestSignalType::MultiSine(freqs) => {
-            generate_multisine(freqs, config.length, config.fs)
-        }
-        TestSignalType::WhiteNoise => {
-            generate_white_noise(config.length)
-        }
-        TestSignalType::ColoredNoise(alpha) => {
-            generate_colored_noise(config.length, *alpha)
-        }
-        TestSignalType::Chirp { start_freq, end_freq } => {
-            generate_chirp(*start_freq, *end_freq, config.length, config.fs)
-        }
-        TestSignalType::Impulse => {
-            generate_impulse(config.length)
-        }
-        TestSignalType::Step => {
-            generate_step(config.length)
-        }
+        TestSignalType::Sinusoid(freq) => generate_sinusoid(*freq, config.length, config.fs),
+        TestSignalType::MultiSine(freqs) => generate_multisine(freqs, config.length, config.fs),
+        TestSignalType::WhiteNoise => generate_white_noise(config.length),
+        TestSignalType::ColoredNoise(alpha) => generate_colored_noise(config.length, *alpha),
+        TestSignalType::Chirp {
+            start_freq,
+            end_freq,
+        } => generate_chirp(*start_freq, *end_freq, config.length, config.fs),
+        TestSignalType::Impulse => generate_impulse(config.length),
+        TestSignalType::Step => generate_step(config.length),
         TestSignalType::ComplexSinusoid(freq) => {
             let real_part = generate_sinusoid(*freq, config.length, config.fs)?;
             let imag_part = generate_cosine(*freq, config.length, config.fs)?;
@@ -78,7 +68,9 @@ fn generate_cosine(freq: f64, length: usize, fs: f64) -> SignalResult<Vec<f64>> 
 /// Generate multi-sine signal
 fn generate_multisine(freqs: &[f64], length: usize, fs: f64) -> SignalResult<Vec<f64>> {
     if freqs.is_empty() {
-        return Err(SignalError::ValueError("Frequency list cannot be empty".to_string()));
+        return Err(SignalError::ValueError(
+            "Frequency list cannot be empty".to_string(),
+        ));
     }
 
     let dt = 1.0 / fs;
@@ -105,8 +97,9 @@ fn generate_multisine(freqs: &[f64], length: usize, fs: f64) -> SignalResult<Vec
 
 /// Generate white noise
 fn generate_white_noise(length: usize) -> SignalResult<Vec<f64>> {
+    let mut rng = thread_rng();
     let signal: Vec<f64> = (0..length)
-        .map(|_| fastrand::f64() * 2.0 - 1.0) // Uniform distribution [-1, 1]
+        .map(|_| rng.random::<f64>() * 2.0 - 1.0) // Uniform distribution [-1, 1]
         .collect();
 
     Ok(signal)
@@ -134,9 +127,16 @@ fn generate_colored_noise(length: usize, alpha: f64) -> SignalResult<Vec<f64>> {
 }
 
 /// Generate chirp signal (frequency sweep)
-fn generate_chirp(start_freq: f64, end_freq: f64, length: usize, fs: f64) -> SignalResult<Vec<f64>> {
+fn generate_chirp(
+    start_freq: f64,
+    end_freq: f64,
+    length: usize,
+    fs: f64,
+) -> SignalResult<Vec<f64>> {
     if start_freq <= 0.0 || end_freq <= 0.0 {
-        return Err(SignalError::ValueError("Frequencies must be positive".to_string()));
+        return Err(SignalError::ValueError(
+            "Frequencies must be positive".to_string(),
+        ));
     }
 
     if start_freq >= fs / 2.0 || end_freq >= fs / 2.0 {
@@ -185,7 +185,9 @@ fn generate_step(length: usize) -> SignalResult<Vec<f64>> {
 /// Add noise to signal with specified SNR
 pub fn add_noise_to_signal(signal: &[f64], snr_db: f64) -> SignalResult<Vec<f64>> {
     if signal.is_empty() {
-        return Err(SignalError::ValueError("Signal cannot be empty".to_string()));
+        return Err(SignalError::ValueError(
+            "Signal cannot be empty".to_string(),
+        ));
     }
 
     // Calculate signal power
@@ -197,9 +199,10 @@ pub fn add_noise_to_signal(signal: &[f64], snr_db: f64) -> SignalResult<Vec<f64>
     let noise_std = noise_power.sqrt();
 
     // Generate noise and add to signal
+    let mut rng = thread_rng();
     let mut noisy_signal = signal.to_vec();
     for sample in noisy_signal.iter_mut() {
-        let noise = fastrand::f64() * 2.0 - 1.0; // Uniform noise
+        let noise = rng.random::<f64>() * 2.0 - 1.0; // Uniform noise
         *sample += noise * noise_std;
     }
 
@@ -209,7 +212,9 @@ pub fn add_noise_to_signal(signal: &[f64], snr_db: f64) -> SignalResult<Vec<f64>
 /// Assess signal quality metrics
 pub fn assess_signal_quality(signal: &[f64], fs: f64) -> SignalResult<SignalQualityMetrics> {
     if signal.is_empty() {
-        return Err(SignalError::ValueError("Signal cannot be empty".to_string()));
+        return Err(SignalError::ValueError(
+            "Signal cannot be empty".to_string(),
+        ));
     }
 
     // Calculate basic statistics

@@ -5,6 +5,7 @@
 
 pub mod mean_shift;
 pub mod region_growing;
+pub mod semantic;
 pub mod slic;
 pub mod watershed;
 
@@ -12,6 +13,7 @@ pub use mean_shift::{mean_shift, MeanShiftParams};
 pub use region_growing::{
     adaptive_region_growing, region_growing, region_labels_to_color, RegionGrowingParams, SeedPoint,
 };
+pub use semantic::*;
 pub use slic::{draw_superpixel_boundaries, slic};
 pub use watershed::{
     compute_gradient_magnitude, labels_to_color_image, watershed, watershed_markers,

@@ -4,7 +4,6 @@
 // of signals.
 
 use crate::error::{SignalError, SignalResult};
-use rustfft::FftPlanner;
 use scirs2_core::ndarray::{Array1, Array2, ArrayView1};
 use scirs2_core::numeric::Complex64;
 use scirs2_core::numeric::{Float, NumCast};
@@ -423,24 +422,23 @@ where
     let min_size = a_f64.len() + v_f64.len() - 1;
     let fft_size = next_power_of_two(min_size);
 
-    // Prepare FFT planner
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(fft_size);
-    let ifft = planner.plan_fft_inverse(fft_size);
+    // Pad input signal and compute FFT using scirs2-fft
+    let mut a_padded_input: Vec<f64> = a_f64
+        .iter()
+        .copied()
+        .chain(std::iter::repeat(0.0).take(fft_size - a_f64.len()))
+        .collect();
+    let a_padded = scirs2_fft::fft(&a_padded_input, Some(fft_size))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
-    // Pad and transform input signal
-    let mut a_padded = vec![Complex64::new(0.0, 0.0); fft_size];
-    for (i, &val) in a_f64.iter().enumerate() {
-        a_padded[i] = Complex64::new(val, 0.0);
-    }
-    fft.process(&mut a_padded);
-
-    // Pad and transform kernel
-    let mut v_padded = vec![Complex64::new(0.0, 0.0); fft_size];
-    for (i, &val) in v_f64.iter().enumerate() {
-        v_padded[i] = Complex64::new(val, 0.0);
-    }
-    fft.process(&mut v_padded);
+    // Pad kernel and compute FFT using scirs2-fft
+    let mut v_padded_input: Vec<f64> = v_f64
+        .iter()
+        .copied()
+        .chain(std::iter::repeat(0.0).take(fft_size - v_f64.len()))
+        .collect();
+    let v_padded = scirs2_fft::fft(&v_padded_input, Some(fft_size))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
     // Wiener deconvolution in frequency domain
     // H_wiener = V* / (|V|^2 + epsilon)
@@ -463,14 +461,15 @@ where
         }
     }
 
-    // Inverse FFT
-    ifft.process(&mut result_fft);
+    // Inverse FFT using scirs2-fft
+    let result_ifft = scirs2_fft::ifft(&result_fft, Some(fft_size))
+        .map_err(|e| SignalError::ComputationError(format!("IFFT failed: {}", e)))?;
 
-    // Extract real part and normalize by FFT size
-    let mut result: Vec<f64> = result_fft
+    // Extract real part (ifft already applies normalization)
+    let mut result: Vec<f64> = result_ifft
         .iter()
         .take(a_f64.len())  // Return same length as input
-        .map(|c| c.re / fft_size as f64)
+        .map(|c| c.re)
         .collect();
 
     // Validate output for numerical stability

@@ -264,7 +264,12 @@ fn calculate_optimal_dimensions(
             [wave_aligned.min(1024), 1, 1]
         }
         GpuBackend::Wgpu => {
-            // WebGPU conservative workgroup size
+            // WebGPU conservative workgroup size (includes Vulkan backend)
+            [workgroup_size[0].min(256), 1, 1]
+        }
+        #[cfg(not(feature = "gpu"))]
+        GpuBackend::Vulkan => {
+            // Vulkan workgroup size - similar to OpenCL/WebGPU
             [workgroup_size[0].min(256), 1, 1]
         }
     };
@@ -806,7 +811,9 @@ impl GpuMemoryManager {
             GpuBackend::Metal => 16,  // Metal prefers 16-byte alignment
             GpuBackend::Cpu => 8,     // CPU standard alignment
             GpuBackend::Rocm => 64,   // AMD ROCm prefers 64-byte alignment
-            GpuBackend::Wgpu => 32,   // WebGPU standard alignment
+            GpuBackend::Wgpu => 32,   // WebGPU standard alignment (includes Vulkan)
+            #[cfg(not(feature = "gpu"))]
+            GpuBackend::Vulkan => 32, // Vulkan standard alignment
         };
 
         #[cfg(feature = "gpu")]
@@ -1189,7 +1196,13 @@ impl GpuMemoryManager {
                 size.div_ceil(alignment) * alignment
             }
             GpuBackend::Wgpu => {
-                // WebGPU standard alignment
+                // WebGPU standard alignment (includes Vulkan)
+                let alignment = 32 / std::mem::size_of::<usize>();
+                size.div_ceil(alignment) * alignment
+            }
+            #[cfg(not(feature = "gpu"))]
+            GpuBackend::Vulkan => {
+                // Vulkan standard alignment
                 let alignment = 32 / std::mem::size_of::<usize>();
                 size.div_ceil(alignment) * alignment
             }
@@ -1306,7 +1319,16 @@ pub fn calculate_adaptive_workgroup_size(
             }
         }
         GpuBackend::Wgpu => {
-            // WebGPU conservative sizing
+            // WebGPU conservative sizing (includes Vulkan)
+            if avg_nnz_per_row < 20 {
+                [32, 1, 1]
+            } else {
+                [64, 1, 1]
+            }
+        }
+        #[cfg(not(feature = "gpu"))]
+        GpuBackend::Vulkan => {
+            // Vulkan conservative sizing
             if avg_nnz_per_row < 20 {
                 [32, 1, 1]
             } else {
@@ -1549,6 +1571,22 @@ impl GpuPerformanceProfiler {
                         if avg_time > 15.0 {
                             recommendations.push(format!(
                                 "WebGPU performance for {operation} could be improved with buffer optimization (current avg: {avg_time:.2}ms)"
+                            ));
+                        } else if avg_time > 12.0 {
+                            recommendations.push(format!(
+                                "WebGPU performance for {operation} could be improved with memory optimization (current avg: {avg_time:.2}ms)"
+                            ));
+                        }
+                    }
+                    #[cfg(not(feature = "gpu"))]
+                    GpuBackend::Vulkan => {
+                        if avg_time > 15.0 {
+                            recommendations.push(format!(
+                                "Vulkan performance for {operation} could be improved with buffer optimization (current avg: {avg_time:.2}ms)"
+                            ));
+                        } else if avg_time > 12.0 {
+                            recommendations.push(format!(
+                                "Vulkan performance for {operation} could be improved with memory optimization (current avg: {avg_time:.2}ms)"
                             ));
                         }
                     }

@@ -861,6 +861,26 @@ pub use spatial_stats::{
     clark_evans_index, distance_weights_matrix, gearys_c, getis_ord_gi, local_morans_i, morans_i,
 };
 
+// Variogram analysis for geostatistics and spatial interpolation
+pub mod variogram;
+pub use variogram::{
+    directional_variogram, experimental_variogram, fit_variogram, FittedVariogram,
+};
+
+// Distance transforms for image processing and spatial analysis
+pub mod distance_transform;
+pub use distance_transform::{
+    euclidean_distance_transform, euclidean_distance_transform_3d, feature_transform,
+    DistanceMetric as DistanceTransformMetric,
+};
+
+// Map projections and coordinate system transformations
+pub mod projections;
+pub use projections::{
+    albers_equal_area, lambert_conformal_conic, utm_to_geographic, Ellipsoid, ProjectionType,
+    UTMZone,
+};
+
 // SIMD-accelerated distance calculations
 pub mod simd_distance;
 pub use simd_distance::{
@@ -964,14 +984,18 @@ pub use ml_optimization::{
 };
 
 // Distributed spatial computing framework for massive scale processing
+#[cfg(feature = "async")]
 pub mod distributed;
+#[cfg(feature = "async")]
 pub use distributed::{
     ClusterStatistics, DataPartition, DistributedMessage, DistributedSpatialCluster, LoadBalancer,
     LoadMetrics, NodeConfig, NodeStatus, QueryResults, QueryType, SpatialBounds,
 };
 
 // Real-time adaptive algorithm selection and optimization
+#[cfg(feature = "async")]
 pub mod adaptive_selection;
+#[cfg(feature = "async")]
 pub use adaptive_selection::{
     ActualPerformance, AdaptiveAlgorithmSelector, AlgorithmParameters, AlgorithmSelection,
     DataCharacteristics, ExecutionResult, PerformancePrediction, SelectedAlgorithm,

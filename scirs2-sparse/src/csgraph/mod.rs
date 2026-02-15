@@ -58,8 +58,16 @@ pub mod minimum_spanning_tree;
 pub mod shortest_path;
 pub mod traversal;
 
+// v0.2.0 Advanced graph algorithms
+pub mod centrality;
+pub mod community_detection;
+pub mod max_flow;
+
+pub use centrality::*;
+pub use community_detection::*;
 pub use connected_components::*;
 pub use laplacian::*;
+pub use max_flow::*;
 pub use minimum_spanning_tree::*;
 pub use shortest_path::*;
 pub use traversal::*;

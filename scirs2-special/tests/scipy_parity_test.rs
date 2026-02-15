@@ -77,3 +77,58 @@ fn test_distribution_inverse_functions() {
     // Note: Other inverse functions are more complex and may require specific test cases
     // This test just verifies they compile and don't panic
 }
+
+#[test]
+#[allow(dead_code)]
+fn test_betainc_regularized_asymmetric() {
+    // Test betainc_regularized with asymmetric parameters
+    // This is the critical test case that was failing due to the continued fraction bug
+
+    // Test case from Student's t distribution with df=10, t=1.812
+    // I_x(5.0, 0.5) where x = 10/(10+1.812^2) = 0.668271
+    // Expected value from scipy: ~0.050012
+    let x: f64 = 0.668271;
+    let a: f64 = 5.0;
+    let b: f64 = 0.5;
+    let result = betainc_regularized(x, a, b).expect("Should compute betainc_regularized");
+    let expected: f64 = 0.050012;
+
+    // Allow for small numerical differences
+    let relative_error = ((result - expected) / expected).abs();
+    assert!(
+        relative_error < 0.01,
+        "betainc_regularized({}, {}, {}) = {} but expected {} (relative error: {})",
+        x,
+        a,
+        b,
+        result,
+        expected,
+        relative_error
+    );
+
+    // Test symmetric case (should still work)
+    let result_sym: f64 =
+        betainc_regularized(0.5, 2.0, 2.0).expect("Should compute symmetric case");
+    assert!(
+        (result_sym - 0.5).abs() < 1e-10,
+        "betainc_regularized(0.5, 2.0, 2.0) = {} but expected 0.5",
+        result_sym
+    );
+
+    // Additional test with b < 1 (small b is where the bug manifests)
+    let result2 = betainc_regularized(0.3, 3.0, 0.5).expect("Should compute with b < 1");
+    assert!(
+        result2 > 0.0 && result2 < 1.0,
+        "betainc_regularized should return value in (0,1), got {}",
+        result2
+    );
+
+    // Test with larger a and small b
+    let result3 =
+        betainc_regularized(0.8, 10.0, 0.3).expect("Should compute with large a, small b");
+    assert!(
+        result3 > 0.0 && result3 < 1.0,
+        "betainc_regularized should return value in (0,1), got {}",
+        result3
+    );
+}

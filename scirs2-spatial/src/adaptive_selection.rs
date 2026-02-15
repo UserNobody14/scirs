@@ -67,6 +67,7 @@ use statrs::statistics::Statistics;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+#[cfg(feature = "async")]
 use tokio::sync::RwLock;
 
 /// Adaptive algorithm selector
@@ -1475,6 +1476,7 @@ impl AdaptiveAlgorithmSelector {
         data: &ArrayView2<'_, f64>,
     ) -> SpatialResult<AlgorithmResult> {
         // Simulate algorithm execution
+        #[cfg(feature = "async")]
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         Ok(AlgorithmResult {
@@ -1659,6 +1661,7 @@ mod tests {
         assert_eq!(chars.dimensionality_category, DimensionalityCategory::Low);
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_algorithm_selection() {
         let mut selector = AdaptiveAlgorithmSelector::new();
@@ -1678,6 +1681,7 @@ mod tests {
         assert!(selection.confidence > 0.0);
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_execution_with_feedback() {
         let mut selector = AdaptiveAlgorithmSelector::new().with_performance_learning(true);

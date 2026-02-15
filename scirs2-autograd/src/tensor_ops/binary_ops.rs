@@ -49,8 +49,8 @@ impl<T: Float> op::Op<T> for MaybeReduceSum {
     fn compute(&self, ctx: &mut op::ComputeContext<T>) -> Result<(), op::OpError> {
         let gy = ctx.input(0);
         let origshape__ = crate::ndarray_ext::asshape(&ctx.input(1));
-        let origshape_ = origshape__.as_slice(); // x shape: []
-        let gyshape = gy.shape(); // gy shape: [1]
+        let origshape_ = origshape__.as_slice();
+        let gyshape = gy.shape();
 
         if origshape_ == gyshape {
             // The case where forward path didn't cause broadcast.
@@ -64,6 +64,14 @@ impl<T: Float> op::Op<T> for MaybeReduceSum {
         let targetshape_is_scalar = crate::ndarray_ext::is_scalarshape(origshape_);
         let origshape = if targetshape_is_scalar {
             vec![1; gyshape.len()]
+        } else if origshape_.len() < gyshape.len() {
+            // Handle case where original has fewer dims than gradient
+            // (e.g., bias [128] was broadcast to [32, 128])
+            // Pad with 1s at the front to match ndarray broadcasting rules
+            let pad_len = gyshape.len() - origshape_.len();
+            let mut padded = vec![1_usize; pad_len];
+            padded.extend_from_slice(origshape_);
+            padded
         } else {
             origshape_.to_vec()
         };
@@ -93,14 +101,25 @@ impl<T: Float> op::Op<T> for MaybeReduceSum {
                 let result = crate::ndarray_ext::expand_dims(result, i);
                 folded = Some(result);
             } else if orig_ith_dim_size != gy_ith_dim_size {
-                unreachable!("bug of MaybeReduceSum probably");
+                // Shape mismatch that can't be explained by broadcasting
+                return Err(op::OpError::IncompatibleShape(format!(
+                    "MaybeReduceSum: incompatible shapes origshape={:?} gyshape={:?} at dim {}",
+                    origshape, gyshape, i
+                )));
             }
             // case of x_axis == gy_axis -> nothing to do
         }
-        let ret = folded.expect("Failed to fold");
+        let ret = match folded {
+            Some(ret) => ret,
+            None => {
+                // No folding needed, shapes already match after padding
+                ctx.append_output(gy.to_owned());
+                return Ok(());
+            }
+        };
         ctx.append_output(
             ret.into_shape_with_order(origshape_)
-                .expect("bug of MaybeReduceSum probably"),
+                .expect("MaybeReduceSum: shape conversion failed"),
         );
         Ok(())
     }
@@ -292,7 +311,7 @@ impl<T: Float> op::Op<T> for DivOp {
 }
 
 #[allow(dead_code)]
-fn maybe_reduce<'g, T: Float>(
+pub(crate) fn maybe_reduce<'g, T: Float>(
     targetshape: &Tensor<'g, T>,
     x: &Tensor<'g, T>,
     graph: &'g Graph<T>,

@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Fast Fourier Transform module for SciRS2 (scirs2-fft)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["fft", "fourier", "scientific", "scipy", "numerical"]
@@ -11,14 +12,14 @@ categories = ["science", "mathematics", "algorithms"]
 
 [features]
 # NOTE: Pure Rust by default - OxiFFT provides high-performance Pure Rust FFT
-# Enable with: cargo build --features oxifft
-default = ["helper", "window", "parallel"]
+default = ["helper", "window", "parallel", "oxifft"]
 helper = []
 window = []
 minimal = []
 parallel = []
 simd = [] # SIMD acceleration support
-oxifft = ["dep:oxifft"] # High-performance Pure Rust FFT (FFTW-compatible algorithms)
+oxifft = ["dep:oxifft"] # Pure Rust FFT backend (default)
+rustfft-backend = ["dep:rustfft"] # Optional RustFFT backend
 serde = [] # Serialization support
 cuda = [] # Optional CUDA support for GPU acceleration (dependencies disabled)
 hip = [] # Optional ROCm/HIP support for AMD GPU acceleration
@@ -39,10 +40,11 @@ thiserror = { workspace = true }
 scirs2-core = { workspace = true, features = ["simd", "parallel", "gpu", "validation", "random", "array"] }
 
 # FFT specific dependencies
-rustfft = { workspace = true }
-
-# OxiFFT - Pure Rust high-performance FFT (FFTW-compatible algorithms)
+# OxiFFT - Pure Rust high-performance FFT (FFTW-compatible algorithms) - DEFAULT
 oxifft = { workspace = true, optional = true }
+
+# RustFFT - Optional backend (feature-gated for Pure Rust policy)
+rustfft = { workspace = true, default-features = false, optional = true }
 
 # Serialization dependencies
 serde = { workspace = true }

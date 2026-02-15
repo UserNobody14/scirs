@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Signal processing module for SciRS2 (scirs2-signal)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["signal-processing", "filter", "scientific", "scipy", "numerical"]
@@ -24,8 +25,8 @@ thiserror = { workspace = true }
 # BLAS dependencies handled through scirs2-core
 
 # Signal processing specific dependencies
-rustfft = { workspace = true }
-scirs2-fft = { workspace = true }
+oxifft = { workspace = true }  # Pure Rust FFT (COOLJAPAN Policy)
+scirs2-fft = { workspace = true, features = ["oxifft"] }
 scirs2-linalg = { workspace = true }
 scirs2-special = { workspace = true }
 rand_chacha = { workspace = true }

@@ -14,7 +14,7 @@ fn test_issue_100_no_warnings_and_optimizer_works() {
     let batch_size = data.shape()[0] as isize;
 
     let mut env = ag::VariableEnvironment::new();
-    let m_id = env.name("m").set(arr0(0.0)); // scalars to avoid 1×1 quirks
+    let m_id = env.name("m").set(arr0(0.0)); // scalars to avoid 1x1 quirks
     let log_s_id = env.name("log_s").set(arr0(-1.0));
 
     // Create Adam optimizer
@@ -28,7 +28,12 @@ fn test_issue_100_no_warnings_and_optimizer_works() {
             let log_s = ctx.variable_by_id(log_s_id);
             let s = exp(log_s);
             let eps: Tensor = random_normal(&[batch_size, 1], 0.0, 1.0, ctx);
-            let mu = reshape(m, &[batch_size, 1]) + reshape(s, &[batch_size, 1]) * eps;
+            // Use broadcasting via ones() instead of reshape() for scalars
+            // reshape() requires matching element count; broadcasting is the right approach
+            let ones_batch: Tensor = ones(&[batch_size, 1], ctx);
+            let m_broadcast = m * ones_batch;
+            let s_broadcast = s * ones_batch;
+            let mu = m_broadcast + s_broadcast * eps;
             let loglik: Tensor = -0.5 * reduce_sum(square(x - mu), &[0, 1], false);
             let logprior: Tensor = -0.5 * reduce_sum(square(mu), &[0, 1], false);
             let entropy: Tensor = reduce_sum(
@@ -79,7 +84,9 @@ fn test_issue_100_get_update_tensors_api() {
     env.run(|ctx| {
         let x = ctx.placeholder("x", &[batch_size, 1]);
         let w = ctx.variable_by_id(w_id);
-        let pred = reshape(w, &[batch_size, 1]);
+        // Use broadcasting instead of reshape for scalar to [batch_size, 1]
+        let ones_batch: Tensor = ones(&[batch_size, 1], ctx);
+        let pred = w * ones_batch;
         let loss = reduce_sum(square(x - pred), &[0, 1], false);
         let grads = grad(&[loss], &[w]);
 

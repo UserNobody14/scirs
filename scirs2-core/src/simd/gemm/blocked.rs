@@ -21,8 +21,8 @@
 //! - Falls back to simple loops for small matrices
 
 use super::config::MatMulConfig;
-use super::micro_kernels::micro_kernel_f32;
-use super::packing::{pack_b_f32, pack_b_f32_fast};
+use super::micro_kernels::{micro_kernel_f32, micro_kernel_f64};
+use super::packing::{pack_b_f32, pack_b_f32_fast, pack_b_f64_fast};
 
 /// Blocked GEMM implementation for f32: C = beta*C + alpha*A*B
 ///
@@ -158,6 +158,285 @@ pub unsafe fn blocked_gemm_f32(
         }
 
         jc += nc;
+    }
+}
+
+/// Blocked GEMM implementation for f64: C = beta*C + alpha*A*B
+///
+/// # Arguments
+///
+/// * `m` - Number of rows of A and C
+/// * `k` - Number of columns of A and rows of B
+/// * `n` - Number of columns of B and C
+/// * `alpha` - Scalar multiplier for A*B
+/// * `a` - Pointer to A matrix (m x k, row-major)
+/// * `lda` - Leading dimension of A (typically k)
+/// * `b` - Pointer to B matrix (k x n, row-major)
+/// * `ldb` - Leading dimension of B (typically n)
+/// * `beta` - Scalar multiplier for C
+/// * `c` - Pointer to C matrix (m x n, row-major)
+/// * `ldc` - Leading dimension of C (typically n)
+/// * `config` - GEMM configuration parameters
+///
+/// # Safety
+///
+/// Caller must ensure:
+/// - `a` points to valid memory with at least `m * lda` elements
+/// - `b` points to valid memory with at least `k * ldb` elements
+/// - `c` points to valid memory with at least `m * ldc` elements
+/// - `lda >= k`, `ldb >= n`, `ldc >= n`
+pub unsafe fn blocked_gemm_f64(
+    m: usize,
+    k: usize,
+    n: usize,
+    alpha: f64,
+    a: *const f64,
+    lda: usize,
+    b: *const f64,
+    ldb: usize,
+    beta: f64,
+    c: *mut f64,
+    ldc: usize,
+    config: &MatMulConfig,
+) {
+    // For very small matrices, use simple implementation
+    if m < 32 || n < 32 || k < 32 {
+        gemm_small_f64(m, k, n, alpha, a, lda, b, ldb, beta, c, ldc);
+        return;
+    }
+
+    let mc = config.mc;
+    let kc = config.kc;
+    let nc = config.nc;
+    let mr = config.mr;
+    let nr = config.nr;
+
+    // Allocate packing buffer for B
+    // Size: KC x NR (one micro-panel of B)
+    let b_buffer_size = kc * nr;
+    let mut b_packed = vec![0.0f64; b_buffer_size];
+    let b_packed_ptr = b_packed.as_mut_ptr();
+
+    // Loop over N dimension (columns of B and C) with NC blocking
+    let mut jc = 0;
+    while jc < n {
+        let nc_curr = (n - jc).min(nc);
+
+        // Loop over K dimension (inner dimension) with KC blocking
+        let mut pc = 0;
+        while pc < k {
+            let kc_curr = (k - pc).min(kc);
+
+            // Loop over M dimension (rows of A and C) with MC blocking
+            let mut ic = 0;
+            while ic < m {
+                let mc_curr = (m - ic).min(mc);
+
+                // Loop over NR panels (micro-panel of B)
+                let mut jr = 0;
+                while jr < nc_curr {
+                    let nr_curr = (nc_curr - jr).min(nr);
+
+                    // Pack B[KC x NR] for this micro-panel
+                    let b_panel = b.add(pc * ldb + jc + jr);
+                    pack_b_f64_fast(kc_curr, nr_curr, b_panel, ldb, b_packed_ptr, config);
+
+                    // Loop over MR panels (micro-panel of A)
+                    let mut ir = 0;
+                    while ir < mc_curr {
+                        let mr_curr = (mc_curr - ir).min(mr);
+
+                        // Get pointers to current micro-panels
+                        let a_panel = a.add((ic + ir) * lda + pc);
+                        let c_block = c.add((ic + ir) * ldc + jc + jr);
+
+                        // Compute micro-kernel: C[MR x NR] += A[MR x KC] * B[KC x NR]
+                        // Only apply beta on first iteration (pc == 0)
+                        let beta_curr = if pc == 0 { beta } else { 1.0 };
+
+                        if mr_curr == mr && nr_curr == nr && kc_curr == kc {
+                            // Fast path: full micro-kernel
+                            micro_kernel_f64(
+                                kc_curr,
+                                alpha,
+                                a_panel,
+                                b_packed_ptr,
+                                beta_curr,
+                                c_block,
+                                ldc,
+                                config,
+                            );
+                        } else {
+                            // Edge case: partial micro-kernel
+                            micro_kernel_f64_edge(
+                                mr_curr,
+                                nr_curr,
+                                kc_curr,
+                                alpha,
+                                a_panel,
+                                lda,
+                                b_packed_ptr,
+                                beta_curr,
+                                c_block,
+                                ldc,
+                            );
+                        }
+
+                        ir += mr;
+                    }
+
+                    jr += nr;
+                }
+
+                ic += mc;
+            }
+
+            pc += kc;
+        }
+
+        jc += nc;
+    }
+}
+
+/// Edge case micro-kernel for f64 partial blocks
+///
+/// Handles cases where mr_curr < MR or nr_curr < NR
+#[inline]
+unsafe fn micro_kernel_f64_edge(
+    mr_curr: usize,
+    nr_curr: usize,
+    kc_curr: usize,
+    alpha: f64,
+    a: *const f64,
+    lda: usize,
+    b_packed: *const f64,
+    beta: f64,
+    c: *mut f64,
+    ldc: usize,
+) {
+    // Simple scalar implementation for edge cases
+    for i in 0..mr_curr {
+        for j in 0..nr_curr {
+            let mut sum = 0.0f64;
+
+            for p in 0..kc_curr {
+                let a_val = *a.add(i * lda + p);
+                let b_val = *b_packed.add(p * nr_curr + j);
+                sum += a_val * b_val;
+            }
+
+            let c_ptr = c.add(i * ldc + j);
+            if beta == 0.0 {
+                *c_ptr = alpha * sum;
+            } else {
+                *c_ptr = beta * (*c_ptr) + alpha * sum;
+            }
+        }
+    }
+}
+
+/// Simple GEMM for small f64 matrices (fallback)
+///
+/// Uses straightforward triple-loop implementation optimized for small sizes.
+#[inline]
+unsafe fn gemm_small_f64(
+    m: usize,
+    k: usize,
+    n: usize,
+    alpha: f64,
+    a: *const f64,
+    lda: usize,
+    b: *const f64,
+    ldb: usize,
+    beta: f64,
+    c: *mut f64,
+    ldc: usize,
+) {
+    // Scale C by beta first
+    if beta == 0.0 {
+        for i in 0..m {
+            for j in 0..n {
+                *c.add(i * ldc + j) = 0.0;
+            }
+        }
+    } else if beta != 1.0 {
+        for i in 0..m {
+            for j in 0..n {
+                let c_ptr = c.add(i * ldc + j);
+                *c_ptr *= beta;
+            }
+        }
+    }
+
+    // Simple triple loop: C += alpha * A * B
+    // Use ikj order for better cache locality
+    for i in 0..m {
+        for p in 0..k {
+            let a_val = alpha * (*a.add(i * lda + p));
+
+            // Vectorize the inner loop when possible
+            #[cfg(target_arch = "x86_64")]
+            {
+                if is_x86_feature_detected!("avx2") && is_x86_feature_detected!("fma") {
+                    use std::arch::x86_64::*;
+
+                    let a_broadcast = _mm256_set1_pd(a_val);
+                    let mut j = 0;
+
+                    while j + 4 <= n {
+                        let b_vec = _mm256_loadu_pd(b.add(p * ldb + j));
+                        let c_ptr = c.add(i * ldc + j);
+                        let c_vec = _mm256_loadu_pd(c_ptr);
+                        let result = _mm256_fmadd_pd(a_broadcast, b_vec, c_vec);
+                        _mm256_storeu_pd(c_ptr, result);
+                        j += 4;
+                    }
+
+                    // Handle remaining elements
+                    while j < n {
+                        let c_ptr = c.add(i * ldc + j);
+                        *c_ptr += a_val * (*b.add(p * ldb + j));
+                        j += 1;
+                    }
+
+                    continue;
+                }
+            }
+
+            #[cfg(target_arch = "aarch64")]
+            {
+                if std::arch::is_aarch64_feature_detected!("neon") {
+                    use std::arch::aarch64::*;
+
+                    let a_broadcast = vdupq_n_f64(a_val);
+                    let mut j = 0;
+
+                    while j + 2 <= n {
+                        let b_vec = vld1q_f64(b.add(p * ldb + j));
+                        let c_ptr = c.add(i * ldc + j);
+                        let c_vec = vld1q_f64(c_ptr);
+                        let result = vfmaq_f64(c_vec, a_broadcast, b_vec);
+                        vst1q_f64(c_ptr, result);
+                        j += 2;
+                    }
+
+                    // Handle remaining elements
+                    while j < n {
+                        let c_ptr = c.add(i * ldc + j);
+                        *c_ptr += a_val * (*b.add(p * ldb + j));
+                        j += 1;
+                    }
+
+                    continue;
+                }
+            }
+
+            // Scalar fallback
+            for j in 0..n {
+                let c_ptr = c.add(i * ldc + j);
+                *c_ptr += a_val * (*b.add(p * ldb + j));
+            }
+        }
     }
 }
 

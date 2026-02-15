@@ -9,10 +9,11 @@
 //! - Wide network gradients: 5 benchmarks
 //! - Complex DAG gradients: 5 benchmarks
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use scirs2_autograd as ag;
 use scirs2_autograd::tensor_ops as T;
 use scirs2_core::ndarray::{arr0, Array2};
+use std::hint::black_box;
 
 /// Simple gradient benchmarks (10 benchmarks)
 fn simple_gradients_benchmark(c: &mut Criterion) {

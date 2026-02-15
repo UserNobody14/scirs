@@ -568,6 +568,454 @@ mod utils {
 // Re-export utility functions
 pub use utils::*;
 
+/// Arbitrary precision hypergeometric functions
+pub mod hypergeometric {
+    use super::*;
+
+    /// Compute the Gauss hypergeometric function ₂F₁(a,b;c;z) with arbitrary precision
+    ///
+    /// Uses direct series computation with precision-dependent convergence criteria.
+    #[allow(dead_code)]
+    pub fn hyp2f1_ap(
+        a: f64,
+        b: f64,
+        c: f64,
+        z: f64,
+        ctx: &PrecisionContext,
+    ) -> SpecialResult<Float> {
+        let a_mp = ctx.float(a);
+        let b_mp = ctx.float(b);
+        let c_mp = ctx.float(c);
+        let z_mp = ctx.float(z);
+
+        hyp2f1_mp(&a_mp, &b_mp, &c_mp, &z_mp, ctx)
+    }
+
+    /// Compute ₂F₁(a,b;c;z) for arbitrary precision inputs
+    #[allow(dead_code)]
+    pub fn hyp2f1_mp(
+        a: &Float,
+        b: &Float,
+        c: &Float,
+        z: &Float,
+        ctx: &PrecisionContext,
+    ) -> SpecialResult<Float> {
+        // Check for pole in c
+        if c.is_zero() || (c.is_finite() && *c < 0.0 && c.is_integer()) {
+            return Err(SpecialError::DomainError(
+                "c must not be 0 or a negative integer".to_string(),
+            ));
+        }
+
+        // z = 0
+        if z.is_zero() {
+            return Ok(ctx.float(1.0));
+        }
+
+        // Direct series: ₂F₁ = Σ (a)_n (b)_n / ((c)_n n!) z^n
+        let mut sum = ctx.float(1.0);
+        let mut term = ctx.float(1.0);
+
+        let tol = Float::with_val(ctx.precision(), 10.0).pow(-(ctx.precision() as i32) / 3);
+
+        for n in 1..500 {
+            let n_f = ctx.float(n as f64);
+            let n_minus_1 = ctx.float((n - 1) as f64);
+
+            // term *= (a + n - 1) * (b + n - 1) / ((c + n - 1) * n) * z
+            let numerator = Float::with_val(ctx.precision(), a.clone() + &n_minus_1)
+                * Float::with_val(ctx.precision(), b.clone() + &n_minus_1);
+            let denominator = Float::with_val(ctx.precision(), c.clone() + &n_minus_1)
+                * Float::with_val(ctx.precision(), &n_f);
+            term *= Float::with_val(ctx.precision(), numerator / denominator);
+            term *= z;
+
+            sum += &term;
+
+            // Check convergence
+            if term.clone().abs() < sum.clone().abs() * &tol {
+                break;
+            }
+        }
+
+        Ok(sum)
+    }
+
+    /// Compute the confluent hypergeometric function ₁F₁(a;b;z) with arbitrary precision
+    #[allow(dead_code)]
+    pub fn hyp1f1_ap(a: f64, b: f64, z: f64, ctx: &PrecisionContext) -> SpecialResult<Float> {
+        let a_mp = ctx.float(a);
+        let b_mp = ctx.float(b);
+        let z_mp = ctx.float(z);
+
+        hyp1f1_mp(&a_mp, &b_mp, &z_mp, ctx)
+    }
+
+    /// Compute ₁F₁(a;b;z) for arbitrary precision inputs
+    #[allow(dead_code)]
+    pub fn hyp1f1_mp(
+        a: &Float,
+        b: &Float,
+        z: &Float,
+        ctx: &PrecisionContext,
+    ) -> SpecialResult<Float> {
+        if b.is_zero() || (b.is_finite() && *b < 0.0 && b.is_integer()) {
+            return Err(SpecialError::DomainError(
+                "b must not be 0 or a negative integer".to_string(),
+            ));
+        }
+
+        if z.is_zero() {
+            return Ok(ctx.float(1.0));
+        }
+
+        // For large negative z, use Kummer transformation
+        if *z < -20.0 {
+            let exp_z = z.clone().exp();
+            let b_minus_a = Float::with_val(ctx.precision(), b.clone() - a);
+            let neg_z = Float::with_val(ctx.precision(), -z.clone());
+            let transformed = hyp1f1_mp(&b_minus_a, b, &neg_z, ctx)?;
+            return Ok(exp_z * transformed);
+        }
+
+        // Direct series
+        let mut sum = ctx.float(1.0);
+        let mut term = ctx.float(1.0);
+
+        let tol = Float::with_val(ctx.precision(), 10.0).pow(-(ctx.precision() as i32) / 3);
+
+        for n in 1..500 {
+            let n_f = ctx.float(n as f64);
+            let n_minus_1 = ctx.float((n - 1) as f64);
+
+            let a_plus_n = Float::with_val(ctx.precision(), a.clone() + &n_minus_1);
+            let b_plus_n = Float::with_val(ctx.precision(), b.clone() + &n_minus_1);
+            let factor = Float::with_val(ctx.precision(), a_plus_n / (b_plus_n * &n_f));
+            term *= Float::with_val(ctx.precision(), factor * z);
+
+            sum += &term;
+
+            if term.clone().abs() < sum.clone().abs() * &tol {
+                break;
+            }
+        }
+
+        Ok(sum)
+    }
+}
+
+/// Arbitrary precision incomplete gamma functions
+pub mod incomplete_gamma {
+    use super::*;
+
+    /// Compute the lower incomplete gamma function γ(a,x) with arbitrary precision
+    #[allow(dead_code)]
+    pub fn gammainc_lower_ap(a: f64, x: f64, ctx: &PrecisionContext) -> SpecialResult<Float> {
+        let a_mp = ctx.float(a);
+        let x_mp = ctx.float(x);
+
+        gammainc_lower_mp(&a_mp, &x_mp, ctx)
+    }
+
+    /// Compute γ(a,x) for arbitrary precision inputs
+    #[allow(dead_code)]
+    pub fn gammainc_lower_mp(a: &Float, x: &Float, ctx: &PrecisionContext) -> SpecialResult<Float> {
+        if *x < 0.0 {
+            return Err(SpecialError::DomainError(
+                "x must be non-negative for lower incomplete gamma".to_string(),
+            ));
+        }
+
+        if x.is_zero() {
+            return Ok(ctx.float(0.0));
+        }
+
+        // Use series expansion: γ(a,x) = x^a e^(-x) Σ x^n / (a)_{n+1}
+        let x_pow_a = x.clone().pow(a);
+        let neg_x = Float::with_val(ctx.precision(), -x.clone());
+        let exp_neg_x = neg_x.exp();
+
+        let mut sum = ctx.float(0.0);
+        let mut term = ctx.float(1.0) / a;
+
+        let tol = Float::with_val(ctx.precision(), 10.0).pow(-(ctx.precision() as i32) / 3);
+
+        sum += &term;
+
+        for n in 1..500 {
+            let n_f = ctx.float(n as f64);
+            let a_plus_n = Float::with_val(ctx.precision(), a.clone() + &n_f);
+            term *= Float::with_val(ctx.precision(), x.clone() / a_plus_n);
+            sum += &term;
+
+            if term.clone().abs() < sum.clone().abs() * &tol {
+                break;
+            }
+        }
+
+        Ok(x_pow_a * exp_neg_x * sum)
+    }
+
+    /// Compute the upper incomplete gamma function Γ(a,x) with arbitrary precision
+    #[allow(dead_code)]
+    pub fn gammainc_upper_ap(a: f64, x: f64, ctx: &PrecisionContext) -> SpecialResult<Float> {
+        let a_mp = ctx.float(a);
+        let x_mp = ctx.float(x);
+
+        gammainc_upper_mp(&a_mp, &x_mp, ctx)
+    }
+
+    /// Compute Γ(a,x) for arbitrary precision inputs
+    #[allow(dead_code)]
+    pub fn gammainc_upper_mp(a: &Float, x: &Float, ctx: &PrecisionContext) -> SpecialResult<Float> {
+        if *x < 0.0 {
+            return Err(SpecialError::DomainError(
+                "x must be non-negative for upper incomplete gamma".to_string(),
+            ));
+        }
+
+        // Γ(a,x) = Γ(a) - γ(a,x)
+        let gamma_a = super::gamma::gamma_mp(a, ctx)?;
+        let lower = gammainc_lower_mp(a, x, ctx)?;
+
+        Ok(gamma_a - lower)
+    }
+
+    /// Compute the regularized incomplete gamma function P(a,x) = γ(a,x)/Γ(a)
+    #[allow(dead_code)]
+    pub fn gammainc_regularized_ap(a: f64, x: f64, ctx: &PrecisionContext) -> SpecialResult<Float> {
+        let a_mp = ctx.float(a);
+        let x_mp = ctx.float(x);
+
+        gammainc_regularized_mp(&a_mp, &x_mp, ctx)
+    }
+
+    /// Compute P(a,x) for arbitrary precision inputs
+    #[allow(dead_code)]
+    pub fn gammainc_regularized_mp(
+        a: &Float,
+        x: &Float,
+        ctx: &PrecisionContext,
+    ) -> SpecialResult<Float> {
+        let lower = gammainc_lower_mp(a, x, ctx)?;
+        let gamma_a = super::gamma::gamma_mp(a, ctx)?;
+
+        Ok(lower / gamma_a)
+    }
+}
+
+/// Arbitrary precision digamma (psi) function
+pub mod digamma {
+    use super::*;
+
+    /// Compute the digamma function ψ(x) with arbitrary precision
+    #[allow(dead_code)]
+    pub fn digamma_ap(x: f64, ctx: &PrecisionContext) -> SpecialResult<Float> {
+        let x_mp = ctx.float(x);
+        digamma_mp(&x_mp, ctx)
+    }
+
+    /// Compute ψ(x) for arbitrary precision inputs
+    #[allow(dead_code)]
+    pub fn digamma_mp(x: &Float, ctx: &PrecisionContext) -> SpecialResult<Float> {
+        if x.is_zero() || (x.is_finite() && *x < 0.0 && x.is_integer()) {
+            return Err(SpecialError::DomainError(
+                "Digamma undefined at non-positive integers".to_string(),
+            ));
+        }
+
+        // For x < 1, use reflection formula: ψ(1-x) - ψ(x) = π cot(πx)
+        if *x < 1.0 {
+            let pi = ctx.pi();
+            let pi_x = Float::with_val(ctx.precision(), &pi * x);
+            let cot_pi_x = pi_x.clone().cos() / pi_x.sin();
+
+            let one_minus_x = ctx.float(1.0) - x;
+            let psi_oneminus_x = digamma_mp(&one_minus_x, ctx)?;
+
+            return Ok(psi_oneminus_x - pi * cot_pi_x);
+        }
+
+        // For x >= 1, use recurrence to bring x > 8 then asymptotic expansion
+        let mut result = ctx.float(0.0);
+        let mut curr_x = x.clone();
+
+        while curr_x < 8.0 {
+            result -= Float::with_val(ctx.precision(), 1.0) / &curr_x;
+            curr_x += 1.0;
+        }
+
+        // Asymptotic expansion: ψ(x) ~ ln(x) - 1/(2x) - 1/(12x²) + 1/(120x⁴) - ...
+        let ln_x = curr_x.clone().ln();
+        let x2 = Float::with_val(ctx.precision(), &curr_x * &curr_x);
+        let x4 = Float::with_val(ctx.precision(), &x2 * &x2);
+        let x6 = Float::with_val(ctx.precision(), &x4 * &x2);
+
+        let asymp = ln_x
+            - Float::with_val(ctx.precision(), 1.0)
+                / (Float::with_val(ctx.precision(), 2.0) * &curr_x)
+            - Float::with_val(ctx.precision(), 1.0)
+                / (Float::with_val(ctx.precision(), 12.0) * &x2)
+            + Float::with_val(ctx.precision(), 1.0)
+                / (Float::with_val(ctx.precision(), 120.0) * &x4)
+            - Float::with_val(ctx.precision(), 1.0)
+                / (Float::with_val(ctx.precision(), 252.0) * &x6);
+
+        Ok(result + asymp)
+    }
+
+    /// Compute the trigamma function ψ¹(x) = d/dx ψ(x) with arbitrary precision
+    #[allow(dead_code)]
+    pub fn trigamma_ap(x: f64, ctx: &PrecisionContext) -> SpecialResult<Float> {
+        let x_mp = ctx.float(x);
+        trigamma_mp(&x_mp, ctx)
+    }
+
+    /// Compute ψ¹(x) for arbitrary precision inputs
+    #[allow(dead_code)]
+    pub fn trigamma_mp(x: &Float, ctx: &PrecisionContext) -> SpecialResult<Float> {
+        if x.is_zero() || (x.is_finite() && *x < 0.0 && x.is_integer()) {
+            return Err(SpecialError::DomainError(
+                "Trigamma undefined at non-positive integers".to_string(),
+            ));
+        }
+
+        // For x < 1, use reflection formula: ψ¹(1-x) + ψ¹(x) = π²/sin²(πx)
+        if *x < 1.0 {
+            let pi = ctx.pi();
+            let pi_x = Float::with_val(ctx.precision(), &pi * x);
+            let sin_pi_x = pi_x.sin();
+            let csc_sq = Float::with_val(ctx.precision(), 1.0)
+                / Float::with_val(ctx.precision(), &sin_pi_x * &sin_pi_x);
+
+            let one_minus_x = ctx.float(1.0) - x;
+            let psi1_oneminus_x = trigamma_mp(&one_minus_x, ctx)?;
+
+            return Ok(Float::with_val(ctx.precision(), &pi * &pi) * csc_sq - psi1_oneminus_x);
+        }
+
+        // For x >= 1, use series: ψ¹(x) = Σ 1/(x+n)²
+        let mut result = ctx.float(0.0);
+        let mut curr_x = x.clone();
+
+        while curr_x < 8.0 {
+            let one_over_x2 = Float::with_val(ctx.precision(), 1.0)
+                / Float::with_val(ctx.precision(), &curr_x * &curr_x);
+            result += one_over_x2;
+            curr_x += 1.0;
+        }
+
+        // Asymptotic expansion for x > 8
+        let x2 = Float::with_val(ctx.precision(), &curr_x * &curr_x);
+        let x3 = Float::with_val(ctx.precision(), &x2 * &curr_x);
+        let x4 = Float::with_val(ctx.precision(), &x2 * &x2);
+        let x5 = Float::with_val(ctx.precision(), &x4 * &curr_x);
+
+        let asymp = Float::with_val(ctx.precision(), 1.0) / &curr_x
+            + Float::with_val(ctx.precision(), 1.0) / (Float::with_val(ctx.precision(), 2.0) * &x2)
+            + Float::with_val(ctx.precision(), 1.0) / (Float::with_val(ctx.precision(), 6.0) * &x3)
+            - Float::with_val(ctx.precision(), 1.0)
+                / (Float::with_val(ctx.precision(), 30.0) * &x5);
+
+        Ok(result + asymp)
+    }
+}
+
+/// Arbitrary precision beta function
+pub mod beta {
+    use super::*;
+
+    /// Compute the beta function B(a,b) with arbitrary precision
+    #[allow(dead_code)]
+    pub fn beta_ap(a: f64, b: f64, ctx: &PrecisionContext) -> SpecialResult<Float> {
+        let a_mp = ctx.float(a);
+        let b_mp = ctx.float(b);
+
+        beta_mp(&a_mp, &b_mp, ctx)
+    }
+
+    /// Compute B(a,b) for arbitrary precision inputs
+    #[allow(dead_code)]
+    pub fn beta_mp(a: &Float, b: &Float, ctx: &PrecisionContext) -> SpecialResult<Float> {
+        // B(a,b) = Γ(a)Γ(b)/Γ(a+b)
+        let gamma_a = super::gamma::gamma_mp(a, ctx)?;
+        let gamma_b = super::gamma::gamma_mp(b, ctx)?;
+        let a_plus_b = Float::with_val(ctx.precision(), a.clone() + b);
+        let gamma_aplusb = super::gamma::gamma_mp(&a_plus_b, ctx)?;
+
+        Ok(gamma_a * gamma_b / gamma_aplusb)
+    }
+
+    /// Compute the incomplete beta function B(x; a,b) with arbitrary precision
+    #[allow(dead_code)]
+    pub fn betainc_ap(x: f64, a: f64, b: f64, ctx: &PrecisionContext) -> SpecialResult<Float> {
+        let x_mp = ctx.float(x);
+        let a_mp = ctx.float(a);
+        let b_mp = ctx.float(b);
+
+        betainc_mp(&x_mp, &a_mp, &b_mp, ctx)
+    }
+
+    /// Compute B(x; a,b) for arbitrary precision inputs
+    #[allow(dead_code)]
+    pub fn betainc_mp(
+        x: &Float,
+        a: &Float,
+        b: &Float,
+        ctx: &PrecisionContext,
+    ) -> SpecialResult<Float> {
+        if *x < 0.0 || *x > 1.0 {
+            return Err(SpecialError::DomainError(
+                "x must be in [0, 1] for incomplete beta".to_string(),
+            ));
+        }
+
+        if x.is_zero() {
+            return Ok(ctx.float(0.0));
+        }
+
+        if *x == 1.0 {
+            return beta_mp(a, b, ctx);
+        }
+
+        // Use series expansion: B(x; a,b) = x^a / a * ₂F₁(a, 1-b; a+1; x)
+        let x_pow_a = x.clone().pow(a);
+        let hyp =
+            super::hypergeometric::hyp2f1_mp(a, &(ctx.float(1.0) - b), &(a.clone() + 1.0), x, ctx)?;
+
+        Ok(x_pow_a * hyp / a)
+    }
+
+    /// Compute the regularized incomplete beta function I_x(a,b) = B(x;a,b)/B(a,b)
+    #[allow(dead_code)]
+    pub fn betainc_regularized_ap(
+        x: f64,
+        a: f64,
+        b: f64,
+        ctx: &PrecisionContext,
+    ) -> SpecialResult<Float> {
+        let x_mp = ctx.float(x);
+        let a_mp = ctx.float(a);
+        let b_mp = ctx.float(b);
+
+        betainc_regularized_mp(&x_mp, &a_mp, &b_mp, ctx)
+    }
+
+    /// Compute I_x(a,b) for arbitrary precision inputs
+    #[allow(dead_code)]
+    pub fn betainc_regularized_mp(
+        x: &Float,
+        a: &Float,
+        b: &Float,
+        ctx: &PrecisionContext,
+    ) -> SpecialResult<Float> {
+        let inc = betainc_mp(x, a, b, ctx)?;
+        let full = beta_mp(a, b, ctx)?;
+
+        Ok(inc / full)
+    }
+}
+
 /// Convert arbitrary precision Float to f64
 #[allow(dead_code)]
 pub fn to_f64(x: &Float) -> f64 {

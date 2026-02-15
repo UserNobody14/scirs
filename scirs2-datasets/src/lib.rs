@@ -41,7 +41,16 @@
 //! let data = make_classification(100, 5, 3, 2, 4, Some(42)).expect("Operation failed");
 //! ```
 //!
-//! ## 🔒 Version: 0.1.5 (January 15, 2026)
+//! ## 🔒 Version: 0.2.0 (February 8, 2026)
+//!
+//! ### v0.2.0 New Features
+//!
+//! - **Lazy Loading**: Memory-mapped datasets with zero-copy views
+//! - **Data Augmentation**: GPU-accelerated augmentation pipeline
+//! - **Parallel Preprocessing**: Multi-threaded preprocessing with work-stealing
+//! - **Distributed Loading**: Shard-aware loading for distributed training
+//! - **Format Support**: Parquet, Arrow, HDF5 integration via scirs2-io
+//! - **Benchmarks**: Comprehensive comparison with PyTorch DataLoader
 //!
 //! # Examples
 //!
@@ -158,6 +167,40 @@ pub mod neuromorphic_data_processor;
 pub mod quantum_enhanced_generators;
 pub mod quantum_neuromorphic_fusion;
 
+// v0.2.0 modules
+/// Lazy loading and memory-mapped datasets
+///
+/// Provides zero-copy dataset access with adaptive chunking for memory-efficient
+/// processing of datasets larger than available RAM.
+#[cfg(feature = "lazy-loading")]
+pub mod lazy_loading;
+
+/// Data augmentation pipeline with GPU support
+///
+/// Composable augmentation transforms for images, audio, and tabular data
+/// with optional GPU acceleration for improved performance.
+#[cfg(feature = "augmentation")]
+pub mod augmentation;
+
+/// Parallel data preprocessing
+///
+/// Multi-threaded preprocessing pipeline with work-stealing scheduler and
+/// backpressure handling for optimal throughput.
+pub mod parallel_preprocessing;
+
+/// Distributed dataset loading
+///
+/// Shard-aware loading for distributed training with multi-node coordination
+/// and distributed caching.
+#[cfg(feature = "distributed")]
+pub mod distributed_loading;
+
+/// Format support (Parquet, Arrow, HDF5)
+///
+/// Integration with scirs2-io for reading and writing datasets in modern
+/// columnar and scientific formats.
+pub mod formats;
+
 // Re-export commonly used functionality
 pub use adaptive_streaming_engine::{
     create_adaptive_engine, create_adaptive_engine_with_config, AdaptiveStreamConfig,
@@ -268,4 +311,36 @@ pub use utils::{
     stratified_sample, time_series_split, AdvancedDatasetAnalyzer, AdvancedQualityMetrics,
     BalancingStrategy, BinningStrategy, CorrelationInsights, CrossValidationFolds, Dataset,
     NormalityAssessment,
+};
+
+// v0.2.0 re-exports
+#[cfg(feature = "lazy-loading")]
+pub use lazy_loading::{
+    from_binary as lazy_from_binary, from_binary_with_config as lazy_from_binary_with_config,
+    LazyChunkIterator, LazyDataset, LazyLoadConfig, MmapDataset,
+};
+
+#[cfg(feature = "augmentation")]
+pub use augmentation::{
+    standard_image_augmentation, standard_tabular_augmentation, AugmentationPipeline, Brightness,
+    Contrast, GaussianNoise, HorizontalFlip, Mixup, RandomFeatureScale, RandomRotation90,
+    Transform, VerticalFlip,
+};
+
+pub use parallel_preprocessing::{
+    create_pipeline, create_pipeline_with_config, ParallelConfig, ParallelPipeline, PreprocessFn,
+};
+
+#[cfg(feature = "distributed")]
+pub use distributed_loading::{
+    create_loader, create_loader_with_config, DistributedCache,
+    DistributedConfig as DistributedLoadingConfig, DistributedLoader, Shard,
+};
+
+pub use formats::{CompressionCodec, FormatConfig, FormatType};
+
+#[cfg(feature = "formats")]
+pub use formats::{
+    read_auto, read_hdf5, read_parquet, write_hdf5, write_parquet, FormatConverter, Hdf5Reader,
+    Hdf5Writer, ParquetReader, ParquetWriter,
 };

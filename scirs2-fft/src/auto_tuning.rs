@@ -8,6 +8,11 @@
 //! - Persisting tuning results for future use
 //! - Detecting CPU features and adapting algorithms accordingly
 
+#[cfg(feature = "oxifft")]
+use crate::oxifft_plan_cache;
+#[cfg(feature = "oxifft")]
+use oxifft::{Complex as OxiComplex, Direction};
+#[cfg(feature = "rustfft-backend")]
 use rustfft::FftPlanner;
 use scirs2_core::numeric::Complex64;
 use serde::{Deserialize, Serialize};
@@ -310,26 +315,67 @@ impl AutoTuner {
         for _ in 0..self.config.warmup {
             match variant {
                 FftVariant::Standard => {
-                    let mut planner = FftPlanner::new();
-                    let fft = if forward {
-                        planner.plan_fft_forward(size)
-                    } else {
-                        planner.plan_fft_inverse(size)
-                    };
-                    let mut buffer = data.clone();
-                    fft.process(&mut buffer);
+                    #[cfg(feature = "oxifft")]
+                    {
+                        let input_oxi: Vec<OxiComplex<f64>> =
+                            data.iter().map(|c| OxiComplex::new(c.re, c.im)).collect();
+                        let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); size];
+
+                        let direction = if forward {
+                            Direction::Forward
+                        } else {
+                            Direction::Backward
+                        };
+                        let _ = oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, direction);
+                    }
+
+                    #[cfg(not(feature = "oxifft"))]
+                    {
+                        #[cfg(feature = "rustfft-backend")]
+                        {
+                            let mut planner = FftPlanner::new();
+                            let fft = if forward {
+                                planner.plan_fft_forward(size)
+                            } else {
+                                planner.plan_fft_inverse(size)
+                            };
+                            let mut buffer = data.clone();
+                            fft.process(&mut buffer);
+                        }
+                    }
                 }
                 FftVariant::InPlace => {
-                    let mut planner = FftPlanner::new();
-                    let fft = if forward {
-                        planner.plan_fft_forward(size)
-                    } else {
-                        planner.plan_fft_inverse(size)
-                    };
-                    // Use in-place processing with scratch buffer
-                    let mut buffer = data.clone();
-                    let mut scratch = vec![Complex64::new(0.0, 0.0); fft.get_inplace_scratch_len()];
-                    fft.process_with_scratch(&mut buffer, &mut scratch);
+                    #[cfg(feature = "oxifft")]
+                    {
+                        let input_oxi: Vec<OxiComplex<f64>> =
+                            data.iter().map(|c| OxiComplex::new(c.re, c.im)).collect();
+                        let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); size];
+
+                        let direction = if forward {
+                            Direction::Forward
+                        } else {
+                            Direction::Backward
+                        };
+                        let _ = oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, direction);
+                    }
+
+                    #[cfg(not(feature = "oxifft"))]
+                    {
+                        #[cfg(feature = "rustfft-backend")]
+                        {
+                            let mut planner = FftPlanner::new();
+                            let fft = if forward {
+                                planner.plan_fft_forward(size)
+                            } else {
+                                planner.plan_fft_inverse(size)
+                            };
+                            // Use in-place processing with scratch buffer
+                            let mut buffer = data.clone();
+                            let mut scratch =
+                                vec![Complex64::new(0.0, 0.0); fft.get_inplace_scratch_len()];
+                            fft.process_with_scratch(&mut buffer, &mut scratch);
+                        }
+                    }
                 }
                 FftVariant::Cached => {
                     // Create a plan via the serialization manager
@@ -339,16 +385,37 @@ impl AutoTuner {
                     manager.record_plan_usage(&plan_info, time).unwrap_or(());
                 }
                 FftVariant::SplitRadix => {
-                    // For now, this is just an example variant
-                    // In a real implementation, we'd use a specific split-radix algorithm
-                    let mut planner = FftPlanner::new();
-                    let fft = if forward {
-                        planner.plan_fft_forward(size)
-                    } else {
-                        planner.plan_fft_inverse(size)
-                    };
-                    let mut buffer = data.clone();
-                    fft.process(&mut buffer);
+                    #[cfg(feature = "oxifft")]
+                    {
+                        // For now, use OxiFFT's standard algorithm
+                        let input_oxi: Vec<OxiComplex<f64>> =
+                            data.iter().map(|c| OxiComplex::new(c.re, c.im)).collect();
+                        let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); size];
+
+                        let direction = if forward {
+                            Direction::Forward
+                        } else {
+                            Direction::Backward
+                        };
+                        let _ = oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, direction);
+                    }
+
+                    #[cfg(not(feature = "oxifft"))]
+                    {
+                        #[cfg(feature = "rustfft-backend")]
+                        {
+                            // For now, this is just an example variant
+                            // In a real implementation, we'd use a specific split-radix algorithm
+                            let mut planner = FftPlanner::new();
+                            let fft = if forward {
+                                planner.plan_fft_forward(size)
+                            } else {
+                                planner.plan_fft_inverse(size)
+                            };
+                            let mut buffer = data.clone();
+                            fft.process(&mut buffer);
+                        }
+                    }
                 }
             }
         }
@@ -361,48 +428,129 @@ impl AutoTuner {
 
             match variant {
                 FftVariant::Standard => {
-                    let mut planner = FftPlanner::new();
-                    let fft = if forward {
-                        planner.plan_fft_forward(size)
-                    } else {
-                        planner.plan_fft_inverse(size)
-                    };
-                    let mut buffer = data.clone();
-                    fft.process(&mut buffer);
+                    #[cfg(feature = "oxifft")]
+                    {
+                        let input_oxi: Vec<OxiComplex<f64>> =
+                            data.iter().map(|c| OxiComplex::new(c.re, c.im)).collect();
+                        let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); size];
+
+                        let direction = if forward {
+                            Direction::Forward
+                        } else {
+                            Direction::Backward
+                        };
+                        let _ = oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, direction);
+                    }
+
+                    #[cfg(not(feature = "oxifft"))]
+                    {
+                        #[cfg(feature = "rustfft-backend")]
+                        {
+                            let mut planner = FftPlanner::new();
+                            let fft = if forward {
+                                planner.plan_fft_forward(size)
+                            } else {
+                                planner.plan_fft_inverse(size)
+                            };
+                            let mut buffer = data.clone();
+                            fft.process(&mut buffer);
+                        }
+                    }
                 }
                 FftVariant::InPlace => {
-                    let mut planner = FftPlanner::new();
-                    let fft = if forward {
-                        planner.plan_fft_forward(size)
-                    } else {
-                        planner.plan_fft_inverse(size)
-                    };
-                    // Use in-place processing with scratch buffer
-                    let mut buffer = data.clone();
-                    let mut scratch = vec![Complex64::new(0.0, 0.0); fft.get_inplace_scratch_len()];
-                    fft.process_with_scratch(&mut buffer, &mut scratch);
+                    #[cfg(feature = "oxifft")]
+                    {
+                        let input_oxi: Vec<OxiComplex<f64>> =
+                            data.iter().map(|c| OxiComplex::new(c.re, c.im)).collect();
+                        let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); size];
+
+                        let direction = if forward {
+                            Direction::Forward
+                        } else {
+                            Direction::Backward
+                        };
+                        let _ = oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, direction);
+                    }
+
+                    #[cfg(not(feature = "oxifft"))]
+                    {
+                        #[cfg(feature = "rustfft-backend")]
+                        {
+                            let mut planner = FftPlanner::new();
+                            let fft = if forward {
+                                planner.plan_fft_forward(size)
+                            } else {
+                                planner.plan_fft_inverse(size)
+                            };
+                            // Use in-place processing with scratch buffer
+                            let mut buffer = data.clone();
+                            let mut scratch =
+                                vec![Complex64::new(0.0, 0.0); fft.get_inplace_scratch_len()];
+                            fft.process_with_scratch(&mut buffer, &mut scratch);
+                        }
+                    }
                 }
                 FftVariant::Cached => {
-                    // Use the plan cache
-                    let mut planner = FftPlanner::new();
-                    let fft = if forward {
-                        planner.plan_fft_forward(size)
-                    } else {
-                        planner.plan_fft_inverse(size)
-                    };
-                    let mut buffer = data.clone();
-                    fft.process(&mut buffer);
+                    #[cfg(feature = "oxifft")]
+                    {
+                        let input_oxi: Vec<OxiComplex<f64>> =
+                            data.iter().map(|c| OxiComplex::new(c.re, c.im)).collect();
+                        let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); size];
+
+                        let direction = if forward {
+                            Direction::Forward
+                        } else {
+                            Direction::Backward
+                        };
+                        let _ = oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, direction);
+                    }
+
+                    #[cfg(not(feature = "oxifft"))]
+                    {
+                        #[cfg(feature = "rustfft-backend")]
+                        {
+                            // Use the plan cache
+                            let mut planner = FftPlanner::new();
+                            let fft = if forward {
+                                planner.plan_fft_forward(size)
+                            } else {
+                                planner.plan_fft_inverse(size)
+                            };
+                            let mut buffer = data.clone();
+                            fft.process(&mut buffer);
+                        }
+                    }
                 }
                 FftVariant::SplitRadix => {
-                    // Placeholder for split-radix implementation
-                    let mut planner = FftPlanner::new();
-                    let fft = if forward {
-                        planner.plan_fft_forward(size)
-                    } else {
-                        planner.plan_fft_inverse(size)
-                    };
-                    let mut buffer = data.clone();
-                    fft.process(&mut buffer);
+                    #[cfg(feature = "oxifft")]
+                    {
+                        let input_oxi: Vec<OxiComplex<f64>> =
+                            data.iter().map(|c| OxiComplex::new(c.re, c.im)).collect();
+                        let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); size];
+
+                        let direction = if forward {
+                            Direction::Forward
+                        } else {
+                            Direction::Backward
+                        };
+                        let _ = oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, direction);
+                    }
+
+                    #[cfg(not(feature = "oxifft"))]
+                    {
+                        #[cfg(feature = "rustfft-backend")]
+                        {
+                            // Placeholder for split-radix implementation
+                            let mut planner = FftPlanner::new();
+                            let fft = if forward {
+                                planner.plan_fft_forward(size)
+                            } else {
+                                planner.plan_fft_inverse(size)
+                            };
+                            let mut buffer = data.clone();
+                            fft.process(&mut buffer);
+                        }
+                    }
                 }
             }
 
@@ -527,42 +675,75 @@ impl AutoTuner {
             buffer.resize(actual_size, Complex64::new(0.0, 0.0));
         }
 
-        match variant {
-            FftVariant::Standard => {
-                let mut planner = FftPlanner::new();
-                let fft = if forward {
-                    planner.plan_fft_forward(actual_size)
-                } else {
-                    planner.plan_fft_inverse(actual_size)
-                };
-                fft.process(&mut buffer);
+        #[cfg(feature = "oxifft")]
+        {
+            let input_oxi: Vec<OxiComplex<f64>> =
+                buffer.iter().map(|c| OxiComplex::new(c.re, c.im)).collect();
+            let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); actual_size];
+
+            let direction = if forward {
+                Direction::Forward
+            } else {
+                Direction::Backward
+            };
+            oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, direction)?;
+
+            // Copy result back to buffer
+            for (i, val) in output.iter().enumerate() {
+                buffer[i] = Complex64::new(val.re, val.im);
             }
-            FftVariant::InPlace => {
-                let mut planner = FftPlanner::new();
-                let fft = if forward {
-                    planner.plan_fft_forward(actual_size)
-                } else {
-                    planner.plan_fft_inverse(actual_size)
-                };
-                let mut scratch = vec![Complex64::new(0.0, 0.0); fft.get_inplace_scratch_len()];
-                fft.process_with_scratch(&mut buffer, &mut scratch);
+        }
+
+        #[cfg(not(feature = "oxifft"))]
+        {
+            #[cfg(feature = "rustfft-backend")]
+            {
+                match variant {
+                    FftVariant::Standard => {
+                        let mut planner = FftPlanner::new();
+                        let fft = if forward {
+                            planner.plan_fft_forward(actual_size)
+                        } else {
+                            planner.plan_fft_inverse(actual_size)
+                        };
+                        fft.process(&mut buffer);
+                    }
+                    FftVariant::InPlace => {
+                        let mut planner = FftPlanner::new();
+                        let fft = if forward {
+                            planner.plan_fft_forward(actual_size)
+                        } else {
+                            planner.plan_fft_inverse(actual_size)
+                        };
+                        let mut scratch =
+                            vec![Complex64::new(0.0, 0.0); fft.get_inplace_scratch_len()];
+                        fft.process_with_scratch(&mut buffer, &mut scratch);
+                    }
+                    FftVariant::Cached => {
+                        // Use the plan cache via PlanSerializationManager
+                        // Create a plan directly - manager is not needed here
+                        let (plan_, _) =
+                            crate::plan_serialization::create_and_time_plan(actual_size, forward);
+                        plan_.process(&mut buffer);
+                    }
+                    FftVariant::SplitRadix => {
+                        // Placeholder for split-radix FFT
+                        let mut planner = FftPlanner::new();
+                        let fft = if forward {
+                            planner.plan_fft_forward(actual_size)
+                        } else {
+                            planner.plan_fft_inverse(actual_size)
+                        };
+                        fft.process(&mut buffer);
+                    }
+                }
             }
-            FftVariant::Cached => {
-                // Use the plan cache via PlanSerializationManager
-                // Create a plan directly - manager is not needed here
-                let (plan_, _) =
-                    crate::plan_serialization::create_and_time_plan(actual_size, forward);
-                plan_.process(&mut buffer);
-            }
-            FftVariant::SplitRadix => {
-                // Placeholder for split-radix FFT
-                let mut planner = FftPlanner::new();
-                let fft = if forward {
-                    planner.plan_fft_forward(actual_size)
-                } else {
-                    planner.plan_fft_inverse(actual_size)
-                };
-                fft.process(&mut buffer);
+
+            #[cfg(not(feature = "rustfft-backend"))]
+            {
+                return Err(FFTError::ComputationError(
+                    "No FFT backend available. Enable either 'oxifft' or 'rustfft-backend' feature.".to_string()
+                ));
             }
         }
 
@@ -621,6 +802,238 @@ fn detect_cpu_features() -> Vec<String> {
     // Add more architecture-specific features if needed
 
     features
+}
+
+// ============================================================================
+// Enhanced Auto-Selection (v0.2.0)
+// ============================================================================
+
+/// Integrated auto-selection that combines algorithm selection with auto-tuning
+pub struct IntegratedAutoSelector {
+    /// Algorithm selector for input-characteristic based selection
+    selector: crate::algorithm_selector::AlgorithmSelector,
+    /// Auto-tuner for performance-based selection
+    tuner: AutoTuner,
+    /// Whether to prefer learned performance data
+    prefer_learned: bool,
+}
+
+impl Default for IntegratedAutoSelector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl IntegratedAutoSelector {
+    /// Create a new integrated auto-selector
+    pub fn new() -> Self {
+        Self {
+            selector: crate::algorithm_selector::AlgorithmSelector::new(),
+            tuner: AutoTuner::new(),
+            prefer_learned: true,
+        }
+    }
+
+    /// Create with custom configuration
+    pub fn with_config(
+        selector_config: crate::algorithm_selector::SelectionConfig,
+        tuner_config: AutoTuneConfig,
+        prefer_learned: bool,
+    ) -> Self {
+        Self {
+            selector: crate::algorithm_selector::AlgorithmSelector::with_config(selector_config),
+            tuner: AutoTuner::with_config(tuner_config),
+            prefer_learned,
+        }
+    }
+
+    /// Select the best algorithm for the given size
+    pub fn select(&self, size: usize, forward: bool) -> FFTResult<SelectionResult> {
+        // First, check if we have learned performance data
+        if self.prefer_learned && self.tuner.is_enabled() {
+            let variant = self.tuner.get_best_variant(size, forward);
+            if variant != FftVariant::Standard {
+                // We have learned data, use it
+                return Ok(SelectionResult {
+                    algorithm: variant_to_algorithm(variant),
+                    variant,
+                    source: SelectionSource::Learned,
+                    confidence: 0.9,
+                    recommendation: self.selector.select_algorithm(size, forward).ok(),
+                });
+            }
+        }
+
+        // Fall back to input-characteristic based selection
+        let recommendation = self.selector.select_algorithm(size, forward)?;
+        let variant = algorithm_to_variant(recommendation.algorithm);
+
+        Ok(SelectionResult {
+            algorithm: recommendation.algorithm,
+            variant,
+            source: SelectionSource::Characteristic,
+            confidence: recommendation.confidence,
+            recommendation: Some(recommendation),
+        })
+    }
+
+    /// Run auto-tuning for a range of sizes
+    pub fn auto_tune(&mut self, sizes: &[usize]) -> FFTResult<()> {
+        // Generate size range from provided sizes
+        if sizes.is_empty() {
+            return Ok(());
+        }
+
+        let min = *sizes.iter().min().unwrap_or(&16);
+        let max = *sizes.iter().max().unwrap_or(&8192);
+
+        let config = AutoTuneConfig {
+            sizes: SizeRange {
+                min,
+                max,
+                step: SizeStep::Custom(sizes.to_vec()),
+            },
+            ..Default::default()
+        };
+
+        self.tuner = AutoTuner::with_config(config);
+        self.tuner.run_benchmarks()
+    }
+
+    /// Execute FFT with optimal algorithm
+    pub fn execute<T>(
+        &self,
+        input: &[T],
+        size: Option<usize>,
+        forward: bool,
+    ) -> FFTResult<Vec<Complex64>>
+    where
+        T: Clone + Into<Complex64>,
+    {
+        let actual_size = size.unwrap_or(input.len());
+        let selection = self.select(actual_size, forward)?;
+
+        // Use the tuner's run_optimal_fft which handles the actual execution
+        self.tuner.run_optimal_fft(input, size, forward)
+    }
+
+    /// Get the algorithm selector
+    pub fn selector(&self) -> &crate::algorithm_selector::AlgorithmSelector {
+        &self.selector
+    }
+
+    /// Get the auto-tuner
+    pub fn tuner(&self) -> &AutoTuner {
+        &self.tuner
+    }
+}
+
+/// Result of algorithm selection
+#[derive(Debug, Clone)]
+pub struct SelectionResult {
+    /// Selected algorithm
+    pub algorithm: crate::algorithm_selector::FftAlgorithm,
+    /// Corresponding FFT variant
+    pub variant: FftVariant,
+    /// Source of the selection
+    pub source: SelectionSource,
+    /// Confidence in the selection
+    pub confidence: f64,
+    /// Full recommendation (if available)
+    pub recommendation: Option<crate::algorithm_selector::AlgorithmRecommendation>,
+}
+
+/// Source of algorithm selection
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionSource {
+    /// Selected based on learned performance data
+    Learned,
+    /// Selected based on input characteristics
+    Characteristic,
+    /// Forced by configuration
+    Forced,
+    /// Default fallback
+    Default,
+}
+
+/// Convert FftVariant to FftAlgorithm
+fn variant_to_algorithm(variant: FftVariant) -> crate::algorithm_selector::FftAlgorithm {
+    use crate::algorithm_selector::FftAlgorithm;
+    match variant {
+        FftVariant::Standard => FftAlgorithm::MixedRadix,
+        FftVariant::InPlace => FftAlgorithm::InPlace,
+        FftVariant::Cached => FftAlgorithm::MixedRadix,
+        FftVariant::SplitRadix => FftAlgorithm::SplitRadix,
+    }
+}
+
+/// Convert FftAlgorithm to FftVariant
+fn algorithm_to_variant(algorithm: crate::algorithm_selector::FftAlgorithm) -> FftVariant {
+    use crate::algorithm_selector::FftAlgorithm;
+    match algorithm {
+        FftAlgorithm::SplitRadix => FftVariant::SplitRadix,
+        FftAlgorithm::InPlace => FftVariant::InPlace,
+        _ => FftVariant::Standard,
+    }
+}
+
+/// Auto-select the best FFT algorithm for the given input
+///
+/// This is a convenience function that uses the integrated auto-selector
+/// to determine the optimal algorithm based on input characteristics and
+/// learned performance data.
+///
+/// # Arguments
+///
+/// * `size` - FFT size
+/// * `forward` - Whether this is a forward (true) or inverse (false) transform
+///
+/// # Returns
+///
+/// The recommended algorithm and metadata
+///
+/// # Example
+///
+/// ```rust
+/// use scirs2_fft::auto_tuning::auto_select_algorithm;
+///
+/// let result = auto_select_algorithm(1024, true).expect("Selection failed");
+/// println!("Recommended: {:?}", result.algorithm);
+/// ```
+pub fn auto_select_algorithm(size: usize, forward: bool) -> FFTResult<SelectionResult> {
+    let selector = IntegratedAutoSelector::new();
+    selector.select(size, forward)
+}
+
+/// Execute FFT with automatic algorithm selection
+///
+/// This function automatically selects the best algorithm based on
+/// input characteristics and executes the FFT.
+///
+/// # Arguments
+///
+/// * `input` - Input data
+/// * `size` - Optional FFT size (if different from input length)
+/// * `forward` - Whether this is a forward (true) or inverse (false) transform
+///
+/// # Returns
+///
+/// The FFT result as a vector of complex numbers
+///
+/// # Example
+///
+/// ```rust
+/// use scirs2_fft::auto_tuning::auto_fft;
+///
+/// let signal = vec![1.0, 2.0, 3.0, 4.0];
+/// let spectrum = auto_fft(&signal, None, true).expect("FFT failed");
+/// ```
+pub fn auto_fft<T>(input: &[T], size: Option<usize>, forward: bool) -> FFTResult<Vec<Complex64>>
+where
+    T: Clone + Into<Complex64>,
+{
+    let selector = IntegratedAutoSelector::new();
+    selector.execute(input, size, forward)
 }
 
 #[cfg(test)]

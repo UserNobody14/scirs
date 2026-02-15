@@ -42,14 +42,10 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 
+// Pure Rust compression libraries (COOLJAPAN Policy)
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
-use bzip2::read::{BzDecoder, BzEncoder};
-use bzip2::Compression as Bzip2Compression;
-use flate2::read::{GzDecoder, GzEncoder};
-use flate2::Compression as GzipCompression;
-use lz4::{Decoder, EncoderBuilder};
+use oxiarc_archive::{bzip2, gzip, lz4, zstd};
 use snap::{raw::Decoder as SnapDecoder, raw::Encoder as SnapEncoder};
-use zstd::{decode_all, encode_all};
 
 // Re-export ndarray submodule
 pub mod ndarray;
@@ -159,37 +155,32 @@ pub fn compress_data(
 
     match algorithm {
         CompressionAlgorithm::Gzip => {
-            let mut encoder = GzEncoder::new(data, GzipCompression::new(normalized_level as u32));
-            let mut compressed = Vec::new();
-            encoder
-                .read_to_end(&mut compressed)
-                .map_err(|e| IoError::CompressionError(e.to_string()))?;
-            Ok(compressed)
+            // Use Pure Rust oxiarc-archive implementation
+            gzip::compress(data, normalized_level as u8)
+                .map_err(|e| IoError::CompressionError(e.to_string()))
         }
-        CompressionAlgorithm::Zstd => encode_all(data, normalized_level as i32)
-            .map_err(|e| IoError::CompressionError(e.to_string())),
+        CompressionAlgorithm::Zstd => {
+            // Use Pure Rust oxiarc-archive implementation
+            let writer = zstd::ZstdWriter::new();
+            writer
+                .compress(data)
+                .map_err(|e| IoError::CompressionError(e.to_string()))
+        }
         CompressionAlgorithm::Lz4 => {
-            let mut encoder = EncoderBuilder::new()
-                .level(normalized_level as u32)
-                .build(Vec::new())
+            // Use Pure Rust oxiarc-archive implementation
+            use std::io::Write;
+            let mut writer = lz4::Lz4Writer::new(Vec::new());
+            writer
+                .write_compressed(data)
                 .map_err(|e| IoError::CompressionError(e.to_string()))?;
-
-            encoder
-                .write_all(data)
-                .map_err(|e| IoError::CompressionError(e.to_string()))?;
-
-            let (compressed, result) = encoder.finish();
-            result.map_err(|e| IoError::CompressionError(e.to_string()))?;
-
-            Ok(compressed)
+            Ok(writer.into_inner())
         }
         CompressionAlgorithm::Bzip2 => {
-            let mut encoder = BzEncoder::new(data, Bzip2Compression::new(normalized_level as u32));
-            let mut compressed = Vec::new();
-            encoder
-                .read_to_end(&mut compressed)
-                .map_err(|e| IoError::CompressionError(e.to_string()))?;
-            Ok(compressed)
+            // Use Pure Rust oxiarc-archive implementation
+            let writer = bzip2::Bzip2Writer::with_level(normalized_level as u8);
+            writer
+                .compress(data)
+                .map_err(|e| IoError::CompressionError(e.to_string()))
         }
         CompressionAlgorithm::Brotli => {
             let mut compressed = Vec::new();
@@ -231,39 +222,42 @@ pub fn compress_data(
 ///
 /// The decompressed data as a `Vec<u8>`
 #[allow(dead_code)]
-pub fn decompress_data(mut data: &[u8], algorithm: CompressionAlgorithm) -> Result<Vec<u8>> {
+pub fn decompress_data(data: &[u8], algorithm: CompressionAlgorithm) -> Result<Vec<u8>> {
     match algorithm {
         CompressionAlgorithm::Gzip => {
-            let mut decoder = GzDecoder::new(data);
-            let mut decompressed = Vec::new();
-            decoder
-                .read_to_end(&mut decompressed)
-                .map_err(|e| IoError::DecompressionError(e.to_string()))?;
-            Ok(decompressed)
+            // Use Pure Rust oxiarc-archive implementation
+            use std::io::Cursor;
+            let mut cursor = Cursor::new(data);
+            gzip::decompress(&mut cursor).map_err(|e| IoError::DecompressionError(e.to_string()))
         }
         CompressionAlgorithm::Zstd => {
-            decode_all(data).map_err(|e| IoError::DecompressionError(e.to_string()))
+            // Use Pure Rust oxiarc-archive implementation
+            use std::io::Cursor;
+            let cursor = Cursor::new(data);
+            let mut reader = zstd::ZstdReader::new(cursor)
+                .map_err(|e| IoError::DecompressionError(e.to_string()))?;
+            reader
+                .decompress()
+                .map_err(|e| IoError::DecompressionError(e.to_string()))
         }
         CompressionAlgorithm::Lz4 => {
-            let mut decoder =
-                Decoder::new(data).map_err(|e| IoError::DecompressionError(e.to_string()))?;
-            let mut decompressed = Vec::new();
-            decoder
-                .read_to_end(&mut decompressed)
+            // Use Pure Rust oxiarc-archive implementation
+            use std::io::Cursor;
+            let cursor = Cursor::new(data);
+            let mut reader = lz4::Lz4Reader::new(cursor)
                 .map_err(|e| IoError::DecompressionError(e.to_string()))?;
-            Ok(decompressed)
+            reader
+                .decompress()
+                .map_err(|e| IoError::DecompressionError(e.to_string()))
         }
         CompressionAlgorithm::Bzip2 => {
-            let mut decoder = BzDecoder::new(data);
-            let mut decompressed = Vec::new();
-            decoder
-                .read_to_end(&mut decompressed)
-                .map_err(|e| IoError::DecompressionError(e.to_string()))?;
-            Ok(decompressed)
+            // Use Pure Rust oxiarc-archive implementation
+            bzip2::decompress(data).map_err(|e| IoError::DecompressionError(e.to_string()))
         }
         CompressionAlgorithm::Brotli => {
             let mut decompressed = Vec::new();
-            BrotliDecompress(&mut data, &mut decompressed).map_err(|e| {
+            let mut data_copy = data;
+            BrotliDecompress(&mut data_copy, &mut decompressed).map_err(|e| {
                 IoError::DecompressionError(format!("Brotli decompression failed: {e}"))
             })?;
             Ok(decompressed)
@@ -855,8 +849,8 @@ fn compress_fpzip(data: &[u8], level: u32) -> Result<Vec<u8>> {
             }
         }
 
-        // Compress the XOR'd data with LZ4
-        let compressed = compress_data(&encoded_data, CompressionAlgorithm::Lz4, Some(6))?;
+        // Compress the XOR'd data with LZ4 (Pure Rust implementation)
+        let compressed = compress_data(&encoded_data, CompressionAlgorithm::Lz4, Some(level))?;
         result.extend_from_slice(&compressed);
     } else if data.len().is_multiple_of(4) {
         // Assume f32 data - apply similar technique
@@ -875,11 +869,11 @@ fn compress_fpzip(data: &[u8], level: u32) -> Result<Vec<u8>> {
             }
         }
 
-        let compressed = compress_data(&encoded_data, CompressionAlgorithm::Lz4, Some(6))?;
+        let compressed = compress_data(&encoded_data, CompressionAlgorithm::Lz4, Some(level))?;
         result.extend_from_slice(&compressed);
     } else {
         // Not aligned to float boundaries, use regular compression
-        let compressed = compress_data(data, CompressionAlgorithm::Zstd, Some(6))?;
+        let compressed = compress_data(data, CompressionAlgorithm::Zstd, Some(level))?;
         result.extend_from_slice(&compressed);
     }
 

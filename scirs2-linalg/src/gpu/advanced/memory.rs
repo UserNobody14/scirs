@@ -533,11 +533,12 @@ impl BandwidthPredictor {
         };
 
         // Scale based on data size (simplified model)
-        let size_factor = if data_size > 1024 * 1024 * 1024 {
-            0.9
-        } else {
-            1.0
-        };
+        #[cfg(target_pointer_width = "32")]
+        let threshold = 256 * 1024 * 1024; // 256MB for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let threshold = 1024 * 1024 * 1024; // 1GB for 64-bit
+
+        let size_factor = if data_size > threshold { 0.9 } else { 1.0 };
 
         base_bandwidth * size_factor
     }

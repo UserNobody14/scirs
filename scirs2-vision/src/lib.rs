@@ -293,6 +293,7 @@ pub mod transform;
 // Advanced Advanced-mode modules - future development features
 pub mod activity_recognition;
 pub mod scene_understanding;
+pub mod vision_3d;
 pub mod visual_reasoning;
 pub mod visual_slam;
 
@@ -463,6 +464,12 @@ pub use activity_recognition::{
 pub use visual_slam::{
     process_visual_slam, process_visual_slam_realtime, CameraPose, CameraTrajectory, LoopClosure,
     Map3D, SLAMResult, SLAMSystemState, SemanticMap, VisualSLAMSystem,
+};
+
+// Re-export 3D vision functionality
+pub use vision_3d::{
+    stereo_bm, stereo_sgbm, structure_from_motion, triangulate_points, BMParams, DisparityMap,
+    PointCloud, SGBMParams, SfMResult, StereoAlgorithm,
 };
 
 // Re-export Advanced integration functionality

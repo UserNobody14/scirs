@@ -3,7 +3,7 @@
 use crate::error::{NeuralError, Result};
 use crate::losses::Loss;
 use scirs2_core::ndarray::Array;
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 /// Contrastive loss function.
 ///
@@ -57,7 +57,7 @@ impl Default for ContrastiveLoss {
     }
 }
 
-impl<F: Float + Debug> Loss<F> for ContrastiveLoss {
+impl<F: Float + Debug + NumAssign> Loss<F> for ContrastiveLoss {
     fn forward(
         &self,
         predictions: &Array<F, scirs2_core::ndarray::IxDyn>,
@@ -102,7 +102,7 @@ impl<F: Float + Debug> Loss<F> for ContrastiveLoss {
             let mut distance_squared = F::zero();
             for j in 0..embedding_dim {
                 let diff = x1[j] - x2[j];
-                distance_squared = distance_squared + diff * diff;
+                distance_squared += diff * diff;
             }
             let distance = distance_squared.sqrt();
             // Extract label (1 for similar, 0 for dissimilar)
@@ -117,7 +117,7 @@ impl<F: Float + Debug> Loss<F> for ContrastiveLoss {
                 let margin_term = (margin - distance).max(zero);
                 margin_term * margin_term
             };
-            total_loss = total_loss + pair_loss;
+            total_loss += pair_loss;
         }
         // Average loss over the batch
         let loss = total_loss / n;
@@ -151,7 +151,7 @@ impl<F: Float + Debug> Loss<F> for ContrastiveLoss {
             let mut distance_sq = F::zero();
             for j in 0..embedding_dim {
                 let diff = x1[j] - x2[j];
-                distance_sq = distance_sq + diff * diff;
+                distance_sq += diff * diff;
             }
             let distance = distance_sq.sqrt();
 

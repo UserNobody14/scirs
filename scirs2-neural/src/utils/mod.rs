@@ -6,7 +6,7 @@
 
 use crate::error::{NeuralError, Result};
 use scirs2_core::ndarray::{Array, Dimension};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::Rng;
 use std::fmt::Debug;
 /// Terminal color utilities for visualization
@@ -100,7 +100,7 @@ pub fn random_normal<F: Float + Debug, R: Rng>(
 ///   assert_eq!(one_hot[[1, 2]], 1.0f64); // Second sample, class 2
 ///   assert_eq!(one_hot[[2, 1]], 1.0f64); // Third sample, class 1
 #[allow(dead_code)]
-pub fn one_hot_encode<F: Float + Debug>(
+pub fn one_hot_encode<F: Float + Debug + NumAssign>(
     indices: &scirs2_core::ndarray::Array1<usize>,
     num_classes: usize,
 ) -> Result<scirs2_core::ndarray::Array2<F>> {

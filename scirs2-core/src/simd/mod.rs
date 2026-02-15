@@ -46,8 +46,16 @@
 //! ## Architecture Support
 //!
 //! - **x86_64**: AVX-512, AVX2, SSE2 with runtime detection
-//! - **aarch64**: NEON with runtime detection
+//! - **aarch64**: NEON with runtime detection (including mobile-optimized variants)
 //! - **Fallback**: Scalar implementations for unsupported architectures
+//!
+//! ## Mobile Platform Support (v0.2.0)
+//!
+//! The [`neon`] module provides ARM NEON optimizations specifically designed for
+//! mobile platforms (iOS/Android) with:
+//! - Battery-efficient algorithms
+//! - Thermal-aware processing
+//! - Memory-constrained operation modes
 
 // Include legacy simd implementation (remaining functions not yet migrated)
 #[path = "../simd_impl.rs"]
@@ -56,6 +64,10 @@ mod simd_impl;
 // Core infrastructure
 pub mod detect;
 pub mod traits;
+
+// Mobile platform optimizations (ARM NEON)
+#[cfg(any(target_arch = "aarch64", target_arch = "arm"))]
+pub mod neon;
 
 // Layer 2: Core operations
 pub mod arithmetic;
@@ -91,7 +103,7 @@ pub mod unary_powi; // Phase 25: Integer exponentiation // Phase 36: Cache-optim
 // - miscellaneous helper functions and optimized variants
 
 // Re-export GEMM operations
-pub use gemm::{blocked_gemm_f32, should_use_blocked, MatMulConfig};
+pub use gemm::{blocked_gemm_f32, blocked_gemm_f64, should_use_blocked, MatMulConfig};
 
 // Re-export core traits and detection
 pub use detect::{detect_simd_capabilities, get_cpu_features, CpuFeatures, SimdCapabilities};

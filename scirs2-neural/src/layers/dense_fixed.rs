@@ -5,14 +5,14 @@ use crate::error::{NeuralError, Result};
 use crate::layers::{Layer, ParamLayer};
 use scirs2_core::ndarray::{Array, IxDyn, ScalarOperand};
 use scirs2_core::random::{Distribution, Uniform};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 
 /// Dense (fully connected) layer for neural networks.
 ///
 /// A dense layer performs the operation: y = activation(W * x + b), where W is the weight matrix,
 /// x is the input vector, b is the bias vector, and activation is the activation function.
-pub struct Dense<F: Float + Debug + Send + Sync> {
+pub struct Dense<F: Float + Debug + Send + Sync + NumAssign> {
     /// Number of input features
     input_dim: usize,
     /// Number of output features
@@ -410,5 +410,5 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> ParamLayer<F> for
 }
 
 // Explicit Send + Sync implementations for Dense layer
-unsafe impl<F: Float + Debug + Send + Sync> Send for Dense<F> {}
-unsafe impl<F: Float + Debug + Send + Sync> Sync for Dense<F> {}
+unsafe impl<F: Float + Debug + Send + Sync + NumAssign> Send for Dense<F> {}
+unsafe impl<F: Float + Debug + Send + Sync + NumAssign> Sync for Dense<F> {}

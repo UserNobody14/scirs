@@ -36,6 +36,7 @@ fn test_tensor_core_clustering_creation() {
     assert_eq!(clustering._numclusters, 3);
 }
 
+#[cfg(feature = "async")]
 #[tokio::test]
 async fn test_tensor_core_distance_computation() {
     let points = array![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]];
@@ -53,6 +54,7 @@ async fn test_tensor_core_distance_computation() {
     }
 }
 
+#[cfg(feature = "async")]
 #[tokio::test]
 async fn test_tensor_core_clustering() {
     let points = array![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]];
@@ -190,6 +192,7 @@ fn test_error_recovery_system_creation() {
     assert_eq!(recovery_system.max_recovery_attempts, 3);
 }
 
+#[cfg(feature = "async")]
 #[tokio::test]
 async fn test_recovery_action_selection() {
     let mut recovery_system = ErrorRecoverySystem::new();
@@ -317,6 +320,7 @@ fn test_advanced_tensor_core_distance_matrix_creation() {
     assert!(advanced_computer.auto_recovery_enabled);
 }
 
+#[cfg(feature = "async")]
 #[tokio::test]
 #[ignore = "Test failure - assertion failed: result.is_ok() at line 329"]
 async fn test_stability_monitoring_computation() {
@@ -339,6 +343,7 @@ async fn test_stability_monitoring_computation() {
     assert!(!monitor.stability_history.is_empty());
 }
 
+#[cfg(feature = "async")]
 #[tokio::test]
 async fn test_recovery_action_application() {
     let mut advanced_computer = AdvancedTensorCoreDistanceMatrix::new().expect("Operation failed");

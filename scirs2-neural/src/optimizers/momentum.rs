@@ -3,7 +3,7 @@
 use crate::error::{NeuralError, Result};
 use crate::optimizers::Optimizer;
 use scirs2_core::ndarray::{Array, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 /// Momentum optimizer
 ///
@@ -20,7 +20,7 @@ use std::fmt::Debug;
 /// // or with weight decay
 /// let mut momentum_with_decay = MomentumOptimizer::new_with_weight_decay(0.01f64, 0.9, 0.0001);
 #[derive(Debug, Clone)]
-pub struct MomentumOptimizer<F: Float + ScalarOperand + Debug> {
+pub struct MomentumOptimizer<F: Float + NumAssign + ScalarOperand + Debug> {
     /// Learning rate
     learning_rate: F,
     /// Momentum factor
@@ -30,13 +30,13 @@ pub struct MomentumOptimizer<F: Float + ScalarOperand + Debug> {
     /// Velocity (momentum state) for each parameter array
     velocity: Vec<Array<F, scirs2_core::ndarray::IxDyn>>,
 }
-impl<F: Float + ScalarOperand + Debug> MomentumOptimizer<F> {
+impl<F: Float + NumAssign + ScalarOperand + Debug> MomentumOptimizer<F> {
     /// Creates a new momentum optimizer with the given learning rate and momentum
     ///
     /// # Arguments
     /// * `learning_rate` - The learning rate for parameter updates
     /// * `momentum` - The momentum factor (typically 0.9)
-    pub fn new(_learningrate: F, momentum: F) -> Self {
+    pub fn new(learning_rate: F, momentum: F) -> Self {
         Self {
             learning_rate,
             momentum,
@@ -44,25 +44,43 @@ impl<F: Float + ScalarOperand + Debug> MomentumOptimizer<F> {
             velocity: Vec::new(),
         }
     }
+
     /// Creates a new momentum optimizer with weight decay
     /// * `weight_decay` - The weight decay factor (L2 regularization)
-    pub fn new_with_weight_decay(_learning_rate: F, momentum: F, weightdecay: F) -> Self {
+    pub fn new_with_weight_decay(learning_rate: F, momentum: F, weight_decay: F) -> Self {
+        Self {
+            learning_rate,
+            momentum,
             weight_decay,
+            velocity: Vec::new(),
+        }
+    }
+
     /// Sets the momentum factor
     /// * `momentum` - The momentum factor
     pub fn set_momentum(&mut self, momentum: F) -> &mut Self {
         self.momentum = momentum;
         self
+    }
+
     /// Gets the current momentum factor
     pub fn get_momentum(&self) -> F {
         self.momentum
+    }
+
     /// Sets the weight decay factor
-    pub fn set_weight_decay(&mut self, weightdecay: F) -> &mut Self {
+    pub fn set_weight_decay(&mut self, weight_decay: F) -> &mut Self {
         self.weight_decay = weight_decay;
+        self
+    }
+
     /// Gets the current weight decay factor
     pub fn get_weight_decay(&self) -> F {
         self.weight_decay
-impl<F: Float + ScalarOperand + Debug> Optimizer<F> for MomentumOptimizer<F> {
+    }
+}
+
+impl<F: Float + NumAssign + ScalarOperand + Debug> Optimizer<F> for MomentumOptimizer<F> {
     fn update(
         &mut self,
         params: &mut [Array<F, scirs2_core::ndarray::IxDyn>],
@@ -74,9 +92,13 @@ impl<F: Float + ScalarOperand + Debug> Optimizer<F> for MomentumOptimizer<F> {
                 params.len(),
                 grads.len()
             )));
+        }
+
         // Initialize velocity if it doesn't exist or has changed size
         if self.velocity.len() != params.len() {
             self.velocity = params.iter().map(|p| Array::zeros(p.raw_dim())).collect();
+        }
+
         // Update parameters for each param-grad pair
         for i in 0..params.len() {
             // Apply weight decay to gradients if needed
@@ -85,17 +107,31 @@ impl<F: Float + ScalarOperand + Debug> Optimizer<F> for MomentumOptimizer<F> {
             } else {
                 grads[i].clone()
             };
+
             // Update velocity with momentum
             self.velocity[i] =
                 &self.velocity[i] * self.momentum + &(&adjusted_grad * self.learning_rate);
+
             // Update parameters
             params[i] = &params[i] - &self.velocity[i];
+        }
+
         Ok(())
+    }
+
     fn get_learning_rate(&self) -> F {
         self.learning_rate
+    }
+
     fn set_learning_rate(&mut self, lr: F) {
         self.learning_rate = lr;
+    }
+
     fn reset(&mut self) {
         self.velocity.clear();
+    }
+
     fn name(&self) -> &'static str {
         "MomentumOptimizer"
+    }
+}

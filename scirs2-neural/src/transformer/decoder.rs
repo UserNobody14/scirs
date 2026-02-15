@@ -7,7 +7,7 @@ use crate::error::{NeuralError, Result};
 use crate::layers::{AttentionConfig, Layer, LayerNorm, MultiHeadAttention, SelfAttention};
 use crate::transformer::encoder::FeedForward;
 use scirs2_core::ndarray::{Array, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::Rng;
 use scirs2_core::simd_ops::SimdUnifiedOps;
 use std::fmt::Debug;
@@ -19,7 +19,7 @@ use std::sync::{Arc, RwLock};
 /// "Attention Is All You Need" by Vaswani et al. It consists of masked multi-head
 /// self-attention, multi-head cross-attention over encoder output, and a position-wise
 /// feed-forward network, with residual connections and layer normalization.
-pub struct TransformerDecoderLayer<F: Float + Debug + Send + Sync + SimdUnifiedOps> {
+pub struct TransformerDecoderLayer<F: Float + Debug + Send + Sync + SimdUnifiedOps + NumAssign> {
     /// Masked multi-head self-attention layer
     self_attn: SelfAttention<F>,
     /// Layer normalization after self-attention
@@ -47,7 +47,7 @@ pub struct TransformerDecoderLayer<F: Float + Debug + Send + Sync + SimdUnifiedO
     norm2_output_cache: Arc<RwLock<Option<Array<F, IxDyn>>>>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign> Clone
     for TransformerDecoderLayer<F>
 {
     fn clone(&self) -> Self {
@@ -68,7 +68,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign>
     TransformerDecoderLayer<F>
 {
     /// Create a new transformer decoder layer
@@ -92,7 +92,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps>
         rng: &mut R,
     ) -> Result<Self> {
         // Verify parameters
-        if d_model % n_heads != 0 {
+        if !d_model.is_multiple_of(n_heads) {
             return Err(NeuralError::InvalidArchitecture(format!(
                 "d_model ({}) must be divisible by n_heads ({})",
                 d_model, n_heads
@@ -197,7 +197,10 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps>
 
         // 1. Self-attention with residual connection
         let self_attn_output = self.self_attn.forward(input)?;
-        *self.self_attn_output_cache.write().expect("Operation failed") = Some(self_attn_output.clone());
+        *self
+            .self_attn_output_cache
+            .write()
+            .expect("Operation failed") = Some(self_attn_output.clone());
 
         // Add residual connection (x + Sublayer(x))
         let self_attn_output_residual = input + &self_attn_output;
@@ -212,7 +215,10 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps>
         // In a full implementation, we'd use a separate method that takes encoder_output
         // For now, we'll use a simplified approach
         let cross_attn_output = self.cross_attn.forward(&norm1_output)?;
-        *self.cross_attn_output_cache.write().expect("Operation failed") = Some(cross_attn_output.clone());
+        *self
+            .cross_attn_output_cache
+            .write()
+            .expect("Operation failed") = Some(cross_attn_output.clone());
 
         // Add residual connection
         let cross_attn_output_residual = &norm1_output + &cross_attn_output;
@@ -243,7 +249,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps>
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign> Layer<F>
     for TransformerDecoderLayer<F>
 {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -323,14 +329,14 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
 ///
 /// Stack of transformer decoder layers that processes target sequences using
 /// masked self-attention, cross-attention with encoder output, and feed-forward networks.
-pub struct TransformerDecoder<F: Float + Debug + Send + Sync + SimdUnifiedOps> {
+pub struct TransformerDecoder<F: Float + Debug + Send + Sync + SimdUnifiedOps + NumAssign> {
     /// Stack of decoder layers
     layers: Vec<TransformerDecoderLayer<F>>,
     /// Layer outputs cache for backward pass
     layer_outputs: Arc<RwLock<Vec<Array<F, IxDyn>>>>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> Clone
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign> Clone
     for TransformerDecoder<F>
 {
     fn clone(&self) -> Self {
@@ -341,7 +347,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign>
     TransformerDecoder<F>
 {
     /// Create a new transformer decoder
@@ -401,7 +407,10 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps>
         for layer in &self.layers {
             output = layer.forward_with_encoder(&output, encoder_output)?;
             // Cache layer output for backward pass
-            self.layer_outputs.write().expect("Operation failed").push(output.clone());
+            self.layer_outputs
+                .write()
+                .expect("Operation failed")
+                .push(output.clone());
         }
 
         Ok(output)
@@ -423,7 +432,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps>
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps + NumAssign> Layer<F>
     for TransformerDecoder<F>
 {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -443,7 +452,10 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + SimdUnifiedOps> 
         for layer in &self.layers {
             output = layer.forward(&output)?;
             // Cache layer output for backward pass
-            self.layer_outputs.write().expect("Operation failed").push(output.clone());
+            self.layer_outputs
+                .write()
+                .expect("Operation failed")
+                .push(output.clone());
         }
 
         Ok(output)
@@ -663,13 +675,13 @@ mod tests {
                 .expect("Operation failed");
 
         // Test with wrong dimensions (2D instead of 3D)
-        let wrong_input = scirs2_core::ndarray::Array2::<f64>::from_elem((4, d_model), 0.1).into_dyn();
+        let wrong_input =
+            scirs2_core::ndarray::Array2::<f64>::from_elem((4, d_model), 0.1).into_dyn();
         let result = dec_layer.forward(&wrong_input);
         assert!(result.is_err());
 
         // Test with wrong feature dimension
-        let wrong_dim_input =
-            Array3::<f64>::from_elem((2, 4, d_model + 10), 0.1).into_dyn();
+        let wrong_dim_input = Array3::<f64>::from_elem((2, 4, d_model + 10), 0.1).into_dyn();
         let result = dec_layer.forward(&wrong_dim_input);
         assert!(result.is_err());
     }

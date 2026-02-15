@@ -5,7 +5,7 @@
 use crate::error::{NeuralError, Result};
 use crate::layers::Layer;
 use scirs2_core::ndarray::{Array, ArrayView1, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::simd_ops::SimdUnifiedOps;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -42,7 +42,7 @@ const GLOBAL_AVGPOOL_SIMD_THRESHOLD: usize = 64;
 /// ```
 #[derive(Debug)]
 #[allow(clippy::type_complexity)]
-pub struct MaxPool2D<F: Float + Debug + Send + Sync> {
+pub struct MaxPool2D<F: Float + Debug + Send + Sync + NumAssign> {
     /// Pool size (height, width)
     pool_size: (usize, usize),
     /// Stride (height, width)
@@ -57,7 +57,7 @@ pub struct MaxPool2D<F: Float + Debug + Send + Sync> {
     _phantom: PhantomData<F>,
 }
 
-impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> MaxPool2D<F> {
+impl<F: Float + Debug + Send + Sync + ScalarOperand + NumAssign + 'static> MaxPool2D<F> {
     /// Create a new MaxPool2D layer
     ///
     /// # Arguments
@@ -99,7 +99,9 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> MaxPool2D<F> {
     }
 }
 
-impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> Layer<F> for MaxPool2D<F> {
+impl<F: Float + Debug + Send + Sync + ScalarOperand + NumAssign + 'static> Layer<F>
+    for MaxPool2D<F>
+{
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
         let shape = input.shape();
         if shape.len() != 4 {
@@ -217,8 +219,7 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> Layer<F> for MaxP
                 for oh in 0..out_h {
                     for ow in 0..out_w {
                         let (max_h, max_w) = max_indices[[b, c, oh, ow]];
-                        grad_input[[b, c, max_h, max_w]] =
-                            grad_input[[b, c, max_h, max_w]] + grad_output[[b, c, oh, ow]];
+                        grad_input[[b, c, max_h, max_w]] += grad_output[[b, c, oh, ow]];
                     }
                 }
             }
@@ -295,7 +296,7 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> Layer<F> for MaxP
 /// assert_eq!(output.shape(), &[1, 3, 4, 4]);
 /// ```
 #[derive(Debug)]
-pub struct AvgPool2D<F: Float + Debug + Send + Sync> {
+pub struct AvgPool2D<F: Float + Debug + Send + Sync + NumAssign> {
     /// Pool size (height, width)
     pool_size: (usize, usize),
     /// Stride (height, width)
@@ -308,7 +309,7 @@ pub struct AvgPool2D<F: Float + Debug + Send + Sync> {
     _phantom: PhantomData<F>,
 }
 
-impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> AvgPool2D<F> {
+impl<F: Float + Debug + Send + Sync + ScalarOperand + NumAssign + 'static> AvgPool2D<F> {
     /// Create a new AvgPool2D layer
     ///
     /// # Arguments
@@ -349,7 +350,9 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> AvgPool2D<F> {
     }
 }
 
-impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> Layer<F> for AvgPool2D<F> {
+impl<F: Float + Debug + Send + Sync + ScalarOperand + NumAssign + 'static> Layer<F>
+    for AvgPool2D<F>
+{
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
         let shape = input.shape();
         if shape.len() != 4 {
@@ -400,7 +403,7 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> Layer<F> for AvgP
                                 let iw = w_start + pw;
 
                                 if ih < input_h && iw < input_w {
-                                    sum = sum + input[[b, c, ih, iw]];
+                                    sum += input[[b, c, ih, iw]];
                                     count += 1;
                                 }
                             }
@@ -473,8 +476,7 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> Layer<F> for AvgP
                                 let ih = h_start + ph;
                                 let iw = w_start + pw;
                                 if ih < input_h && iw < input_w {
-                                    grad_input[[b, c, ih, iw]] =
-                                        grad_input[[b, c, ih, iw]] + grad_per_elem;
+                                    grad_input[[b, c, ih, iw]] += grad_per_elem;
                                 }
                             }
                         }
@@ -537,7 +539,7 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> Layer<F> for AvgP
 /// # Output Shape
 /// - 4D tensor: (batch_size, channels, 1, 1)
 #[derive(Debug)]
-pub struct GlobalAvgPool2D<F: Float + Debug + Send + Sync> {
+pub struct GlobalAvgPool2D<F: Float + Debug + Send + Sync + NumAssign> {
     /// Layer name
     name: Option<String>,
     /// Input cache for backward pass
@@ -546,7 +548,7 @@ pub struct GlobalAvgPool2D<F: Float + Debug + Send + Sync> {
     _phantom: PhantomData<F>,
 }
 
-impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> GlobalAvgPool2D<F> {
+impl<F: Float + Debug + Send + Sync + ScalarOperand + NumAssign + 'static> GlobalAvgPool2D<F> {
     /// Create a new GlobalAvgPool2D layer
     pub fn new(name: Option<&str>) -> Self {
         Self {
@@ -557,7 +559,7 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> GlobalAvgPool2D<F
     }
 }
 
-impl<F: Float + Debug + Send + Sync + ScalarOperand + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + Send + Sync + ScalarOperand + SimdUnifiedOps + NumAssign + 'static> Layer<F>
     for GlobalAvgPool2D<F>
 {
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
@@ -609,7 +611,7 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + SimdUnifiedOps + 'static> 
                     let mut sum = F::zero();
                     for h in 0..height {
                         for w in 0..width {
-                            sum = sum + input[[b, c, h, w]];
+                            sum += input[[b, c, h, w]];
                         }
                     }
                     output[[b, c, 0, 0]] = sum / spatial_size_f;

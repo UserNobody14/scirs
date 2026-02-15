@@ -5,6 +5,7 @@
 //! different FFT implementations at runtime.
 
 use crate::error::{FFTError, FFTResult};
+#[cfg(feature = "rustfft-backend")]
 use rustfft::FftPlanner;
 use scirs2_core::numeric::Complex64;
 use std::collections::HashMap;
@@ -48,10 +49,12 @@ pub trait FftBackend: Send + Sync {
 }
 
 /// RustFFT backend implementation
+#[cfg(feature = "rustfft-backend")]
 pub struct RustFftBackend {
     planner: Arc<Mutex<FftPlanner<f64>>>,
 }
 
+#[cfg(feature = "rustfft-backend")]
 impl RustFftBackend {
     pub fn new() -> Self {
         Self {
@@ -60,12 +63,14 @@ impl RustFftBackend {
     }
 }
 
+#[cfg(feature = "rustfft-backend")]
 impl Default for RustFftBackend {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(feature = "rustfft-backend")]
 impl FftBackend for RustFftBackend {
     fn name(&self) -> &str {
         "rustfft"
@@ -170,13 +175,22 @@ impl BackendManager {
     pub fn new() -> Self {
         let mut backends = HashMap::new();
 
-        // Add default RustFFT backend
-        let rustfft_backend = Arc::new(RustFftBackend::new()) as Arc<dyn FftBackend>;
-        backends.insert("rustfft".to_string(), rustfft_backend);
+        // Add default RustFFT backend (if feature is enabled)
+        #[cfg(feature = "rustfft-backend")]
+        {
+            let rustfft_backend = Arc::new(RustFftBackend::new()) as Arc<dyn FftBackend>;
+            backends.insert("rustfft".to_string(), rustfft_backend);
+        }
+
+        #[cfg(feature = "rustfft-backend")]
+        let default_backend = "rustfft".to_string();
+
+        #[cfg(not(feature = "rustfft-backend"))]
+        let default_backend = "none".to_string();
 
         Self {
             backends: Arc::new(Mutex::new(backends)),
-            current_backend: Arc::new(Mutex::new("rustfft".to_string())),
+            current_backend: Arc::new(Mutex::new(default_backend)),
         }
     }
 
@@ -352,6 +366,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(feature = "rustfft-backend")]
     fn test_rustfft_backend() {
         let backend = RustFftBackend::new();
         assert_eq!(backend.name(), "rustfft");
@@ -360,6 +375,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "rustfft-backend")]
     fn test_backend_manager() {
         let manager = BackendManager::new();
 
@@ -378,6 +394,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "rustfft-backend")]
     fn test_backend_context() {
         let manager = get_backend_manager();
         let original = manager.get_backend_name();

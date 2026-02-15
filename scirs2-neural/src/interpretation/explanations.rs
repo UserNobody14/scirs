@@ -23,7 +23,7 @@ pub enum DistanceMetric {
 }
 /// Counterfactual explanation generator
 #[derive(Debug, Clone)]
-pub struct CounterfactualGenerator<F: Float + Debug> {
+pub struct CounterfactualGenerator<F: Float + Debug + NumAssign> {
     /// Maximum number of features to perturb
     pub max_features: usize,
     /// Learning rate for optimization
@@ -35,7 +35,7 @@ pub struct CounterfactualGenerator<F: Float + Debug> {
     /// Cache of original predictions
     pub original_predictions: HashMap<String, F>,
 /// Concept Activation Vector for concept-based explanations
-pub struct ConceptActivationVector<F: Float + Debug> {
+pub struct ConceptActivationVector<F: Float + Debug + NumAssign> {
     /// Concept name
     pub concept_name: String,
     /// Layer name where concept is detected
@@ -47,7 +47,7 @@ pub struct ConceptActivationVector<F: Float + Debug> {
     /// Number of examples used to derive this concept
     pub num_examples: usize,
 /// LIME (Local Interpretable Model-agnostic Explanations) explainer
-pub struct LIMEExplainer<F: Float + Debug> {
+pub struct LIMEExplainer<F: Float + Debug + NumAssign> {
     /// Number of perturbations to generate
     pub num_perturbations: usize,
     /// Size of local neighborhood
@@ -59,7 +59,7 @@ pub struct LIMEExplainer<F: Float + Debug> {
     /// Cached perturbations for efficiency
     pub cached_perturbations: HashMap<String, Vec<ArrayD<F>>>,
 /// Adversarial explanation result
-pub struct AdversarialExplanation<F: Float + Debug> {
+pub struct AdversarialExplanation<F: Float + Debug + NumAssign> {
     /// Original input
     pub original_input: ArrayD<F>,
     /// Adversarial example

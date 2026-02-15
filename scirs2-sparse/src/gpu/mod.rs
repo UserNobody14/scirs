@@ -6,6 +6,7 @@
 pub mod cuda;
 pub mod metal;
 pub mod opencl;
+pub mod vulkan;
 
 // Re-export common types and traits
 #[cfg(feature = "gpu")]
@@ -25,6 +26,10 @@ pub use metal::{MetalDeviceInfo, MetalMemoryManager, MetalOptimizationLevel, Met
 pub use opencl::{
     OpenCLMemoryManager, OpenCLOptimizationLevel, OpenCLPlatformInfo, OpenCLSpMatVec,
 };
+pub use vulkan::{
+    VulkanDeviceInfo, VulkanDeviceType, VulkanMemoryManager, VulkanOptimizationLevel,
+    VulkanSpMatVec,
+};
 
 use crate::csr_array::CsrArray;
 use crate::error::{SparseError, SparseResult};
@@ -41,6 +46,7 @@ pub struct GpuSpMatVec {
     cuda_handler: Option<CudaSpMatVec>,
     opencl_handler: Option<OpenCLSpMatVec>,
     metal_handler: Option<MetalSpMatVec>,
+    vulkan_handler: Option<VulkanSpMatVec>,
 }
 
 impl GpuSpMatVec {
@@ -53,6 +59,7 @@ impl GpuSpMatVec {
             cuda_handler: None,
             opencl_handler: None,
             metal_handler: None,
+            vulkan_handler: None,
         };
 
         // Initialize the appropriate backend
@@ -68,6 +75,7 @@ impl GpuSpMatVec {
             cuda_handler: None,
             opencl_handler: None,
             metal_handler: None,
+            vulkan_handler: None,
         };
 
         handler.initialize_backend()?;
@@ -87,11 +95,18 @@ impl GpuSpMatVec {
             GpuBackend::Metal => {
                 self.metal_handler = Some(MetalSpMatVec::new()?);
             }
+            GpuBackend::Wgpu => {
+                self.vulkan_handler = Some(VulkanSpMatVec::new()?);
+            }
+            #[cfg(not(feature = "gpu"))]
+            GpuBackend::Vulkan => {
+                self.vulkan_handler = Some(VulkanSpMatVec::new()?);
+            }
             GpuBackend::Cpu => {
                 // CPU fallback - no initialization needed
             }
-            _ => {
-                // For other backends (ROCm, WGPU), fall back to CPU for now
+            GpuBackend::Rocm => {
+                // For ROCm, fall back to CPU for now
                 self.backend = GpuBackend::Cpu;
             }
         }
@@ -101,7 +116,7 @@ impl GpuSpMatVec {
 
     /// Detect the best available GPU backend
     fn detect_best_backend() -> GpuBackend {
-        // Priority order: Metal (on macOS), CUDA, OpenCL, CPU
+        // Priority order: Metal (on macOS), CUDA, Vulkan, OpenCL, CPU
         #[cfg(target_os = "macos")]
         {
             if Self::is_metal_available() {
@@ -111,6 +126,10 @@ impl GpuSpMatVec {
 
         if Self::is_cuda_available() {
             return GpuBackend::Cuda;
+        }
+
+        if Self::is_vulkan_available() {
+            return GpuBackend::Wgpu;
         }
 
         if Self::is_opencl_available() {
@@ -155,6 +174,19 @@ impl GpuSpMatVec {
         false
     }
 
+    /// Check if Vulkan is available
+    fn is_vulkan_available() -> bool {
+        #[cfg(feature = "gpu")]
+        {
+            // Check for Vulkan SDK or runtime
+            std::env::var("VULKAN_SDK").is_ok()
+                || std::path::Path::new("/usr/share/vulkan").exists()
+                || std::path::Path::new("/usr/local/share/vulkan").exists()
+        }
+        #[cfg(not(feature = "gpu"))]
+        false
+    }
+
     /// Execute sparse matrix-vector multiplication on GPU
     pub fn spmv<T>(
         &self,
@@ -173,9 +205,8 @@ impl GpuSpMatVec {
                         if let Some(device) = device {
                             handler.execute_spmv(matrix, vector, device)
                         } else {
-                            return Err(SparseError::ComputationError(
-                                "GPU device required for CUDA operations".to_string(),
-                            ));
+                            // Fall back to CPU when no device is provided
+                            matrix.dot_vector(vector)
                         }
                     }
                     #[cfg(not(feature = "gpu"))]
@@ -193,9 +224,8 @@ impl GpuSpMatVec {
                         if let Some(device) = device {
                             handler.execute_spmv(matrix, vector, device)
                         } else {
-                            return Err(SparseError::ComputationError(
-                                "GPU device required for OpenCL operations".to_string(),
-                            ));
+                            // Fall back to CPU when no device is provided
+                            matrix.dot_vector(vector)
                         }
                     }
                     #[cfg(not(feature = "gpu"))]
@@ -213,9 +243,8 @@ impl GpuSpMatVec {
                         if let Some(device) = device {
                             handler.execute_spmv(matrix, vector, device)
                         } else {
-                            return Err(SparseError::ComputationError(
-                                "GPU device required for Metal operations".to_string(),
-                            ));
+                            // Fall back to CPU when no device is provided
+                            matrix.dot_vector(vector)
                         }
                     }
                     #[cfg(not(feature = "gpu"))]
@@ -226,11 +255,40 @@ impl GpuSpMatVec {
                     ))
                 }
             }
+            GpuBackend::Wgpu => {
+                if let Some(ref handler) = self.vulkan_handler {
+                    #[cfg(feature = "gpu")]
+                    {
+                        if let Some(device) = device {
+                            handler.execute_spmv(matrix, vector, device)
+                        } else {
+                            // Fall back to CPU when no device is provided
+                            matrix.dot_vector(vector)
+                        }
+                    }
+                    #[cfg(not(feature = "gpu"))]
+                    handler.execute_spmv_cpu(matrix, vector)
+                } else {
+                    Err(SparseError::ComputationError(
+                        "Vulkan handler not initialized".to_string(),
+                    ))
+                }
+            }
+            #[cfg(not(feature = "gpu"))]
+            GpuBackend::Vulkan => {
+                if let Some(ref handler) = self.vulkan_handler {
+                    handler.execute_spmv_cpu(matrix, vector)
+                } else {
+                    Err(SparseError::ComputationError(
+                        "Vulkan handler not initialized".to_string(),
+                    ))
+                }
+            }
             GpuBackend::Cpu => {
                 // CPU fallback
                 matrix.dot_vector(vector)
             }
-            _ => {
+            GpuBackend::Rocm => {
                 // Unsupported backend, fall back to CPU
                 matrix.dot_vector(vector)
             }
@@ -312,7 +370,39 @@ impl GpuSpMatVec {
                     ))
                 }
             }
-            _ => {
+            GpuBackend::Wgpu => {
+                if let Some(ref handler) = self.vulkan_handler {
+                    let vulkan_level = optimization_hint.to_vulkan_level();
+                    #[cfg(feature = "gpu")]
+                    {
+                        if let Some(device) = device {
+                            handler.execute_optimized_spmv(matrix, vector, device, vulkan_level)
+                        } else {
+                            return Err(SparseError::ComputationError(
+                                "GPU device required for Vulkan operations".to_string(),
+                            ));
+                        }
+                    }
+                    #[cfg(not(feature = "gpu"))]
+                    handler.execute_spmv_cpu(matrix, vector)
+                } else {
+                    Err(SparseError::ComputationError(
+                        "Vulkan handler not initialized".to_string(),
+                    ))
+                }
+            }
+            #[cfg(not(feature = "gpu"))]
+            GpuBackend::Vulkan => {
+                if let Some(ref handler) = self.vulkan_handler {
+                    let vulkan_level = optimization_hint.to_vulkan_level();
+                    handler.execute_spmv_cpu(matrix, vector)
+                } else {
+                    Err(SparseError::ComputationError(
+                        "Vulkan handler not initialized".to_string(),
+                    ))
+                }
+            }
+            GpuBackend::Cpu | GpuBackend::Rocm => {
                 // Fall back to basic implementation
                 self.spmv(matrix, vector, device)
             }
@@ -357,7 +447,22 @@ impl GpuSpMatVec {
                     8192
                 },
             },
-            _ => BackendInfo {
+            GpuBackend::Wgpu => BackendInfo {
+                name: "Vulkan".to_string(),
+                version: "Unknown".to_string(),
+                device_count: 1,
+                supports_double_precision: true,
+                max_memory_mb: 8192, // 8GB default
+            },
+            #[cfg(not(feature = "gpu"))]
+            GpuBackend::Vulkan => BackendInfo {
+                name: "Vulkan".to_string(),
+                version: "Unknown".to_string(),
+                device_count: 1,
+                supports_double_precision: true,
+                max_memory_mb: 8192, // 8GB default
+            },
+            GpuBackend::Cpu | GpuBackend::Rocm => BackendInfo {
                 name: "CPU".to_string(),
                 version: "Fallback".to_string(),
                 device_count: 0,
@@ -375,6 +480,7 @@ impl Default for GpuSpMatVec {
             cuda_handler: None,
             opencl_handler: None,
             metal_handler: None,
+            vulkan_handler: None,
         })
     }
 }
@@ -423,6 +529,16 @@ impl OptimizationHint {
             OptimizationHint::MemoryOptimized => MetalOptimizationLevel::AppleSilicon,
         }
     }
+
+    /// Convert to Vulkan optimization level
+    pub fn to_vulkan_level(self) -> VulkanOptimizationLevel {
+        match self {
+            OptimizationHint::Basic => VulkanOptimizationLevel::Basic,
+            OptimizationHint::Balanced => VulkanOptimizationLevel::ComputeShader,
+            OptimizationHint::Maximum => VulkanOptimizationLevel::Maximum,
+            OptimizationHint::MemoryOptimized => VulkanOptimizationLevel::Subgroup,
+        }
+    }
 }
 
 /// GPU backend information
@@ -469,6 +585,10 @@ pub mod convenience {
             backends.push(GpuBackend::Cuda);
         }
 
+        if GpuSpMatVec::is_vulkan_available() {
+            backends.push(GpuBackend::Wgpu);
+        }
+
         if GpuSpMatVec::is_opencl_available() {
             backends.push(GpuBackend::OpenCL);
         }
@@ -500,8 +620,14 @@ mod tests {
 
         // Should return a valid backend
         match backend {
-            GpuBackend::Cuda | GpuBackend::OpenCL | GpuBackend::Metal | GpuBackend::Cpu => (),
-            _ => panic!("Unexpected backend detected"),
+            GpuBackend::Cuda
+            | GpuBackend::OpenCL
+            | GpuBackend::Metal
+            | GpuBackend::Cpu
+            | GpuBackend::Wgpu
+            | GpuBackend::Rocm => (),
+            #[cfg(not(feature = "gpu"))]
+            GpuBackend::Vulkan => (),
         }
     }
 

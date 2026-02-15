@@ -27,13 +27,13 @@ use scirs2_optim::optimizers as optim_optimizers;
 /// let grads = vec![Array::from_vec(vec![0.1, 0.2, 0.3]).into_dyn()];
 /// // Update parameters
 /// adam.update(&mut params, &grads).unwrap();
-pub struct Adam<F: Float + Debug> {
+pub struct Adam<F: Float + Debug + NumAssign> {
     /// Inner Adam optimizer from scirs2-optim
     inner: optim, optimizers: Adam<F>,
     /// Weight decay (L2 regularization)
     weight_decay: F,
 }
-impl<F: Float + Debug> Adam<F> {
+impl<F: Float + Debug + NumAssign> Adam<F> {
     /// Create a new Adam optimizer
     ///
     /// # Arguments
@@ -107,7 +107,7 @@ impl<F: Float + Debug> Adam<F> {
     /// Reset the optimizer state
     pub fn reset(&mut self) {
         self.inner.reset();
-impl<F: Float + Debug> Default for Adam<F> {
+impl<F: Float + Debug + NumAssign> Default for Adam<F> {
     fn default() -> Self {
         // Safe default with learning rate 0.001
         let _learning_rate = F::from(0.001).unwrap_or(F::one() / F::from(1000.0).unwrap_or(F::one()));
@@ -115,7 +115,7 @@ impl<F: Float + Debug> Default for Adam<F> {
         let beta2 = F::from(0.999).unwrap_or(F::one());
         let epsilon = F::from(1e-8).unwrap_or(F::zero());
         Self::new(_learning_rate, beta1, beta2, epsilon)
-impl<F: Float + Debug> Optimizer<F> for Adam<F> {
+impl<F: Float + Debug + NumAssign> Optimizer<F> for Adam<F> {
     fn update(&mut self, params: &mut [Array<F, scirs2_core::ndarray::IxDyn>], 
               grads: &[Array<F, scirs2_core::ndarray::IxDyn>]) -> Result<()> {
         if params.len() != grads.len() {

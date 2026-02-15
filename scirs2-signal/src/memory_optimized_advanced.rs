@@ -46,8 +46,13 @@ pub struct MemoryOptimizationConfig {
 
 impl Default for MemoryOptimizationConfig {
     fn default() -> Self {
+        #[cfg(target_pointer_width = "32")]
+        let max_memory_bytes = Some(256 * 1024 * 1024); // 256MB default for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let max_memory_bytes = Some(1024 * 1024 * 1024); // 1GB default for 64-bit
+
         Self {
-            max_memory_bytes: Some(1024 * 1024 * 1024), // 1GB default
+            max_memory_bytes,
             chunk_size: 65536,                          // 64K samples
             overlap_size: 1024,
             use_memory_pool: true,

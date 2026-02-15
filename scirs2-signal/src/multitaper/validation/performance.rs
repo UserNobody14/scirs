@@ -70,7 +70,9 @@ fn simulate_multitaper_computation(config: &TestSignalConfig, enhanced: bool) ->
 
     // Prevent optimization from removing the loop
     if sum == f64::INFINITY {
-        return Err(crate::error::SignalError::ComputationError("Overflow".to_string()));
+        return Err(crate::error::SignalError::ComputationError(
+            "Overflow".to_string(),
+        ));
     }
 
     Ok(())
@@ -132,7 +134,9 @@ pub fn benchmark_memory_access(config: &TestSignalConfig) -> SignalResult<f64> {
 
     // Prevent optimization
     if result == f64::INFINITY {
-        return Err(crate::error::SignalError::ComputationError("Overflow".to_string()));
+        return Err(crate::error::SignalError::ComputationError(
+            "Overflow".to_string(),
+        ));
     }
 
     Ok(elapsed.as_secs_f64() * 1000.0)
@@ -201,7 +205,9 @@ fn simulate_work(iterations: usize) -> SignalResult<()> {
     }
 
     if sum == f64::INFINITY {
-        return Err(crate::error::SignalError::ComputationError("Overflow".to_string()));
+        return Err(crate::error::SignalError::ComputationError(
+            "Overflow".to_string(),
+        ));
     }
 
     Ok(())

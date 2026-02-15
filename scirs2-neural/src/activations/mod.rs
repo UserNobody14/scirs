@@ -74,7 +74,7 @@
 
 use crate::error::Result;
 use scirs2_core::ndarray::Array;
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 /// Trait for activation functions
 ///
 /// This trait defines the interface for all activation functions in the neural network.
@@ -97,7 +97,7 @@ use scirs2_core::numeric::Float;
 /// # Ok(())
 /// # }
 /// ```
-pub trait Activation<F: Float> {
+pub trait Activation<F: Float + NumAssign> {
     /// Apply the activation function to the input
     ///
     /// # Arguments
@@ -117,13 +117,20 @@ pub trait Activation<F: Float> {
     /// # Ok(())
     /// # }
     /// ```
-    fn forward(&self, input: &Array<F, scirs2_core::ndarray::IxDyn>) -> Result<Array<F, scirs2_core::ndarray::IxDyn>>;
-    /// Compute the derivative of the activation function with respect to the input
+    fn forward(
+        &self,
+        input: &Array<F, scirs2_core::ndarray::IxDyn>,
+    ) -> Result<Array<F, scirs2_core::ndarray::IxDyn>>;
+    /// Compute the derivative of the activation function with respect to the input.
     /// This method computes the gradient of the activation function, which is needed
     /// for backpropagation during training.
+    ///
     /// * `grad_output` - Gradient from the next layer in the backpropagation chain
     /// * `output` - Output of the forward pass (used by some activations for efficiency)
-    /// The gradient with respect to the input, same shape as the input
+    ///
+    /// Returns the gradient with respect to the input, same shape as the input.
+    ///
+    /// ```ignore
     /// use scirs2_neural::activations::{Activation, ReLU};
     /// let relu = ReLU::new();
     /// let input = Array::from_vec(vec![-1.0, 1.0]).into_dyn();
@@ -132,6 +139,7 @@ pub trait Activation<F: Float> {
     /// let grad_input = relu.backward(&grad_output, &output)?;
     /// // ReLU gradient: 0 for negative inputs, 1 for positive inputs
     /// assert_eq!(grad_input.as_slice().expect("Operation failed"), &[0.0, 1.0]);
+    /// ```
     fn backward(
         &self,
         grad_output: &Array<F, scirs2_core::ndarray::IxDyn>,
@@ -147,7 +155,7 @@ mod swish;
 mod tanh;
 pub use gelu::GELU;
 pub use mish::Mish;
-pub use relu::{LeakyReLU, ReLU, ELU};
+pub use relu::{LeakyReLU, ReLU};
 pub use sigmoid::Sigmoid;
 pub use softmax::Softmax;
 pub use swish::Swish;

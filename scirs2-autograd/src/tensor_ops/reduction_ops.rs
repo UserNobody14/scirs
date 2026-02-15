@@ -341,7 +341,7 @@ impl<T: Float> op::Op<T> for ReduceSumToScalar {
     }
 }
 
-struct ReduceSumToScalarGrad;
+pub(crate) struct ReduceSumToScalarGrad;
 
 impl<T: Float> op::Op<T> for ReduceSumToScalarGrad {
     fn compute(&self, ctx: &mut crate::op::ComputeContext<T>) -> Result<(), crate::op::OpError> {

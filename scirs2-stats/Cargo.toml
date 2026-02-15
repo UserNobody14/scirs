@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Statistical functions module for SciRS2 (scirs2-stats)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["statistics", "probability", "scientific", "scipy", "numerical"]
@@ -68,6 +69,10 @@ harness = false
 
 [[bench]]
 name = "simd_correlation_bench"
+harness = false
+
+[[bench]]
+name = "v020_simd_comprehensive"
 harness = false
 
 

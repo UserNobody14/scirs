@@ -207,11 +207,15 @@ pub use self::spherical::{spherical_jn, spherical_jn_scaled, spherical_yn, spher
 // to avoid "unused function" warnings
 
 // Export each set of functions from their own module
+pub mod asymptotic;
 pub mod derivatives;
 pub mod first_kind;
 pub mod modified;
 pub mod second_kind;
 pub mod spherical;
+
+// Re-export asymptotic expansion functions
+pub use asymptotic::{adaptive_bessel_j, debye_i, debye_j, debye_k, hankel_j, hankel_y, uniform_j};
 
 /// Hankel functions of the first kind H₁⁽¹⁾(v, z)
 ///

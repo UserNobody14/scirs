@@ -5,7 +5,7 @@
 
 use crate::error::{NeuralError, Result};
 use scirs2_core::ndarray::{s, Array, Array2, ArrayView2, Axis, IxDyn};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::Rng;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -28,7 +28,7 @@ use std::marker::PhantomData;
 /// assert_eq!(dataset.len(), 100);
 /// ```
 #[derive(Debug, Clone)]
-pub struct Dataset<F: Float + Debug> {
+pub struct Dataset<F: Float + Debug + NumAssign> {
     /// Feature matrix [num_samples, num_features]
     features: Array2<F>,
     /// Label matrix [num_samples, num_labels]
@@ -37,7 +37,7 @@ pub struct Dataset<F: Float + Debug> {
     indices: Vec<usize>,
 }
 
-impl<F: Float + Debug> Dataset<F> {
+impl<F: Float + Debug + NumAssign> Dataset<F> {
     /// Create a new dataset from features and labels
     ///
     /// # Arguments
@@ -208,14 +208,14 @@ impl<F: Float + Debug> Dataset<F> {
 /// Iterator for batching a dataset
 ///
 /// Provides efficient iteration over batches of a dataset.
-pub struct BatchIterator<'a, F: Float + Debug> {
+pub struct BatchIterator<'a, F: Float + Debug + NumAssign> {
     dataset: &'a Dataset<F>,
     batch_size: usize,
     current_idx: usize,
     drop_last: bool,
 }
 
-impl<'a, F: Float + Debug> BatchIterator<'a, F> {
+impl<'a, F: Float + Debug + NumAssign> BatchIterator<'a, F> {
     /// Create a new batch iterator
     ///
     /// # Arguments
@@ -242,7 +242,7 @@ impl<'a, F: Float + Debug> BatchIterator<'a, F> {
     }
 }
 
-impl<'a, F: Float + Debug> Iterator for BatchIterator<'a, F> {
+impl<'a, F: Float + Debug + NumAssign> Iterator for BatchIterator<'a, F> {
     type Item = Result<(Array2<F>, Array2<F>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -288,14 +288,14 @@ impl<'a, F: Float + Debug> Iterator for BatchIterator<'a, F> {
 ///     loader.on_epoch_end(); // Shuffle for next epoch
 /// }
 /// ```
-pub struct DataLoader<F: Float + Debug> {
+pub struct DataLoader<F: Float + Debug + NumAssign> {
     dataset: Dataset<F>,
     batch_size: usize,
     shuffle: bool,
     drop_last: bool,
 }
 
-impl<F: Float + Debug> DataLoader<F> {
+impl<F: Float + Debug + NumAssign> DataLoader<F> {
     /// Create a new data loader
     ///
     /// # Arguments
@@ -370,7 +370,7 @@ pub enum Normalization {
 ///
 /// # Returns
 /// Normalized feature matrix
-pub fn normalize_features<F: Float + Debug>(
+pub fn normalize_features<F: Float + Debug + NumAssign>(
     features: &Array2<F>,
     strategy: Normalization,
 ) -> Array2<F> {
@@ -382,7 +382,7 @@ pub fn normalize_features<F: Float + Debug>(
                 // Compute mean
                 let mut sum = F::zero();
                 for i in 0..features.nrows() {
-                    sum = sum + features[[i, j]];
+                    sum += features[[i, j]];
                 }
                 let mean = sum / F::from(features.nrows()).unwrap_or(F::one());
 
@@ -390,7 +390,7 @@ pub fn normalize_features<F: Float + Debug>(
                 let mut var_sum = F::zero();
                 for i in 0..features.nrows() {
                     let diff = features[[i, j]] - mean;
-                    var_sum = var_sum + diff * diff;
+                    var_sum += diff * diff;
                 }
                 let std = (var_sum / F::from(features.nrows()).unwrap_or(F::one())).sqrt();
                 let std = if std < F::from(1e-8).unwrap_or(F::zero()) {
@@ -446,7 +446,10 @@ pub fn normalize_features<F: Float + Debug>(
 ///
 /// # Returns
 /// One-hot encoded label matrix
-pub fn one_hot_encode<F: Float + Debug>(labels: &[usize], num_classes: usize) -> Array2<F> {
+pub fn one_hot_encode<F: Float + Debug + NumAssign>(
+    labels: &[usize],
+    num_classes: usize,
+) -> Array2<F> {
     let n = labels.len();
     let mut encoded = Array2::zeros((n, num_classes));
 

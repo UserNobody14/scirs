@@ -3,10 +3,16 @@
 //! This module provides a caching mechanism for FFT plans to improve performance
 //! when performing repeated transforms of the same size.
 
-use rustfft::FftPlanner;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+// ========================================
+// RUSTFFT BACKEND
+// ========================================
+
+#[cfg(feature = "rustfft-backend")]
+use rustfft::FftPlanner;
 
 /// Cache key for storing FFT plans
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -16,10 +22,23 @@ struct PlanKey {
     // Future: Add backend identifier when we support multiple backends
 }
 
-/// Cached FFT plan with metadata
+/// Cached FFT plan with metadata (rustfft backend)
+#[cfg(feature = "rustfft-backend")]
 #[derive(Clone)]
 struct CachedPlan {
     plan: Arc<dyn rustfft::Fft<f64>>,
+    last_used: Instant,
+    usage_count: usize,
+}
+
+/// Cached FFT plan with metadata (OxiFFT backend)
+#[cfg(all(feature = "oxifft", not(feature = "rustfft-backend")))]
+#[derive(Clone)]
+struct CachedPlan {
+    // For OxiFFT, we don't store the plan here since it's managed globally
+    // This struct just tracks metadata for statistics
+    size: usize,
+    forward: bool,
     last_used: Instant,
     usage_count: usize,
 }
@@ -98,7 +117,8 @@ impl PlanCache {
         }
     }
 
-    /// Get or create an FFT plan for the given size and direction
+    /// Get or create an FFT plan for the given size and direction (rustfft backend)
+    #[cfg(feature = "rustfft-backend")]
     pub fn get_or_create_plan(
         &self,
         size: usize,
@@ -160,6 +180,56 @@ impl PlanCache {
         plan
     }
 
+    /// Get or create an FFT plan for the given size and direction (OxiFFT backend)
+    ///
+    /// Note: OxiFFT plans are managed globally via oxifft_plan_cache.
+    /// This method provides a compatible API but delegates to the global cache.
+    #[cfg(all(feature = "oxifft", not(feature = "rustfft-backend")))]
+    pub fn track_plan_usage(&self, size: usize, forward: bool) {
+        if !*self.enabled.lock().expect("Operation failed") {
+            return;
+        }
+
+        let key = PlanKey { size, forward };
+
+        // Try to get from cache first
+        if let Ok(mut cache) = self.cache.lock() {
+            if let Some(cached) = cache.get_mut(&key) {
+                // Check if the plan is still valid (not too old)
+                if cached.last_used.elapsed() <= self.max_age {
+                    cached.last_used = Instant::now();
+                    cached.usage_count += 1;
+                    *self.hit_count.lock().expect("Operation failed") += 1;
+                    return;
+                } else {
+                    // Remove stale entry
+                    cache.remove(&key);
+                }
+            }
+        }
+
+        // Cache miss - track new plan
+        *self.miss_count.lock().expect("Operation failed") += 1;
+
+        // Store metadata in cache if enabled
+        if let Ok(mut cache) = self.cache.lock() {
+            // Clean up old entries if we're at capacity
+            if cache.len() >= self.max_entries {
+                self.evict_old_entries(&mut cache);
+            }
+
+            cache.insert(
+                key,
+                CachedPlan {
+                    size,
+                    forward,
+                    last_used: Instant::now(),
+                    usage_count: 1,
+                },
+            );
+        }
+    }
+
     /// Evict old entries from the cache (LRU-style)
     fn evict_old_entries(&self, cache: &mut HashMap<PlanKey, CachedPlan>) {
         // Remove entries older than max_age
@@ -179,12 +249,26 @@ impl PlanCache {
         }
     }
 
-    /// Pre-populate cache with common sizes
+    /// Pre-populate cache with common sizes (rustfft backend)
+    #[cfg(feature = "rustfft-backend")]
     pub fn precompute_common_sizes(&self, sizes: &[usize], planner: &mut FftPlanner<f64>) {
         for &size in sizes {
             // Pre-compute both forward and inverse plans
             self.get_or_create_plan(size, true, planner);
             self.get_or_create_plan(size, false, planner);
+        }
+    }
+
+    /// Pre-populate cache with common sizes (OxiFFT backend)
+    ///
+    /// Note: With OxiFFT, plans are created lazily and cached globally.
+    /// This method just tracks the sizes for statistics.
+    #[cfg(all(feature = "oxifft", not(feature = "rustfft-backend")))]
+    pub fn precompute_common_sizes(&self, sizes: &[usize]) {
+        for &size in sizes {
+            // Track both forward and inverse plans
+            self.track_plan_usage(size, true);
+            self.track_plan_usage(size, false);
         }
     }
 }
@@ -240,8 +324,9 @@ pub fn init_global_cache(max_entries: usize, max_age: Duration) -> Result<(), &'
 mod tests {
     use super::*;
 
+    #[cfg(feature = "rustfft-backend")]
     #[test]
-    fn test_plan_cache_basic() {
+    fn test_plan_cache_basic_rustfft() {
         let cache = PlanCache::new();
         let mut planner = FftPlanner::new();
 
@@ -255,8 +340,9 @@ mod tests {
         assert_eq!(stats.miss_count, 1);
     }
 
+    #[cfg(feature = "rustfft-backend")]
     #[test]
-    fn test_cache_eviction() {
+    fn test_cache_eviction_rustfft() {
         let cache = PlanCache::with_config(2, Duration::from_secs(3600));
         let mut planner = FftPlanner::new();
 
@@ -271,8 +357,9 @@ mod tests {
         assert_eq!(stats.size, 2);
     }
 
+    #[cfg(feature = "rustfft-backend")]
     #[test]
-    fn test_cache_disabled() {
+    fn test_cache_disabled_rustfft() {
         let cache = PlanCache::new();
         cache.set_enabled(false);
 
@@ -281,6 +368,53 @@ mod tests {
         // Get the same plan twice with cache disabled
         cache.get_or_create_plan(128, true, &mut planner);
         cache.get_or_create_plan(128, true, &mut planner);
+
+        // Both should be misses
+        let stats = cache.get_stats();
+        assert_eq!(stats.hit_count, 0);
+        assert_eq!(stats.miss_count, 0); // No tracking when disabled
+    }
+
+    #[cfg(all(feature = "oxifft", not(feature = "rustfft-backend")))]
+    #[test]
+    fn test_plan_cache_basic_oxifft() {
+        let cache = PlanCache::new();
+
+        // Track the same plan twice
+        cache.track_plan_usage(128, true);
+        cache.track_plan_usage(128, true);
+
+        // Second request should be a cache hit
+        let stats = cache.get_stats();
+        assert_eq!(stats.hit_count, 1);
+        assert_eq!(stats.miss_count, 1);
+    }
+
+    #[cfg(all(feature = "oxifft", not(feature = "rustfft-backend")))]
+    #[test]
+    fn test_cache_eviction_oxifft() {
+        let cache = PlanCache::with_config(2, Duration::from_secs(3600));
+
+        // Fill cache with 2 entries
+        cache.track_plan_usage(64, true);
+        cache.track_plan_usage(128, true);
+
+        // Add a third entry, which should evict the oldest
+        cache.track_plan_usage(256, true);
+
+        let stats = cache.get_stats();
+        assert_eq!(stats.size, 2);
+    }
+
+    #[cfg(all(feature = "oxifft", not(feature = "rustfft-backend")))]
+    #[test]
+    fn test_cache_disabled_oxifft() {
+        let cache = PlanCache::new();
+        cache.set_enabled(false);
+
+        // Track the same plan twice with cache disabled
+        cache.track_plan_usage(128, true);
+        cache.track_plan_usage(128, true);
 
         // Both should be misses
         let stats = cache.get_stats();

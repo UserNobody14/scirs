@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Neural network building blocks module for SciRS2 (scirs2-neural) - Minimal Version"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["neural-network", "deep-learning", "scientific", "ai", "machine-learning"]
@@ -20,10 +21,14 @@ rustdoc-args = ["--cfg", "docsrs"]
 # Core dependencies - ALL numeric/array/random functionality from scirs2-core (SciRS2 POLICY)
 scirs2-core = { workspace = true, features = ["random", "array", "parallel", "simd"] }
 scirs2-linalg = { workspace = true }
+scirs2-metrics = { workspace = true }
 thiserror = { workspace = true }
 approx = { workspace = true }
 statrs = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [features]
 default = []
 gpu = ["scirs2-core/gpu"]
+metrics_integration = ["scirs2-metrics/neural_common"]

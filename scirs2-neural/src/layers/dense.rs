@@ -4,7 +4,7 @@ use crate::activations_minimal::Activation;
 use crate::error::{NeuralError, Result};
 use crate::layers::{Layer, ParamLayer};
 use scirs2_core::ndarray::{Array, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::{Distribution, Uniform};
 use std::fmt::Debug;
 
@@ -12,7 +12,7 @@ use std::fmt::Debug;
 ///
 /// A dense layer performs the operation: y = activation(W * x + b), where W is the weight matrix,
 /// x is the input vector, b is the bias vector, and activation is the activation function.
-pub struct Dense<F: Float + Debug + Send + Sync> {
+pub struct Dense<F: Float + Debug + Send + Sync + NumAssign> {
     /// Number of input features
     input_dim: usize,
     /// Number of output features
@@ -33,7 +33,9 @@ pub struct Dense<F: Float + Debug + Send + Sync> {
     output_pre_activation: std::sync::RwLock<Option<Array<F, IxDyn>>>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> std::fmt::Debug for Dense<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> std::fmt::Debug
+    for Dense<F>
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Dense")
             .field("input_dim", &self.input_dim)
@@ -45,7 +47,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> std::fmt::Debug f
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Clone for Dense<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> Clone for Dense<F> {
     fn clone(&self) -> Self {
         Self {
             input_dim: self.input_dim,
@@ -69,7 +71,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Clone for Dense<F
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Dense<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> Dense<F> {
     /// Create a new dense layer.
     ///
     /// # Arguments
@@ -169,10 +171,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Dense<F> {
     /// Uses BLAS-accelerated GEMM for 3-5x speedup over naive implementation.
     /// Falls back to scalar version if BLAS is unavailable or for very small batches.
     #[allow(dead_code)]
-    fn compute_forward_simd(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>>
-    where
-        F: scirs2_core::numeric::NumAssign + 'static,
-    {
+    fn compute_forward_simd(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
         let batch_size = input.shape()[0];
 
         // For very small batches (< 4), scalar version might be faster due to overhead
@@ -238,7 +237,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Dense<F> {
             for out_idx in 0..self.output_dim {
                 let mut sum = F::zero();
                 for in_idx in 0..self.input_dim {
-                    sum = sum + input[[batch, in_idx]] * self.weights[[in_idx, out_idx]];
+                    sum += input[[batch, in_idx]] * self.weights[[in_idx, out_idx]];
                 }
                 // Add bias
                 output[[batch, out_idx]] = sum + self.biases[out_idx];
@@ -249,10 +248,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Dense<F> {
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for Dense<F>
-where
-    F: scirs2_core::numeric::NumAssign,
-{
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> Layer<F> for Dense<F> {
     fn forward(
         &self,
         input: &Array<F, scirs2_core::ndarray::IxDyn>,
@@ -452,9 +448,8 @@ where
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> ParamLayer<F> for Dense<F>
-where
-    F: scirs2_core::numeric::NumAssign,
+impl<F: Float + Debug + ScalarOperand + Send + Sync + NumAssign + 'static> ParamLayer<F>
+    for Dense<F>
 {
     fn get_parameters(&self) -> Vec<Array<F, scirs2_core::ndarray::IxDyn>> {
         vec![self.weights.clone(), self.biases.clone()]
@@ -500,5 +495,5 @@ where
 }
 
 // Explicit Send + Sync implementations for Dense layer
-unsafe impl<F: Float + Debug + Send + Sync> Send for Dense<F> {}
-unsafe impl<F: Float + Debug + Send + Sync> Sync for Dense<F> {}
+unsafe impl<F: Float + Debug + Send + Sync + NumAssign> Send for Dense<F> {}
+unsafe impl<F: Float + Debug + Send + Sync + NumAssign> Sync for Dense<F> {}

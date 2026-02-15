@@ -2,11 +2,11 @@
 
 use crate::error::{NeuralError, Result};
 use scirs2_core::ndarray::{Array, Ix1, Ix2, IxDyn, Zip};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 
 /// Trait for metrics that evaluate model performance
-pub trait Metric<F: Float> {
+pub trait Metric<F: Float + NumAssign> {
     /// Compute the metric for the given predictions and targets
     fn compute(&self, predictions: &Array<F, IxDyn>, targets: &Array<F, IxDyn>) -> Result<F>;
 }
@@ -14,7 +14,7 @@ pub trait Metric<F: Float> {
 /// Mean squared error metric
 pub struct MeanSquaredError;
 
-impl<F: Float + Debug> Metric<F> for MeanSquaredError {
+impl<F: Float + Debug + NumAssign> Metric<F> for MeanSquaredError {
     fn compute(&self, predictions: &Array<F, IxDyn>, targets: &Array<F, IxDyn>) -> Result<F> {
         mean_squared_error(predictions, targets)
     }
@@ -39,7 +39,7 @@ impl Default for BinaryAccuracy {
     }
 }
 
-impl<F: Float> Metric<F> for BinaryAccuracy {
+impl<F: Float + NumAssign> Metric<F> for BinaryAccuracy {
     fn compute(&self, predictions: &Array<F, IxDyn>, targets: &Array<F, IxDyn>) -> Result<F> {
         if predictions.shape() != targets.shape() {
             return Err(NeuralError::InferenceError(format!(
@@ -73,7 +73,7 @@ impl<F: Float> Metric<F> for BinaryAccuracy {
 /// Categorical accuracy metric for multi-class classification
 pub struct CategoricalAccuracy;
 
-impl<F: Float + Debug> Metric<F> for CategoricalAccuracy {
+impl<F: Float + Debug + NumAssign> Metric<F> for CategoricalAccuracy {
     fn compute(&self, predictions: &Array<F, IxDyn>, targets: &Array<F, IxDyn>) -> Result<F> {
         if predictions.ndim() >= 2 && targets.ndim() >= 2 {
             categorical_accuracy(
@@ -98,7 +98,7 @@ impl<F: Float + Debug> Metric<F> for CategoricalAccuracy {
 /// Coefficient of determination (R²) metric
 pub struct R2Score;
 
-impl<F: Float> Metric<F> for R2Score {
+impl<F: Float + NumAssign> Metric<F> for R2Score {
     fn compute(&self, predictions: &Array<F, IxDyn>, targets: &Array<F, IxDyn>) -> Result<F> {
         let n_elements = F::from(targets.len()).unwrap_or(F::one());
 
@@ -109,14 +109,14 @@ impl<F: Float> Metric<F> for R2Score {
         let mut ss_tot = F::zero();
         for target in targets.iter() {
             let diff = *target - target_mean;
-            ss_tot = ss_tot + diff * diff;
+            ss_tot += diff * diff;
         }
 
         // Calculate residual sum of squares
         let mut ss_res = F::zero();
         for (pred, target) in predictions.iter().zip(targets.iter()) {
             let diff = *target - *pred;
-            ss_res = ss_res + diff * diff;
+            ss_res += diff * diff;
         }
 
         // Calculate R²
@@ -147,7 +147,7 @@ impl<F: Float> Metric<F> for R2Score {
 /// assert!(mse > 0.0f64);
 /// ```
 #[allow(dead_code)]
-pub fn mean_squared_error<F: Float + Debug>(
+pub fn mean_squared_error<F: Float + Debug + NumAssign>(
     predictions: &Array<F, IxDyn>,
     targets: &Array<F, IxDyn>,
 ) -> Result<F> {
@@ -165,7 +165,7 @@ pub fn mean_squared_error<F: Float + Debug>(
     let mut sum_squared_diff = F::zero();
     for (p, t) in predictions.iter().zip(targets.iter()) {
         let diff = *p - *t;
-        sum_squared_diff = sum_squared_diff + diff * diff;
+        sum_squared_diff += diff * diff;
     }
 
     Ok(sum_squared_diff / n)
@@ -192,7 +192,7 @@ pub fn mean_squared_error<F: Float + Debug>(
 /// assert_eq!(accuracy, 1.0f64); // All predictions are correct
 /// ```
 #[allow(dead_code)]
-pub fn binary_accuracy<F: Float + Debug>(
+pub fn binary_accuracy<F: Float + Debug + NumAssign>(
     predictions: &Array<F, Ix1>,
     targets: &Array<F, Ix1>,
     threshold: F,
@@ -213,7 +213,7 @@ pub fn binary_accuracy<F: Float + Debug>(
     Zip::from(predictions).and(targets).for_each(|&p, &t| {
         let pred_class = if p >= threshold { F::one() } else { F::zero() };
         if pred_class == t {
-            correct = correct + F::one();
+            correct += F::one();
         }
     });
 
@@ -248,7 +248,7 @@ pub fn binary_accuracy<F: Float + Debug>(
 /// assert_eq!(accuracy, 1.0f64); // All predictions are correct
 /// ```
 #[allow(dead_code)]
-pub fn categorical_accuracy<F: Float + Debug>(
+pub fn categorical_accuracy<F: Float + Debug + NumAssign>(
     predictions: &Array<F, Ix2>,
     targets: &Array<F, Ix2>,
 ) -> Result<F> {
@@ -287,7 +287,7 @@ pub fn categorical_accuracy<F: Float + Debug>(
 
         // Check if prediction is correct
         if pred_class == true_class {
-            correct = correct + F::one();
+            correct += F::one();
         }
     }
 

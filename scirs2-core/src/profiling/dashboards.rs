@@ -753,7 +753,7 @@ impl PerformanceDashboard {
         }
         #[cfg(not(feature = "serde"))]
         {
-            let _ = config_json; // Suppress unused variable warning
+            let _ = configjson; // Suppress unused variable warning
             Err(CoreError::from(std::io::Error::other(
                 "Serde feature not enabled for configuration import",
             )))

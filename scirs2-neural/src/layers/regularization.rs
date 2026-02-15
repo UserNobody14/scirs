@@ -6,7 +6,7 @@
 use crate::error::{NeuralError, Result};
 use crate::layers::Layer;
 use scirs2_core::ndarray::{Array, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::{Arc, RwLock};
@@ -35,7 +35,7 @@ use std::sync::{Arc, RwLock};
 /// assert_eq!(output.shape(), input.shape());
 /// ```
 #[derive(Debug, Clone)]
-pub struct ActivityRegularization<F: Float + Debug + Send + Sync> {
+pub struct ActivityRegularization<F: Float + Debug + Send + Sync + NumAssign> {
     /// L1 regularization factor (None to disable)
     l1_factor: Option<F>,
     /// L2 regularization factor (None to disable)
@@ -50,7 +50,9 @@ pub struct ActivityRegularization<F: Float + Debug + Send + Sync> {
     _phantom: PhantomData<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> ActivityRegularization<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign>
+    ActivityRegularization<F>
+{
     /// Create a new activity regularization layer
     ///
     /// # Arguments
@@ -117,13 +119,13 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> ActivityRegulariz
         // L1 regularization (sum of absolute values)
         if let Some(l1_factor) = self.l1_factor {
             let l1_loss = input.mapv(|x| x.abs()).sum();
-            total_loss = total_loss + l1_factor * l1_loss;
+            total_loss += l1_factor * l1_loss;
         }
 
         // L2 regularization (sum of squared values)
         if let Some(l2_factor) = self.l2_factor {
             let l2_loss = input.mapv(|x| x * x).sum();
-            total_loss = total_loss + l2_factor * l2_loss;
+            total_loss += l2_factor * l2_loss;
         }
 
         total_loss
@@ -158,7 +160,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> ActivityRegulariz
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign> Layer<F>
     for ActivityRegularization<F>
 {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -277,11 +279,13 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F>
 /// let output = regularizer.forward(&input).expect("Operation failed");
 /// ```
 #[derive(Debug, Clone)]
-pub struct L1ActivityRegularization<F: Float + Debug + Send + Sync> {
+pub struct L1ActivityRegularization<F: Float + Debug + Send + Sync + NumAssign> {
     inner: ActivityRegularization<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> L1ActivityRegularization<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign>
+    L1ActivityRegularization<F>
+{
     /// Create a new L1 activity regularization layer
     ///
     /// # Arguments
@@ -307,7 +311,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> L1ActivityRegular
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign> Layer<F>
     for L1ActivityRegularization<F>
 {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -365,11 +369,13 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F>
 /// let output = regularizer.forward(&input).expect("Operation failed");
 /// ```
 #[derive(Debug, Clone)]
-pub struct L2ActivityRegularization<F: Float + Debug + Send + Sync> {
+pub struct L2ActivityRegularization<F: Float + Debug + Send + Sync + NumAssign> {
     inner: ActivityRegularization<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> L2ActivityRegularization<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign>
+    L2ActivityRegularization<F>
+{
     /// Create a new L2 activity regularization layer
     ///
     /// # Arguments
@@ -395,7 +401,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> L2ActivityRegular
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign> Layer<F>
     for L2ActivityRegularization<F>
 {
     fn as_any(&self) -> &dyn std::any::Any {

@@ -57,7 +57,7 @@ Basic usage examples:
 ```rust
 use scirs2_series::{utils, decomposition, forecasting, features};
 use scirs2_core::error::CoreResult;
-use ndarray::array;
+use scirs2_core::ndarray::array;
 
 // Create a simple time series
 fn time_series_example() -> CoreResult<()> {
@@ -187,7 +187,7 @@ Seasonal-Trend decomposition using LOESS (STL):
 
 ```rust
 use scirs2_series::decomposition::stl_decompose;
-use ndarray::Array1;
+use scirs2_core::ndarray::Array1;
 
 // Sample time series
 let data = Array1::from_vec(vec![/* time series data */]);
@@ -221,7 +221,7 @@ Autoregressive Integrated Moving Average (ARIMA) model:
 
 ```rust
 use scirs2_series::forecasting::arima_forecast;
-use ndarray::Array1;
+use scirs2_core::ndarray::Array1;
 
 // Sample time series
 let data = Array1::from_vec(vec![/* time series data */]);

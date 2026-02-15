@@ -300,14 +300,23 @@
 //! |---------|---------|-----------------|
 //! | Autodiff | ✅ | ✅ |
 //! | Dynamic Graphs | ✅ | ✅ |
-//! | GPU Support | ✅ | ⚠️ (limited) |
+//! | GPU Support | ✅ | ✅ (v0.2.0) |
 //! | Type Safety | ❌ | ✅ |
 //! | Memory Safety | ⚠️ | ✅ |
 //! | Pure Rust | ❌ | ✅ |
 //!
+//! ## 🚀 v0.2.0 Features
+//!
+//! - **GPU Acceleration**: CUDA, Metal, OpenCL, WebGPU backends
+//! - **Higher-Order Derivatives**: Hessian-vector products, full Jacobians
+//! - **Memory Optimization**: Advanced checkpointing, memory pooling
+//! - **Graph Optimization**: CSE, operation fusion
+//! - **Distributed Training**: Data/model parallelism
+//! - **Symbolic Differentiation**: Analytical derivatives
+//!
 //! ## 🔒 Version
 //!
-//! Current version: **0.1.5** (Released January 15, 2026)
+//! Current version: **0.2.0** (Development - Target Release February 2026)
 
 #[allow(unused_imports)]
 // Re-export from scirs2-core for POLICY compliance
@@ -352,6 +361,13 @@ pub mod tracing;
 pub mod validation;
 pub mod variable;
 pub mod visualization;
+
+// v0.2.0 modules
+pub mod distributed;
+#[cfg(feature = "gpu")]
+pub mod gpu;
+pub mod higher_order;
+pub mod symbolic;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::any::TypeId;

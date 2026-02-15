@@ -22,7 +22,7 @@
 use super::basic_ops::simd_apply_window;
 use super::types::{BatchSpectralResult, BatchSpectralStats, SimdConfig, SingleSpectralResult};
 use crate::error::{SignalError, SignalResult};
-use rustfft::FftPlanner;
+
 use scirs2_core::ndarray::{Array2, ArrayView1, ArrayViewMut1};
 use scirs2_core::numeric::Complex64;
 use scirs2_core::parallel_ops::*;
@@ -343,10 +343,12 @@ fn process_single_signal_simd(
         }
     }
 
-    // Compute FFT using rustfft
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(nfft);
-    fft.process(&mut padded);
+    // Compute FFT using scirs2_fft
+    let fft_result = scirs2_fft::fft(&padded, Some(padded.len()))
+        .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
+    for (i, c) in fft_result.iter().enumerate() {
+        padded[i] = *c;
+    }
 
     // Extract power spectrum and phase (one-sided)
     let n_freqs = nfft / 2 + 1;

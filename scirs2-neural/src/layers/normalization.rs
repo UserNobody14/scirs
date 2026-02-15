@@ -6,7 +6,7 @@
 use crate::error::{NeuralError, Result};
 use crate::layers::{Layer, ParamLayer};
 use scirs2_core::ndarray::{Array, ArrayView1, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::Rng;
 use scirs2_core::simd_ops::SimdUnifiedOps;
 use std::fmt::Debug;
@@ -18,7 +18,10 @@ use std::sync::{Arc, RwLock};
 /// by Ba, Kiros, and Hinton. It normalizes the inputs across the last dimension
 /// and applies learnable scale and shift parameters.
 #[derive(Debug)]
-pub struct LayerNorm<F: Float + Debug + Send + Sync> {
+pub struct LayerNorm<F: Float + Debug + Send + Sync + NumAssign>
+where
+    F: SimdUnifiedOps,
+{
     /// Dimensionality of the input features
     normalizedshape: Vec<usize>,
     /// Learnable scale parameter
@@ -41,7 +44,10 @@ pub struct LayerNorm<F: Float + Debug + Send + Sync> {
     var_cache: Arc<RwLock<Option<Array<F, IxDyn>>>>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Clone for LayerNorm<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign> Clone for LayerNorm<F>
+where
+    F: SimdUnifiedOps,
+{
     fn clone(&self) -> Self {
         let input_cache_clone = match self.input_cache.read() {
             Ok(guard) => guard.clone(),
@@ -79,7 +85,10 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Clone for LayerNo
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> LayerNorm<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign> LayerNorm<F>
+where
+    F: SimdUnifiedOps,
+{
     /// Create a new layer normalization layer
     pub fn new<R: Rng>(normalizedshape: usize, eps: f64, _rng: &mut R) -> Result<Self> {
         let gamma = Array::<F, IxDyn>::from_elem(IxDyn(&[normalizedshape]), F::one());
@@ -125,7 +134,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> LayerNorm<F> {
 /// Threshold for using SIMD-accelerated LayerNorm
 const LAYERNORM_SIMD_THRESHOLD: usize = 64;
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> Layer<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static + NumAssign> Layer<F>
     for LayerNorm<F>
 {
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
@@ -190,14 +199,14 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
             for i in 0..batch_size {
                 let mut sum = F::zero();
                 for j in 0..feat_dim {
-                    sum = sum + reshaped[[i, j]];
+                    sum += reshaped[[i, j]];
                 }
                 mean[[i, 0]] = sum / F::from(feat_dim).expect("Failed to convert to float");
 
                 let mut sum_sq = F::zero();
                 for j in 0..feat_dim {
                     let diff = reshaped[[i, j]] - mean[[i, 0]];
-                    sum_sq = sum_sq + diff * diff;
+                    sum_sq += diff * diff;
                 }
                 var[[i, 0]] = sum_sq / F::from(feat_dim).expect("Failed to convert to float");
             }
@@ -273,8 +282,8 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> ParamLayer<F>
-    for LayerNorm<F>
+impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static + NumAssign>
+    ParamLayer<F> for LayerNorm<F>
 {
     fn get_parameters(&self) -> Vec<Array<F, scirs2_core::ndarray::IxDyn>> {
         vec![self.gamma.clone(), self.beta.clone()]
@@ -317,7 +326,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + SimdUnifiedOps + 'static> 
 
 /// Batch Normalization layer
 #[derive(Debug, Clone)]
-pub struct BatchNorm<F: Float + Debug + Send + Sync> {
+pub struct BatchNorm<F: Float + Debug + Send + Sync + NumAssign> {
     /// Number of features (channels)
     num_features: usize,
     /// Learnable scale parameter
@@ -334,7 +343,7 @@ pub struct BatchNorm<F: Float + Debug + Send + Sync> {
     training: bool,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> BatchNorm<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign> BatchNorm<F> {
     /// Create a new batch normalization layer
     pub fn new<R: Rng>(
         _num_features: usize,
@@ -376,7 +385,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> BatchNorm<F> {
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for BatchNorm<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign> Layer<F>
+    for BatchNorm<F>
+{
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
         // Simple implementation - return input as is for now
         Ok(input.clone())
@@ -411,7 +422,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for Batc
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> ParamLayer<F> for BatchNorm<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign> ParamLayer<F>
+    for BatchNorm<F>
+{
     fn get_parameters(&self) -> Vec<Array<F, scirs2_core::ndarray::IxDyn>> {
         vec![self.gamma.clone(), self.beta.clone()]
     }

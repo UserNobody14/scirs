@@ -6,7 +6,7 @@
 
 use crate::error::Result;
 use scirs2_core::ndarray::{Array, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 
 /// Base trait for neural network layers
@@ -101,12 +101,12 @@ pub trait ParamLayer<F: Float + Debug + ScalarOperand>: Layer<F> {
 ///
 /// A Sequential model is a linear stack of layers where data flows through
 /// each layer in order.
-pub struct Sequential<F: Float + Debug + ScalarOperand> {
+pub struct Sequential<F: Float + Debug + ScalarOperand + NumAssign> {
     layers: Vec<Box<dyn Layer<F> + Send + Sync>>,
     training: bool,
 }
 
-impl<F: Float + Debug + ScalarOperand> + std::fmt::Debug for Sequential<F> {
+impl<F: Float + Debug + ScalarOperand + NumAssign> std::fmt::Debug for Sequential<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Sequential")
             .field("num_layers", &self.layers.len())
@@ -115,7 +115,7 @@ impl<F: Float + Debug + ScalarOperand> + std::fmt::Debug for Sequential<F> {
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + 'static> Clone for Sequential<F> {
+impl<F: Float + Debug + ScalarOperand + NumAssign + 'static> Clone for Sequential<F> {
     fn clone(&self) -> Self {
         // We can't clone the layers, so we just create an empty Sequential
         // with the same training flag
@@ -126,13 +126,13 @@ impl<F: Float + Debug + ScalarOperand + 'static> Clone for Sequential<F> {
     }
 }
 
-impl<F: Float + Debug + ScalarOperand> Default for Sequential<F> {
+impl<F: Float + Debug + ScalarOperand + NumAssign> Default for Sequential<F> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<F: Float + Debug + ScalarOperand> Sequential<F> {
+impl<F: Float + Debug + ScalarOperand + NumAssign> Sequential<F> {
     /// Create a new Sequential container
     pub fn new() -> Self {
         Self {
@@ -162,7 +162,7 @@ impl<F: Float + Debug + ScalarOperand> Sequential<F> {
     }
 }
 
-impl<F: Float + Debug + ScalarOperand> Layer<F> for Sequential<F> {
+impl<F: Float + Debug + ScalarOperand + NumAssign> Layer<F> for Sequential<F> {
     fn forward(&self, input: &Array<F, scirs2_core::ndarray::IxDyn>) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
         let mut output = input.clone();
         for layer in &self.layers {

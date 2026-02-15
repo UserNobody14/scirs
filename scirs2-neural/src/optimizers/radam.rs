@@ -3,7 +3,7 @@
 use crate::error::{NeuralError, Result};
 use crate::optimizers::Optimizer;
 use scirs2_core::ndarray::{Array, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 /// RAdam (Rectified Adam) optimizer for neural networks
 ///
@@ -12,6 +12,7 @@ use std::fmt::Debug;
 /// RAdam is a variant of Adam that addresses the warm-up issue in Adam by:
 /// 1. Correcting the adaptive learning rate bias
 /// 2. Rectifying the variance of the adaptive learning rate
+///
 /// This generally leads to faster convergence and better generalization compared to
 /// vanilla Adam.
 /// # Examples
@@ -23,7 +24,7 @@ use std::fmt::Debug;
 /// // or with custom configuration
 /// let mut radam_custom = RAdam::new(0.001, 0.9, 0.999, 1e-8, 0.01).unwrap();
 #[derive(Debug, Clone)]
-pub struct RAdam<F: Float + ScalarOperand + Debug> {
+pub struct RAdam<F: Float + NumAssign + ScalarOperand + Debug> {
     /// Learning rate
     learning_rate: F,
     /// Exponential decay rate for the first moment estimates
@@ -43,7 +44,7 @@ pub struct RAdam<F: Float + ScalarOperand + Debug> {
     /// RAdam-specific rho_inf value (calculated once)
     rho_inf: F,
 }
-impl<F: Float + ScalarOperand + Debug> RAdam<F> {
+impl<F: Float + NumAssign + ScalarOperand + Debug> RAdam<F> {
     /// Creates a new RAdam optimizer with the given hyperparameters
     ///
     /// # Arguments
@@ -61,11 +62,11 @@ impl<F: Float + ScalarOperand + Debug> RAdam<F> {
         })?;
         let rho_inf = two / (F::one() - beta2) - F::one();
         Ok(Self {
-            learning_rate,
+            learning_rate: _learning_rate,
             beta1,
             beta2,
             epsilon,
-            weight_decay,
+            weight_decay: weightdecay,
             m: Vec::new(),
             v: Vec::new(),
             t: 0,
@@ -73,26 +74,46 @@ impl<F: Float + ScalarOperand + Debug> RAdam<F> {
         })
     }
     /// Creates a new RAdam optimizer with default hyperparameters
-    pub fn default_with_lr(_learningrate: F) -> Result<Self> {
+    pub fn default_with_lr(learning_rate: F) -> Result<Self> {
         let beta1 = F::from(0.9).ok_or_else(|| {
+            NeuralError::InvalidArgument(
                 "Failed to convert 0.9 to the appropriate floating point type".to_string(),
+            )
+        })?;
         let beta2 = F::from(0.999).ok_or_else(|| {
+            NeuralError::InvalidArgument(
                 "Failed to convert 0.999 to the appropriate floating point type".to_string(),
+            )
+        })?;
         let epsilon = F::from(1e-8).ok_or_else(|| {
+            NeuralError::InvalidArgument(
                 "Failed to convert 1e-8 to the appropriate floating point type".to_string(),
+            )
+        })?;
         let weight_decay = F::from(0.0).ok_or_else(|| {
+            NeuralError::InvalidArgument(
                 "Failed to convert 0.0 to the appropriate floating point type".to_string(),
-        Self::new(_learning_rate, beta1, beta2, epsilon, weight_decay)
+            )
+        })?;
+        Self::new(learning_rate, beta1, beta2, epsilon, weight_decay)
+    }
+
     /// Gets the beta1 parameter
     pub fn get_beta1(&self) -> F {
         self.beta1
+    }
+
     /// Sets the beta1 parameter
     pub fn set_beta1(&mut self, beta1: F) -> &mut Self {
         self.beta1 = beta1;
         self
+    }
+
     /// Gets the beta2 parameter
     pub fn get_beta2(&self) -> F {
         self.beta2
+    }
+
     /// Sets the beta2 parameter
     pub fn set_beta2(&mut self, beta2: F) -> &mut Self {
         self.beta2 = beta2;
@@ -117,7 +138,7 @@ impl<F: Float + ScalarOperand + Debug> RAdam<F> {
 
     /// Sets the weight decay parameter
     pub fn set_weight_decay(&mut self, weightdecay: F) -> &mut Self {
-        self.weight_decay = weight_decay;
+        self.weight_decay = weightdecay;
         self
     }
 
@@ -129,7 +150,7 @@ impl<F: Float + ScalarOperand + Debug> RAdam<F> {
     }
 }
 
-impl<F: Float + ScalarOperand + Debug> Optimizer<F> for RAdam<F> {
+impl<F: Float + NumAssign + ScalarOperand + Debug> Optimizer<F> for RAdam<F> {
     fn update(
         &mut self,
         params: &mut [Array<F, scirs2_core::ndarray::IxDyn>],
@@ -167,8 +188,8 @@ impl<F: Float + ScalarOperand + Debug> Optimizer<F> for RAdam<F> {
         let _five = F::from(5.0).ok_or_else(|| {
             NeuralError::InvalidArgument("Failed to convert 5.0 to floating point type".to_string())
         })?; // Unused but keep for reference
-        // Compute rho_t
-        // All calculations in f64 first
+             // Compute rho_t
+             // All calculations in f64 first
         let rho_inf_f64 = self.rho_inf.to_f64().ok_or_else(|| {
             NeuralError::ComputationError("Failed to convert rho_inf to f64".to_string())
         })?;
@@ -180,20 +201,24 @@ impl<F: Float + ScalarOperand + Debug> Optimizer<F> for RAdam<F> {
         // Convert to F type
         let rho_t = F::from(rho_t_f64).ok_or_else(|| {
             NeuralError::ComputationError("Failed to convert rho_t from f64".to_string())
+        })?;
+
         // Rectification term calculation
         let rect_term;
         let use_adaptive_lr;
-        if rho_t > four {
+        if rho_t > _four {
             // Compute the rectification term
-            let rho_t_minus_4 = rho_t - four;
-            let rho_t_minus_2 = rho_t - two;
+            let rho_t_minus_4 = rho_t - _four;
+            let rho_t_minus_2 = rho_t - _two;
             let rt = (rho_t_minus_2 / rho_t_minus_4)
-                * ((rho_t - four) * (rho_t - two) / (rho_t * rho_t_minus_4)).sqrt();
+                * ((rho_t - _four) * (rho_t - _two) / (rho_t * rho_t_minus_4)).sqrt();
             rect_term = rt;
             use_adaptive_lr = true;
         } else {
             rect_term = F::one();
             use_adaptive_lr = false;
+        }
+
         // Update parameters for each param-grad pair
         for i in 0..params.len() {
             // Apply weight decay to gradients if needed
@@ -217,14 +242,28 @@ impl<F: Float + ScalarOperand + Debug> Optimizer<F> for RAdam<F> {
                 let denom = v_hat.mapv(|x| x.sqrt()) + self.epsilon;
                 // Apply the rectified update
                 params[i] = &params[i] - &(m_hat / denom * self.learning_rate * rect_term);
+            } else {
                 // In the early phase, use SGD with momentum instead of the adaptive learning rate
                 params[i] = &params[i] - &(m_hat * self.learning_rate);
             }
+        }
+
         Ok(())
+    }
+
     fn get_learning_rate(&self) -> F {
         self.learning_rate
+    }
+
     fn set_learning_rate(&mut self, lr: F) {
         self.learning_rate = lr;
+    }
+
+    fn name(&self) -> &'static str {
+        "RAdam"
+    }
+}
+
 // Enable direct usage of scirs2-optim's RAdam when the optim feature is enabled
-#[cfg(feature = "optim")]
-pub use scirs2_optim::RAdam as OptimRAdam;
+// #[cfg(feature = "optim")]
+// pub use scirs2_optim::RAdam as OptimRAdam;

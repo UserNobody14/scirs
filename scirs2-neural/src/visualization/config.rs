@@ -4,6 +4,7 @@
 //! of visualization including output formats, styling, interactivity, and performance.
 
 use serde::Serialize;
+use std::path::PathBuf;
 /// Visualization configuration
 #[derive(Debug, Clone, Serialize)]
 pub struct VisualizationConfig {
@@ -31,7 +32,10 @@ pub enum ImageFormat {
     HTML,
     /// JSON format (data export)
     JSON,
+}
+
 /// Interactive visualization configuration
+#[derive(Debug, Clone, Serialize)]
 pub struct InteractiveConfig {
     /// Enable interactive features
     pub enable_interaction: bool,
@@ -43,7 +47,10 @@ pub struct InteractiveConfig {
     pub real_time_updates: bool,
     /// Maximum data points to display
     pub max_data_points: usize,
+}
+
 /// Style configuration for visualizations
+#[derive(Debug, Clone, Serialize)]
 pub struct StyleConfig {
     /// Color palette
     pub color_palette: ColorPalette,
@@ -53,6 +60,8 @@ pub struct StyleConfig {
     pub layout: LayoutConfig,
     /// Theme selection
     pub theme: Theme,
+}
+
 /// Color palette for visualizations
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum ColorPalette {
@@ -66,7 +75,10 @@ pub enum ColorPalette {
     Grayscale,
     /// Custom palette
     Custom(Vec<String>),
+}
+
 /// Font configuration
+#[derive(Debug, Clone, Serialize)]
 pub struct FontConfig {
     /// Font family
     pub family: String,
@@ -76,7 +88,10 @@ pub struct FontConfig {
     pub title_scale: f32,
     /// Label font size multiplier
     pub label_scale: f32,
+}
+
 /// Layout configuration
+#[derive(Debug, Clone, Serialize)]
 pub struct LayoutConfig {
     /// Canvas width
     pub width: u32,
@@ -86,7 +101,10 @@ pub struct LayoutConfig {
     pub margins: Margins,
     /// Grid settings
     pub grid: GridConfig,
+}
+
 /// Margin configuration
+#[derive(Debug, Clone, Serialize)]
 pub struct Margins {
     /// Top margin
     pub top: u32,
@@ -96,7 +114,10 @@ pub struct Margins {
     pub left: u32,
     /// Right margin
     pub right: u32,
+}
+
 /// Grid configuration
+#[derive(Debug, Clone, Serialize)]
 pub struct GridConfig {
     /// Show grid lines
     pub show_grid: bool,
@@ -106,7 +127,10 @@ pub struct GridConfig {
     pub grid_width: u32,
     /// Grid opacity
     pub grid_opacity: f32,
+}
+
 /// Visualization theme
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum Theme {
     /// Light theme
     Light,
@@ -116,7 +140,10 @@ pub enum Theme {
     Auto,
     /// Custom theme
     Custom(CustomTheme),
+}
+
 /// Custom theme configuration
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CustomTheme {
     /// Background color
     pub background: String,
@@ -132,7 +159,10 @@ pub struct CustomTheme {
     pub warning: String,
     /// Error color
     pub error: String,
+}
+
 /// Performance configuration for visualizations
+#[derive(Debug, Clone, Serialize)]
 pub struct PerformanceConfig {
     /// Maximum number of points per plot
     pub max_points_per_plot: usize,
@@ -144,7 +174,10 @@ pub struct PerformanceConfig {
     pub enable_caching: bool,
     /// Cache size limit in MB
     pub cache_size_mb: usize,
+}
+
 /// Downsampling strategy for large datasets
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub enum DownsamplingStrategy {
     /// Take every nth point
     Uniform,
@@ -154,6 +187,8 @@ pub enum DownsamplingStrategy {
     MinMax,
     /// Statistical sampling
     Statistical,
+}
+
 // Default implementations for all configuration types
 impl Default for VisualizationConfig {
     fn default() -> Self {
@@ -165,43 +200,87 @@ impl Default for VisualizationConfig {
             performance: PerformanceConfig::default(),
         }
     }
+}
+
 impl Default for InteractiveConfig {
+    fn default() -> Self {
+        Self {
             enable_interaction: true,
             server_port: 8080,
             refresh_interval_ms: 1000,
             real_time_updates: true,
             max_data_points: 10000,
+        }
+    }
+}
+
 impl Default for StyleConfig {
+    fn default() -> Self {
+        Self {
             color_palette: ColorPalette::Default,
             font: FontConfig::default(),
             layout: LayoutConfig::default(),
             theme: Theme::Light,
+        }
+    }
+}
+
 impl Default for FontConfig {
+    fn default() -> Self {
+        Self {
             family: "Arial, sans-serif".to_string(),
             size: 12,
             title_scale: 1.5,
             label_scale: 0.9,
+        }
+    }
+}
+
 impl Default for LayoutConfig {
+    fn default() -> Self {
+        Self {
             width: 800,
             height: 600,
             margins: Margins::default(),
             grid: GridConfig::default(),
+        }
+    }
+}
+
 impl Default for Margins {
+    fn default() -> Self {
+        Self {
             top: 40,
             bottom: 60,
             left: 80,
             right: 40,
+        }
+    }
+}
+
 impl Default for GridConfig {
+    fn default() -> Self {
+        Self {
             show_grid: true,
             grid_color: "#e0e0e0".to_string(),
             grid_width: 1,
             grid_opacity: 0.5,
+        }
+    }
+}
+
 impl Default for PerformanceConfig {
+    fn default() -> Self {
+        Self {
             max_points_per_plot: 10000,
             enable_downsampling: true,
             downsampling_strategy: DownsamplingStrategy::Uniform,
             enable_caching: true,
             cache_size_mb: 100,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -211,6 +290,9 @@ mod tests {
         assert_eq!(config.image_format, ImageFormat::SVG);
         assert_eq!(config.interactive.server_port, 8080);
         assert_eq!(config.style.theme, Theme::Light);
+    }
+
+    #[test]
     fn test_custom_color_palette() {
         let custom_colors = vec![
             "#ff0000".to_string(),
@@ -219,7 +301,12 @@ mod tests {
         ];
         let palette = ColorPalette::Custom(custom_colors.clone());
         match palette {
-            ColorPalette::Custom(colors) => assert_eq!(colors, custom_colors, _ => assert!(false, "Expected custom color palette"),
+            ColorPalette::Custom(colors) => assert_eq!(colors, custom_colors),
+            _ => panic!("Expected custom color palette"),
+        }
+    }
+
+    #[test]
     fn test_interactive_config() {
         let config = InteractiveConfig {
             enable_interaction: false,
@@ -228,11 +315,17 @@ mod tests {
         };
         assert!(!config.enable_interaction);
         assert_eq!(config.server_port, 3000);
+    }
+
+    #[test]
     fn test_performance_config() {
         let config = PerformanceConfig::default();
         assert!(config.enable_downsampling);
         assert_eq!(config.downsampling_strategy, DownsamplingStrategy::Uniform);
         assert!(config.enable_caching);
+    }
+
+    #[test]
     fn test_theme_variants() {
         let light = Theme::Light;
         let dark = Theme::Dark;
@@ -240,6 +333,9 @@ mod tests {
         assert_eq!(light, Theme::Light);
         assert_eq!(dark, Theme::Dark);
         assert_eq!(auto, Theme::Auto);
+    }
+
+    #[test]
     fn test_custom_theme() {
         let custom = CustomTheme {
             background: "#ffffff".to_string(),
@@ -249,10 +345,14 @@ mod tests {
             success: "#28a745".to_string(),
             warning: "#ffc107".to_string(),
             error: "#dc3545".to_string(),
+        };
         let theme = Theme::Custom(custom.clone());
         match theme {
             Theme::Custom(t) => {
                 assert_eq!(t.background, "#ffffff");
                 assert_eq!(t.primary, "#007bff");
             }
-            _ => assert!(false, "Expected custom theme"),
+            _ => panic!("Expected custom theme"),
+        }
+    }
+}

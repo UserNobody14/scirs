@@ -49,14 +49,25 @@ pub enum CompressionAlgorithm {
 
 impl Default for AdaptiveCompressionConfig {
     fn default() -> Self {
+        // Use reasonable defaults for 32-bit platforms (wasm32)
+        #[cfg(target_pointer_width = "32")]
+        let default_memory_budget = 512 * 1024 * 1024; // 512MB for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let default_memory_budget = 8usize * 1024 * 1024 * 1024; // 8GB for 64-bit
+
+        #[cfg(target_pointer_width = "32")]
+        let default_cache_size = 64 * 1024 * 1024; // 64MB cache for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let default_cache_size = 256 * 1024 * 1024; // 256MB cache for 64-bit
+
         Self {
-            memory_budget: 8 * 1024 * 1024 * 1024, // 8GB default
+            memory_budget: default_memory_budget,
             compression_algorithm: CompressionAlgorithm::Adaptive,
             hierarchical_compression: true,
             block_size: 1024 * 1024, // 1MB blocks
             compression_threshold: 0.8,
             adaptive_compression: true,
-            cache_size: 256 * 1024 * 1024, // 256MB cache
+            cache_size: default_cache_size,
             out_of_core: true,
             temp_directory: "/tmp/scirs2_sparse".to_string(),
             memory_mapping: true,
@@ -177,14 +188,25 @@ impl AdaptiveCompressionConfig {
 
     /// Create a high-performance configuration
     pub fn high_performance() -> Self {
+        // Use reasonable defaults for 32-bit platforms (wasm32)
+        #[cfg(target_pointer_width = "32")]
+        let hp_memory_budget = 1024 * 1024 * 1024; // 1GB for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let hp_memory_budget = 32usize * 1024 * 1024 * 1024; // 32GB for 64-bit
+
+        #[cfg(target_pointer_width = "32")]
+        let hp_cache_size = 256 * 1024 * 1024; // 256MB cache for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let hp_cache_size = 2usize * 1024 * 1024 * 1024; // 2GB cache for 64-bit
+
         Self {
-            memory_budget: 32 * 1024 * 1024 * 1024, // 32GB
+            memory_budget: hp_memory_budget,
             compression_algorithm: CompressionAlgorithm::Adaptive,
             hierarchical_compression: true,
             block_size: 4 * 1024 * 1024, // 4MB blocks
             compression_threshold: 0.7,
             adaptive_compression: true,
-            cache_size: 2 * 1024 * 1024 * 1024, // 2GB cache
+            cache_size: hp_cache_size,
             out_of_core: true,
             temp_directory: "/tmp/scirs2_hiperf".to_string(),
             memory_mapping: true,

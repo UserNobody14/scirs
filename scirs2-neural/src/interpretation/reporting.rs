@@ -16,7 +16,7 @@ use super::core::ModelInterpreter;
 use statrs::statistics::Statistics;
 /// Comprehensive interpretation report for a single input
 #[derive(Debug, Clone)]
-pub struct InterpretationReport<F: Float + Debug> {
+pub struct InterpretationReport<F: Float + Debug + NumAssign> {
     /// Shape of the input being analyzed
     pub inputshape: IxDyn,
     /// Target class for the analysis (if applicable)
@@ -31,7 +31,7 @@ pub struct InterpretationReport<F: Float + Debug> {
     pub interpretation_summary: InterpretationSummary,
 }
 /// Comprehensive interpretation report with additional analysis
-pub struct ComprehensiveInterpretationReport<F: Float + Debug> {
+pub struct ComprehensiveInterpretationReport<F: Float + Debug + NumAssign> {
     /// Basic interpretation report
     pub basic_report: InterpretationReport<F>,
     /// Counterfactual explanations (if available)
@@ -453,7 +453,7 @@ fn export_to_toml<F>(report: &ComprehensiveInterpretationReport<F>) -> Result<St
     toml_content.push_str(&format!("std = {}\n", attribution_stats.std));
     Ok(toml_content)
 // Display implementation for reports
-impl<F: Float + Debug> + std::fmt::Display for InterpretationReport<F> {
+impl<F: Float + Debug + NumAssign> + std::fmt::Display for InterpretationReport<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Interpretation Report")?;
         writeln!(f, "===================")?;
@@ -468,7 +468,7 @@ impl<F: Float + Debug> + std::fmt::Display for InterpretationReport<F> {
             self.interpretation_summary.interpretation_confidence
         )?;
         Ok(())
-impl<F: Float + Debug> + std::fmt::Display for ComprehensiveInterpretationReport<F> {
+impl<F: Float + Debug + NumAssign> + std::fmt::Display for ComprehensiveInterpretationReport<F> {
         writeln!(f, "Comprehensive Interpretation Report")?;
         writeln!(f, "==================================")?;
         write!(f, "{}", self.basic_report)?;

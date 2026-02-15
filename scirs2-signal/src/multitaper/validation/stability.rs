@@ -95,7 +95,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extreme_inputs() {
+    fn test_extreme_inputs_validation() {
         assert!(test_extreme_inputs());
     }
 }

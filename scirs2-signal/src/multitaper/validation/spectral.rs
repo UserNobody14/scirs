@@ -3,8 +3,8 @@
 //! This module provides validation functions for spectral estimation accuracy
 //! including bias, variance, and frequency resolution testing.
 
-use super::types::{SpectralAccuracyMetrics, TestSignalConfig, TestSignalType};
 use super::signal_generation::generate_test_signal;
+use super::types::{SpectralAccuracyMetrics, TestSignalConfig, TestSignalType};
 use crate::error::SignalResult;
 
 /// Validate spectral accuracy across different signal types
@@ -49,15 +49,9 @@ fn validate_single_signal_type(
     _tolerance: f64,
 ) -> SignalResult<SpectralAccuracyMetrics> {
     match signal_type {
-        TestSignalType::Sinusoid(freq) => {
-            calculate_sinusoidal_metrics(*freq, config)
-        },
-        TestSignalType::WhiteNoise => {
-            calculate_noise_metrics(config)
-        },
-        TestSignalType::MultiSine(freqs) => {
-            calculate_multisine_metrics(freqs, config)
-        },
+        TestSignalType::Sinusoid(freq) => calculate_sinusoidal_metrics(*freq, config),
+        TestSignalType::WhiteNoise => calculate_noise_metrics(config),
+        TestSignalType::MultiSine(freqs) => calculate_multisine_metrics(freqs, config),
         _ => {
             // For other signal types, use general metrics
             calculate_general_metrics(config)
@@ -140,10 +134,7 @@ mod tests {
     fn test_spectral_accuracy_validation() {
         let config = TestSignalConfig {
             length: 512,
-            signal_types: vec![
-                TestSignalType::Sinusoid(100.0),
-                TestSignalType::WhiteNoise,
-            ],
+            signal_types: vec![TestSignalType::Sinusoid(100.0), TestSignalType::WhiteNoise],
             ..Default::default()
         };
 

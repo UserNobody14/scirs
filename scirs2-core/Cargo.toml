@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Core utilities and common functionality for SciRS2 (scirs2-core)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["scientific", "mathematics", "science", "scipy", "numerical"]
@@ -27,6 +28,7 @@ num-complex = { workspace = true }
 num-integer = { workspace = true }
 thiserror = { workspace = true }
 once_cell.workspace = true
+parking_lot.workspace = true
 cached = { workspace = true, optional = true }  # Memoization and caching
 chrono = { workspace = true, features = ["serde"] }
 rand = { workspace = true }
@@ -92,6 +94,28 @@ pollster = { workspace = true, optional = true }  # Async runtime for WebGPU
 reqwest = { workspace = true, optional = true }  # HTTP client for tracing export
 sha2 = { workspace = true, optional = true }  # Cryptographic hash functions
 
+# Tracing and observability dependencies
+tracing = { workspace = true, optional = true }  # Structured logging and tracing
+tracing-subscriber = { workspace = true, optional = true }  # Tracing subscriber implementation
+tracing-appender = { workspace = true, optional = true }  # File appender for tracing
+tracing-flame = { workspace = true, optional = true }  # Flame graph generation from tracing
+tracing-chrome = { workspace = true, optional = true }  # Chrome DevTools trace format
+tracing-opentelemetry = { workspace = true, optional = true }  # OpenTelemetry integration
+
+# OpenTelemetry dependencies
+opentelemetry = { workspace = true, optional = true }  # OpenTelemetry API
+opentelemetry_sdk = { workspace = true, optional = true }  # OpenTelemetry SDK
+opentelemetry-otlp = { workspace = true, optional = true }  # OTLP exporter
+opentelemetry-prometheus = { workspace = true, optional = true }  # Prometheus exporter for OpenTelemetry
+opentelemetry-semantic-conventions = { workspace = true, optional = true }  # Semantic conventions
+
+# Prometheus metrics
+prometheus = { workspace = true, optional = true }  # Prometheus metrics
+
+# Memory profiling dependencies
+tikv-jemallocator = { workspace = true, optional = true }  # jemalloc allocator
+tikv-jemalloc-ctl = { workspace = true, optional = true }  # jemalloc control and introspection APIs
+
 # Testing and validation dependencies
 statrs = { workspace = true, optional = true }  # Statistical functions for validation
 quickcheck = { workspace = true, optional = true }  # Property-based testing
@@ -105,6 +129,17 @@ gmp-mpfr-sys = { workspace = true, optional = true }  # Low-level GMP/MPFR bindi
 # Python integration dependencies (PyO3)
 pyo3 = { workspace = true, optional = true }  # Python bindings
 scirs2-numpy = { workspace = true, optional = true }  # NumPy integration for Python (SciRS2 fork with ndarray 0.17)
+
+# Embedded systems support (v0.2.0) - no_std compatibility
+libm = { workspace = true, optional = true }  # Math functions for no_std
+fixed = { workspace = true, optional = true }  # Fixed-point arithmetic
+fixed-sqrt = { workspace = true, optional = true }  # Fixed-point sqrt
+cordic = { workspace = true, optional = true }  # CORDIC algorithms
+critical-section = { workspace = true, optional = true }  # Interrupt-safe operations
+atomic-polyfill = { workspace = true, optional = true }  # Atomic operations for no_std
+portable-atomic = { workspace = true, optional = true }  # Portable atomic operations
+embedded-alloc = { workspace = true, optional = true }  # Global allocator for embedded
+linked_list_allocator = { workspace = true, optional = true }  # Alternative allocator for embedded
 
 # Platform-specific BLAS backend configuration
 # macOS: Use Accelerate framework ONLY (system BLAS, no source build)
@@ -124,6 +159,20 @@ objc2-metal-performance-shaders-graph = { workspace = true, optional = true }  #
 [target.'cfg(all(target_arch = "x86_64", any(target_os = "linux", target_os = "windows")))'.dependencies]
 cudarc = { workspace = true, optional = true }  # CUDA runtime
 
+# Embedded ARM Cortex-M support
+[target.'cfg(target_arch = "arm")'.dependencies]
+cortex-m = { workspace = true, optional = true }  # ARM Cortex-M support
+cortex-m-rt = { workspace = true, optional = true }  # Runtime for ARM Cortex-M
+
+# Embedded RISC-V support
+[target.'cfg(target_arch = "riscv32")'.dependencies]
+riscv = { workspace = true, optional = true }  # RISC-V support
+riscv-rt = { workspace = true, optional = true }  # Runtime for RISC-V
+
+# Linux-specific profiling dependencies
+[target.'cfg(target_os = "linux")'.dependencies]
+perf-event = { workspace = true, optional = true }  # Linux perf integration
+
 # Windows-specific dependencies
 [target.'cfg(target_os = "windows")'.dependencies]
 # GlobalMemoryStatusEx requires both Win32_System_SystemInformation and Win32_Foundation features
@@ -137,25 +186,35 @@ tempfile = { workspace = true }
 pyo3 = { workspace = true, features = ["macros", "auto-initialize"] }
 
 [features]
-default = ["array", "serialization"]  # Enable array module by default
-simd = ["wide"]  # SIMD operations
-parallel = ["rayon", "crossbeam", "crossbeam-utils", "crossbeam-deque", "num_cpus"]  # Parallel processing with rayon
-cache = ["cached"]  # Caching and memoization functionality
-validation = ["regex", "statrs"]  # Validation utilities
-cross_platform = ["libc", "sysinfo"]  # Cross-platform validation and compatibility
-logging = ["log"]  # Structured logging and diagnostics
-async = ["tokio", "async-trait"]  # Async error handling and recovery mechanisms
-gpu = []  # GPU acceleration abstractions
-opencl = ["gpu", "dep:opencl3"]  # OpenCL-specific GPU acceleration
-metal = ["gpu", "dep:metal", "dep:objc2", "dep:objc2-foundation", "dep:objc2-metal", "dep:objc2-metal-performance-shaders"]  # Metal-specific GPU acceleration (Apple)
-mpsgraph = ["metal", "dep:objc2-metal-performance-shaders-graph"]  # MPSGraph high-performance operations (Apple, requires metal)
-wgpu_backend = ["gpu", "dep:wgpu", "dep:pollster"]  # WebGPU-specific GPU acceleration
-rocm = ["gpu"]  # ROCm-specific GPU acceleration (AMD)
+default = ["std", "array", "serialization"]  # Enable std and array module by default
+# Core embedded support features (v0.2.0)
+std = []  # Standard library support (default, required for most features)
+alloc = []  # Heap allocation support (requires global allocator in no_std)
+embedded = ["libm", "critical-section", "portable-atomic"]  # Basic embedded support (no_std + no heap)
+embedded-alloc = ["alloc", "embedded", "dep:embedded-alloc"]  # Embedded with heap allocator
+embedded-arm = ["embedded", "dep:cortex-m"]  # ARM Cortex-M support
+embedded-arm-rt = ["embedded-arm", "dep:cortex-m-rt"]  # ARM Cortex-M with runtime
+embedded-riscv = ["embedded", "dep:riscv"]  # RISC-V support
+embedded-riscv-rt = ["embedded-riscv", "dep:riscv-rt"]  # RISC-V with runtime
+fixed-point = ["embedded", "dep:fixed", "dep:fixed-sqrt", "dep:cordic"]  # Fixed-point arithmetic
+simd = ["wide"]  # SIMD operations (works in no_std with alloc)
+parallel = ["std", "rayon", "crossbeam", "crossbeam-utils", "crossbeam-deque", "num_cpus"]  # Parallel processing with rayon (requires std)
+cache = ["std", "cached"]  # Caching and memoization functionality (requires std)
+validation = ["std", "regex", "statrs"]  # Validation utilities (requires std)
+cross_platform = ["std", "libc", "sysinfo"]  # Cross-platform validation and compatibility (requires std)
+logging = ["log"]  # Structured logging and diagnostics (works with no_std)
+async = ["std", "tokio", "async-trait"]  # Async error handling and recovery mechanisms (requires std)
+gpu = ["std"]  # GPU acceleration abstractions (requires std)
+opencl = ["std", "gpu", "dep:opencl3"]  # OpenCL-specific GPU acceleration (requires std)
+metal = ["std", "gpu", "dep:metal", "dep:objc2", "dep:objc2-foundation", "dep:objc2-metal", "dep:objc2-metal-performance-shaders"]  # Metal-specific GPU acceleration (Apple) (requires std)
+mpsgraph = ["std", "metal", "dep:objc2-metal-performance-shaders-graph"]  # MPSGraph high-performance operations (Apple, requires metal) (requires std)
+wgpu_backend = ["std", "gpu", "dep:wgpu", "dep:pollster"]  # WebGPU-specific GPU acceleration (requires std)
+rocm = ["std", "gpu"]  # ROCm-specific GPU acceleration (AMD) (requires std)
 # CUDA feature is platform-conditional - only works on x86_64 Linux and Windows
-cuda = ["gpu", "dep:cudarc"]  # CUDA-specific GPU acceleration (platform-conditional)
-memory_management = ["oxicode", "tempfile"]  # Advanced memory management (oxicode for SIMD optimization)
-memory_efficient = ["tempfile", "oxicode", "memmap2", "rayon"]  # Memory-efficient operations (oxicode for SIMD)
-memory_efficient_all_types = ["memory_efficient", "float32", "float64", "all_ints"]  # Full type support for memory-efficient operations
+cuda = ["std", "gpu", "dep:cudarc"]  # CUDA-specific GPU acceleration (platform-conditional) (requires std)
+memory_management = ["std", "oxicode", "tempfile", "serialization"]  # Advanced memory management (oxicode for SIMD optimization) (requires std)
+memory_efficient = ["std", "tempfile", "oxicode", "memmap2", "rayon", "serialization"]  # Memory-efficient operations (oxicode for SIMD) (requires std)
+memory_efficient_all_types = ["memory_efficient", "float32", "float64", "all_ints"]  # Full type support for memory-efficient operations (requires std)
 float32 = []  # Support for f32 in zero-copy operations
 float64 = []  # Support for f64 in zero-copy operations
 int32 = []    # Support for i32 in zero-copy operations
@@ -166,22 +225,32 @@ all_ints = [] # Support for all integer types in zero-copy operations
 memory_compression = ["memory_efficient", "lz4", "zstd", "snap", "flate2", "bytemuck", "serde", "serde_json", "libc", "num_cpus"]  # Compressed memory-mapped arrays (SIMD-optimized)
 memory_metrics = ["memory_management", "serde", "serde_json"]  # Enhanced memory metrics tracking
 sysinfo = ["dep:sysinfo"]  # System information gathering
-serialization = ["serde", "serde_json", "num-complex/serde"]  # Serialization support (includes Complex<T> serde)
-array = ["ndarray-rand"]  # Basic ndarray with random support (minimal dependencies)
-array_stats = ["array", "ndarray-stats"]  # Statistics operations on arrays
-array_io = ["array", "ndarray-npy"]  # Array I/O (save/load .npy files)
+serialization = ["std", "serde", "serde_json", "num-complex/serde"]  # Serialization support (includes Complex<T> serde) (requires std)
+array = ["std", "ndarray-rand"]  # Basic ndarray with random support (minimal dependencies) (requires std)
+array_stats = ["std", "array", "ndarray-stats"]  # Statistics operations on arrays (requires std)
+array_io = ["std", "array", "ndarray-npy"]  # Array I/O (save/load .npy files) (requires std)
 memory_visualization = ["memory_metrics"]  # Memory usage visualization
 memory_call_stack = ["memory_metrics"]  # Capture call stacks for memory events
-profiling = ["num_cpus"]  # Performance profiling tools
-random = ["array"]  # Random number generation utilities with ndarray support
-types = []  # Type conversion utilities
-ufuncs = []  # Universal Functions (ufuncs) system
-testing = ["tempfile", "serde", "serde_json", "quickcheck"]  # Testing framework for production systems
-benchmarking = ["testing", "serde", "serde_json"]  # Comprehensive benchmarking system
-linalg = ["array", "oxiblas-ndarray", "oxiblas-blas", "oxiblas-lapack"]  # Linear algebra with OxiBLAS (pure Rust) with Complex support (v0.1.2+)
+profiling = ["std", "num_cpus", "serialization"]  # Performance profiling tools (basic, includes serialization for JSON export) (requires std)
+profiling_advanced = ["std", "profiling", "tracing", "tracing-subscriber", "tracing-appender"]  # Advanced profiling with structured logging (requires std)
+profiling_flame = ["std", "profiling_advanced", "tracing-flame"]  # Flame graph generation (requires std)
+profiling_chrome = ["std", "profiling_advanced", "tracing-chrome"]  # Chrome DevTools profiling (requires std)
+profiling_opentelemetry = ["std", "profiling_advanced", "tracing-opentelemetry", "opentelemetry", "opentelemetry_sdk"]  # OpenTelemetry integration (requires std)
+profiling_prometheus = ["std", "profiling", "prometheus", "opentelemetry-prometheus"]  # Prometheus metrics export (requires std)
+profiling_otlp = ["std", "profiling_opentelemetry", "opentelemetry-otlp"]  # OTLP exporter for distributed tracing (requires std)
+profiling_memory = ["std", "profiling", "tikv-jemallocator", "tikv-jemalloc-ctl"]  # Memory profiling with jemalloc (requires std)
+profiling_perf = ["std", "profiling", "perf-event"]  # Linux perf integration (platform-specific) (requires std)
+profiling_all = ["std", "profiling_advanced", "profiling_flame", "profiling_chrome", "profiling_opentelemetry", "profiling_prometheus", "profiling_otlp", "profiling_memory"]  # All profiling features (requires std)
+instrumentation = ["std", "profiling_advanced", "opentelemetry-semantic-conventions"]  # Instrumentation framework (requires std)
+random = ["std", "array"]  # Random number generation utilities with ndarray support (requires std)
+types = []  # Type conversion utilities (works in no_std)
+ufuncs = []  # Universal Functions (ufuncs) system (works in no_std)
+testing = ["std", "tempfile", "serde", "serde_json", "quickcheck"]  # Testing framework for production systems (requires std)
+benchmarking = ["std", "testing", "serde", "serde_json"]  # Comprehensive benchmarking system (requires std)
+linalg = ["std", "array", "oxiblas-ndarray", "oxiblas-blas", "oxiblas-lapack"]  # Linear algebra with OxiBLAS (pure Rust) with Complex support (v0.1.2+) (requires std)
 # NOTE: OpenBLAS/Netlib/Accelerate features removed - using pure Rust OxiBLAS for all platforms
 array_protocol = []  # Array Protocol for third-party array implementations
-array_protocol_jit = ["array_protocol", "cranelift-module", "cranelift-jit", "cranelift-frontend"]  # JIT compilation for Array Protocol
+array_protocol_jit = ["std", "array_protocol", "cranelift-module", "cranelift-jit", "cranelift-frontend"]  # JIT compilation for Array Protocol (requires std)
 array_protocol_gpu = ["array_protocol", "gpu"]  # GPU support for Array Protocol
 array_protocol_cuda = ["array_protocol_gpu", "cuda"]  # CUDA support for Array Protocol
 array_protocol_opencl = ["array_protocol_gpu", "opencl"]  # OpenCL support for Array Protocol
@@ -191,21 +260,21 @@ array_protocol_rocm = ["array_protocol_gpu", "rocm"]  # ROCm support for Array P
 array_protocol_distributed = ["array_protocol", "parallel"]  # Distributed computing for Array Protocol
 array_protocol_all = ["array_protocol", "array_protocol_jit", "array_protocol_cuda", "array_protocol_distributed"]  # All Array Protocol features
 # Production-level features for enterprise deployments
-observability = ["serde", "serde_json"]  # Observability infrastructure (tracing, audit logging)
-observability_http = ["observability", "reqwest"]  # HTTP export for observability
-versioning = ["serde", "serde_json"]  # API versioning and compatibility management
-leak_detection = ["memory_management", "serde", "serde_json"]  # Memory leak detection system
-data_validation = ["validation", "serde", "serde_json", "regex"]  # Comprehensive data validation
-s3 = []  # S3 integration for remote storage
-crypto = []  # Cryptographic features (placeholder)
-compression = ["flate2"]  # Compression support
-database = []  # Database integration features
-cloud = []  # Cloud storage integration (S3, GCS, Azure)
-jit = ["cranelift-jit", "cranelift-module", "cranelift-frontend"]  # Just-in-time compilation with LLVM
-ml_pipeline = []  # ML pipeline integration and real-time processing
-production = ["observability", "versioning", "leak_detection", "data_validation"]  # All production features
-arbitrary-precision = ["num-bigint", "num-rational", "rug", "gmp-mpfr-sys"]  # Arbitrary precision arithmetic
-python = ["dep:pyo3", "dep:scirs2-numpy", "serialization"]  # Python bindings with NumPy integration (uses scirs2-numpy with ndarray 0.17)
+observability = ["std", "serde", "serde_json"]  # Observability infrastructure (tracing, audit logging) (requires std)
+observability_http = ["std", "observability", "reqwest"]  # HTTP export for observability (requires std)
+versioning = ["std", "serde", "serde_json"]  # API versioning and compatibility management (requires std)
+leak_detection = ["std", "memory_management", "serde", "serde_json"]  # Memory leak detection system (requires std)
+data_validation = ["std", "validation", "serde", "serde_json", "regex"]  # Comprehensive data validation (requires std)
+s3 = ["std"]  # S3 integration for remote storage (requires std)
+crypto = []  # Cryptographic features (placeholder) (may work in no_std)
+compression = ["std", "flate2"]  # Compression support (requires std)
+database = ["std"]  # Database integration features (requires std)
+cloud = ["std"]  # Cloud storage integration (S3, GCS, Azure) (requires std)
+jit = ["std", "cranelift-jit", "cranelift-module", "cranelift-frontend"]  # Just-in-time compilation with LLVM (requires std)
+ml_pipeline = ["std"]  # ML pipeline integration and real-time processing (requires std)
+production = ["std", "observability", "versioning", "leak_detection", "data_validation"]  # All production features (requires std)
+arbitrary-precision = ["std", "num-bigint", "num-rational", "rug", "gmp-mpfr-sys"]  # Arbitrary precision arithmetic (requires std for GMP)
+python = ["std", "dep:pyo3", "dep:scirs2-numpy", "serialization"]  # Python bindings with NumPy integration (uses scirs2-numpy with ndarray 0.17) (requires std)
 all = [
     "simd", "parallel", "cache", "validation", "logging",
     "gpu", "cuda", "memory_management", "memory_efficient", "memory_compression",
@@ -492,6 +561,11 @@ path = "examples/performance_dashboards_demo.rs"
 required-features = ["profiling"]
 
 [[example]]
+name = "advanced_profiling_demo"
+path = "examples/advanced_profiling_demo.rs"
+required-features = ["profiling_all"]
+
+[[example]]
 name = "pattern_recognition_example"
 path = "examples/pattern_recognition_example.rs"
 required-features = ["memory_efficient"]
@@ -530,6 +604,11 @@ required-features = ["mpsgraph"]
 
 [[bench]]
 name = "simd_matmul"
+harness = false
+required-features = ["simd"]
+
+[[bench]]
+name = "v020_performance_validation"
 harness = false
 required-features = ["simd"]
 

@@ -7,7 +7,7 @@
 use crate::error::{NeuralError, Result};
 use crate::layers::Layer;
 use scirs2_core::ndarray::{Array, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::Rng;
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -89,9 +89,9 @@ impl Default for AttentionConfig {
 /// // Output shape should match input shape
 /// assert_eq!(output.shape(), input.shape());
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(clippy::type_complexity)]
-pub struct MultiHeadAttention<F: Float + Debug + Send + Sync> {
+pub struct MultiHeadAttention<F: Float + Debug + Send + Sync + NumAssign> {
     /// Embedding dimension
     d_model: usize,
     /// Attention configuration
@@ -126,7 +126,7 @@ pub struct MultiHeadAttention<F: Float + Debug + Send + Sync> {
     _phantom: PhantomData<F>,
 }
 
-impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> MultiHeadAttention<F> {
+impl<F: Float + Debug + Send + Sync + ScalarOperand + NumAssign + 'static> MultiHeadAttention<F> {
     /// Create a new multi-head attention layer
     ///
     /// # Arguments
@@ -252,7 +252,7 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> MultiHeadAttentio
                 for o in 0..self.d_model {
                     let mut sum = F::zero();
                     for i in 0..self.d_model {
-                        sum = sum + input[[b, s, i]] * weights[[i, o]];
+                        sum += input[[b, s, i]] * weights[[i, o]];
                     }
                     output[[b, s, o]] = sum;
                 }
@@ -319,7 +319,7 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> MultiHeadAttentio
                 full_idx.push(k);
                 let exp_val = (input[IxDyn(&full_idx)] - max_val).exp();
                 exp_vals.push(exp_val);
-                sum = sum + exp_val;
+                sum += exp_val;
             }
 
             // Normalize
@@ -357,7 +357,9 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> MultiHeadAttentio
     }
 }
 
-impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> Layer<F> for MultiHeadAttention<F> {
+impl<F: Float + Debug + Send + Sync + ScalarOperand + NumAssign + 'static> Layer<F>
+    for MultiHeadAttention<F>
+{
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
         let shape = input.shape();
         if shape.len() != 3 {
@@ -405,7 +407,7 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> Layer<F> for Mult
                     for j in 0..seq_len {
                         let mut dot_product = F::zero();
                         for d in 0..head_dim {
-                            dot_product = dot_product + query[[b, i, h, d]] * key[[b, j, h, d]];
+                            dot_product += query[[b, i, h, d]] * key[[b, j, h, d]];
                         }
                         scores[[b, h, i, j]] = dot_product * self.scale;
                     }
@@ -435,7 +437,7 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> Layer<F> for Mult
                     for d in 0..head_dim {
                         let mut sum = F::zero();
                         for j in 0..seq_len {
-                            sum = sum + attention_weights[[b, h, i, j]] * value[[b, j, h, d]];
+                            sum += attention_weights[[b, h, i, j]] * value[[b, j, h, d]];
                         }
                         attended[[b, i, h, d]] = sum;
                     }
@@ -539,8 +541,8 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> Layer<F> for Mult
 }
 
 // Implement Send + Sync
-unsafe impl<F: Float + Debug + Send + Sync> Send for MultiHeadAttention<F> {}
-unsafe impl<F: Float + Debug + Send + Sync> Sync for MultiHeadAttention<F> {}
+unsafe impl<F: Float + Debug + Send + Sync + NumAssign> Send for MultiHeadAttention<F> {}
+unsafe impl<F: Float + Debug + Send + Sync + NumAssign> Sync for MultiHeadAttention<F> {}
 
 /// Self-attention layer
 ///
@@ -552,15 +554,15 @@ unsafe impl<F: Float + Debug + Send + Sync> Sync for MultiHeadAttention<F> {}
 ///
 /// # Output Shape
 /// - 3D tensor: (batch_size, seq_len, d_model)
-#[derive(Debug)]
-pub struct SelfAttention<F: Float + Debug + Send + Sync> {
+#[derive(Debug, Clone)]
+pub struct SelfAttention<F: Float + Debug + Send + Sync + NumAssign> {
     /// Underlying multi-head attention
     attention: MultiHeadAttention<F>,
     /// Layer name
     name: Option<String>,
 }
 
-impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> SelfAttention<F> {
+impl<F: Float + Debug + Send + Sync + ScalarOperand + NumAssign + 'static> SelfAttention<F> {
     /// Create a new self-attention layer
     ///
     /// # Arguments
@@ -581,7 +583,9 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> SelfAttention<F> 
     }
 }
 
-impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> Layer<F> for SelfAttention<F> {
+impl<F: Float + Debug + Send + Sync + ScalarOperand + NumAssign + 'static> Layer<F>
+    for SelfAttention<F>
+{
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
         self.attention.forward(input)
     }
@@ -636,8 +640,8 @@ impl<F: Float + Debug + Send + Sync + ScalarOperand + 'static> Layer<F> for Self
 }
 
 // Implement Send + Sync
-unsafe impl<F: Float + Debug + Send + Sync> Send for SelfAttention<F> {}
-unsafe impl<F: Float + Debug + Send + Sync> Sync for SelfAttention<F> {}
+unsafe impl<F: Float + Debug + Send + Sync + NumAssign> Send for SelfAttention<F> {}
+unsafe impl<F: Float + Debug + Send + Sync + NumAssign> Sync for SelfAttention<F> {}
 
 #[cfg(test)]
 mod tests {

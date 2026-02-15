@@ -8,7 +8,7 @@ use crate::layers::Layer;
 use crate::layers::Sequential;
 use crate::utils::colors::{colorize, stylize, Color, ColorOptions, Style};
 use scirs2_core::ndarray::ScalarOperand;
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 /// Represents a node in the model architecture graph
 #[derive(Debug, Clone)]
@@ -63,7 +63,12 @@ impl Default for ModelVizOptions {
 /// * `Result<String>` - ASCII representation of the model architecture
 #[allow(dead_code)]
 pub fn sequential_model_summary<
-    F: Float + Debug + ScalarOperand + scirs2_core::numeric::FromPrimitive + std::fmt::Display,
+    F: Float
+        + Debug
+        + NumAssign
+        + ScalarOperand
+        + scirs2_core::numeric::FromPrimitive
+        + std::fmt::Display,
 >(
     model: &Sequential<F>,
     inputshape: Option<Vec<usize>>,
@@ -368,7 +373,12 @@ pub fn sequential_model_summary<
 /// including transformations in shape and any connections between layers.
 #[allow(dead_code)]
 pub fn sequential_model_dataflow<
-    F: Float + Debug + ScalarOperand + scirs2_core::numeric::FromPrimitive + std::fmt::Display,
+    F: Float
+        + Debug
+        + NumAssign
+        + ScalarOperand
+        + scirs2_core::numeric::FromPrimitive
+        + std::fmt::Display,
 >(
     model: &Sequential<F>,
     inputshape: Vec<usize>,
@@ -558,7 +568,7 @@ fn extract_output_size(node: &ModelNode) -> Option<usize> {
 }
 // Helper function to extract useful properties from a layer
 #[allow(dead_code)]
-fn extract_layer_properties<F: Float + Debug + ScalarOperand>(
+fn extract_layer_properties<F: Float + Debug + NumAssign + ScalarOperand>(
     layer: &(dyn Layer<F> + Send + Sync),
 ) -> Vec<(String, String)> {
     let mut properties = Vec::new();

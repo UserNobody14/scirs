@@ -908,7 +908,7 @@ mod tests {
             RetrievalMode::External,
             ApproximationMethod::Simple,
         )
-        .unwrap();
+        .expect("find_contours should succeed for valid image");
 
         assert!(!contours.is_empty());
         assert!(contours[0].points.len() >= 4); // At least 4 corners
@@ -937,7 +937,7 @@ mod tests {
             RetrievalMode::Tree,
             ApproximationMethod::None,
         )
-        .unwrap();
+        .expect("find_contours should succeed for image with hole");
 
         // Should find at least 2 contours (outer and hole)
         assert!(!contours.is_empty());
@@ -981,7 +981,7 @@ mod tests {
             RetrievalMode::List,
             ApproximationMethod::Simple,
         )
-        .unwrap();
+        .expect("find_contours should succeed for empty image");
 
         assert!(contours.is_empty());
     }

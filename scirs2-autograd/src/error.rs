@@ -121,6 +121,43 @@ pub enum AutogradError {
     EvalError(#[from] EvalError),
 }
 
+impl AutogradError {
+    /// Create a shape error
+    pub fn shape_error(msg: String) -> Self {
+        Self::ShapeMismatch(msg)
+    }
+
+    /// Create an invalid argument error
+    pub fn invalid_argument(msg: String) -> Self {
+        Self::OperationError(format!("Invalid argument: {}", msg))
+    }
+
+    /// Create a compute error
+    pub fn compute_error(msg: String) -> Self {
+        Self::OperationError(format!("Computation error: {}", msg))
+    }
+
+    /// Create an internal error
+    pub fn internal_error(msg: &str) -> Self {
+        Self::OperationError(format!("Internal error: {}", msg))
+    }
+
+    /// Create a not implemented error
+    pub fn not_implemented(msg: String) -> Self {
+        Self::OperationError(format!("Not implemented: {}", msg))
+    }
+
+    /// Create a GPU error
+    pub fn gpu_error(msg: String) -> Self {
+        Self::OperationError(format!("GPU error: {}", msg))
+    }
+
+    /// Create a memory error
+    pub fn memory_error(msg: String) -> Self {
+        Self::OperationError(format!("Memory error: {}", msg))
+    }
+}
+
 /// Result type for autograd operations
 pub type Result<T> = std::result::Result<T, AutogradError>;
 

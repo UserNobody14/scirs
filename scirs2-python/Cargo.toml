@@ -1,6 +1,6 @@
 [package]
 name = "scirs2-python"
-version = "0.1.5"
+version = "0.2.0"
 authors = ["COOLJAPAN OU (Team KitaSan) <contact@cooljapan.tech>"]
 edition = "2021"
 rust-version = "1.70"
@@ -17,7 +17,7 @@ categories = ["science", "mathematics", "algorithms"]
 [workspace]
 
 [workspace.package]
-version = "0.1.5"
+version = "0.2.0"
 edition = "2021"
 authors = ["COOLJAPAN OU (Team KitaSan) <contact@cooljapan.tech>"]
 license = "Apache-2.0"
@@ -57,6 +57,10 @@ scirs2-neural = { path = "../scirs2-neural" }
 # Python bindings
 pyo3 = { version = "0.27.1", features = ["extension-module"] }
 scirs2-numpy = { path = "../scirs2-numpy" }  # SciRS2 fork with ndarray 0.17 support
+pyo3-asyncio = { version = "0.24", features = ["tokio-runtime"] }  # Async Python support
+
+# Async runtime
+tokio = { version = "1.42", features = ["rt-multi-thread", "macros", "time"] }
 
 # Error handling
 thiserror = "2.0.16"

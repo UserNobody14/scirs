@@ -659,11 +659,16 @@ where
 
 impl Default for CompressionConstraints {
     fn default() -> Self {
+        #[cfg(target_pointer_width = "32")]
+        let memory_budget = 256 * 1024 * 1024; // 256MB for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let memory_budget = 1024 * 1024 * 1024; // 1GB for 64-bit
+
         Self {
             max_compression_time: std::time::Duration::from_millis(100),
             min_compression_ratio: 1.5,
             max_quality_loss: 0.01,
-            memory_budget: 1024 * 1024 * 1024, // 1GB
+            memory_budget,
         }
     }
 }

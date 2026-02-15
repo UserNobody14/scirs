@@ -896,6 +896,8 @@ mod tests {
                 | crate::gpu_ops::GpuBackend::Cpu
                 | crate::gpu_ops::GpuBackend::Rocm
                 | crate::gpu_ops::GpuBackend::Wgpu => {}
+                #[cfg(not(feature = "gpu"))]
+                crate::gpu_ops::GpuBackend::Vulkan => {}
             }
         }
     }

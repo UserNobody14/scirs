@@ -3,12 +3,12 @@
 //! This module provides the main validation entry points and orchestration
 //! functions for comprehensive multitaper testing.
 
-use super::types::*;
+use super::cross_validation::cross_validate_with_reference;
 use super::dpss::validate_dpss_comprehensive;
+use super::performance::benchmark_performance;
 use super::spectral::validate_spectral_accuracy;
 use super::stability::test_numerical_stability_enhanced;
-use super::performance::benchmark_performance;
-use super::cross_validation::cross_validate_with_reference;
+use super::types::*;
 use crate::error::SignalResult;
 
 /// Main comprehensive validation function for multitaper methods
@@ -47,34 +47,30 @@ pub fn validate_multitaper_comprehensive(
     let mut issues = Vec::new();
 
     // Validate DPSS implementation
-    let dpss_validation = validate_dpss_comprehensive(
-        test_signals.length,
-        test_signals.nw,
-        test_signals.k,
-    ).unwrap_or_else(|e| {
-        issues.push(format!("DPSS validation failed: {}", e));
-        DpssValidationMetrics {
-            orthogonality_error: f64::INFINITY,
-            concentration_accuracy: 0.0,
-            eigenvalue_ordering_valid: false,
-            symmetry_preserved: false,
-        }
-    });
+    let dpss_validation =
+        validate_dpss_comprehensive(test_signals.length, test_signals.nw, test_signals.k)
+            .unwrap_or_else(|e| {
+                issues.push(format!("DPSS validation failed: {}", e));
+                DpssValidationMetrics {
+                    orthogonality_error: f64::INFINITY,
+                    concentration_accuracy: 0.0,
+                    eigenvalue_ordering_valid: false,
+                    symmetry_preserved: false,
+                }
+            });
 
     // Validate spectral accuracy
-    let spectral_accuracy = validate_spectral_accuracy(
-        test_signals,
-        validation_config.tolerance,
-    ).unwrap_or_else(|e| {
-        issues.push(format!("Spectral accuracy validation failed: {}", e));
-        SpectralAccuracyMetrics {
-            bias: f64::INFINITY,
-            variance: f64::INFINITY,
-            mse: f64::INFINITY,
-            frequency_resolution: 0.0,
-            leakage_factor: 1.0,
-        }
-    });
+    let spectral_accuracy = validate_spectral_accuracy(test_signals, validation_config.tolerance)
+        .unwrap_or_else(|e| {
+            issues.push(format!("Spectral accuracy validation failed: {}", e));
+            SpectralAccuracyMetrics {
+                bias: f64::INFINITY,
+                variance: f64::INFINITY,
+                mse: f64::INFINITY,
+                frequency_resolution: 0.0,
+                leakage_factor: 1.0,
+            }
+        });
 
     // Test numerical stability
     let numerical_stability = test_numerical_stability_enhanced().unwrap_or_else(|e| {
@@ -100,19 +96,17 @@ pub fn validate_multitaper_comprehensive(
     });
 
     // Cross-validate with reference
-    let cross_validation = cross_validate_with_reference(
-        test_signals,
-        validation_config.tolerance,
-    ).unwrap_or_else(|e| {
-        issues.push(format!("Cross-validation failed: {}", e));
-        CrossValidationMetrics {
-            reference_correlation: 0.0,
-            max_relative_error: f64::INFINITY,
-            mean_absolute_error: f64::INFINITY,
-            reference_available: false,
-            confidence_coverage: 0.0,
-        }
-    });
+    let cross_validation = cross_validate_with_reference(test_signals, validation_config.tolerance)
+        .unwrap_or_else(|e| {
+            issues.push(format!("Cross-validation failed: {}", e));
+            CrossValidationMetrics {
+                reference_correlation: 0.0,
+                max_relative_error: f64::INFINITY,
+                mean_absolute_error: f64::INFINITY,
+                reference_available: false,
+                confidence_coverage: 0.0,
+            }
+        });
 
     // Calculate overall score
     let overall_score = calculate_overall_score(
@@ -150,10 +144,8 @@ pub fn run_comprehensive_enhanced_validation(
     config: &ComprehensiveTestConfig,
 ) -> SignalResult<EnhancedValidationResult> {
     // Run standard validation
-    let standard_metrics = validate_multitaper_comprehensive(
-        &config.signal_config,
-        &config.validation_config,
-    )?;
+    let standard_metrics =
+        validate_multitaper_comprehensive(&config.signal_config, &config.validation_config)?;
 
     // Run robustness validation
     let robustness = validate_robustness_comprehensive(&config.signal_config)?;
@@ -171,7 +163,8 @@ pub fn run_comprehensive_enhanced_validation(
     };
 
     // Validate parameter consistency
-    let parameter_consistency = validate_parameter_consistency_comprehensive(&config.signal_config)?;
+    let parameter_consistency =
+        validate_parameter_consistency_comprehensive(&config.signal_config)?;
 
     // Validate numerical precision
     let precision_validation = validate_numerical_precision_comprehensive(
@@ -189,11 +182,7 @@ pub fn run_comprehensive_enhanced_validation(
     );
 
     // Generate recommendations
-    let recommendations = generate_recommendations(
-        &standard_metrics,
-        &robustness,
-        &simd_metrics,
-    );
+    let recommendations = generate_recommendations(&standard_metrics, &robustness, &simd_metrics);
 
     Ok(EnhancedValidationResult {
         standard_metrics,
@@ -221,7 +210,11 @@ fn calculate_overall_score(
     let dpss_score = if dpss.orthogonality_error.is_finite() {
         let ortho_score = (1.0 - dpss.orthogonality_error.min(1.0)).max(0.0);
         let conc_score = dpss.concentration_accuracy.min(1.0).max(0.0);
-        let order_score = if dpss.eigenvalue_ordering_valid { 1.0 } else { 0.0 };
+        let order_score = if dpss.eigenvalue_ordering_valid {
+            1.0
+        } else {
+            0.0
+        };
         let sym_score = if dpss.symmetry_preserved { 1.0 } else { 0.0 };
         (ortho_score + conc_score + order_score + sym_score) / 4.0
     } else {
@@ -247,8 +240,16 @@ fn calculate_overall_score(
     let stability_score = if stability.condition_number.is_finite() {
         let cond_score = (1.0 / (1.0 + stability.condition_number.ln())).min(1.0);
         let precision_score = (1.0 - stability.precision_loss.min(1.0)).max(0.0);
-        let issues_score = if stability.numerical_issues == 0 { 1.0 } else { 0.0 };
-        let extreme_score = if stability.extreme_input_stable { 1.0 } else { 0.0 };
+        let issues_score = if stability.numerical_issues == 0 {
+            1.0
+        } else {
+            0.0
+        };
+        let extreme_score = if stability.extreme_input_stable {
+            1.0
+        } else {
+            0.0
+        };
         (cond_score + precision_score + issues_score + extreme_score) / 4.0
     } else {
         0.0
@@ -292,9 +293,7 @@ fn calculate_overall_score(
 }
 
 /// Validate robustness across different scenarios
-fn validate_robustness_comprehensive(
-    config: &TestSignalConfig,
-) -> SignalResult<RobustnessMetrics> {
+fn validate_robustness_comprehensive(config: &TestSignalConfig) -> SignalResult<RobustnessMetrics> {
     // This is a simplified implementation
     // In practice, these would call the actual robustness validation functions
 
@@ -314,9 +313,7 @@ fn validate_robustness_comprehensive(
 }
 
 /// Validate SIMD operations comprehensively
-fn validate_simd_comprehensive(
-    config: &TestSignalConfig,
-) -> SignalResult<SimdValidationMetrics> {
+fn validate_simd_comprehensive(config: &TestSignalConfig) -> SignalResult<SimdValidationMetrics> {
     // This is a simplified implementation
     // In practice, this would call the actual SIMD validation functions
 
@@ -334,9 +331,7 @@ fn validate_simd_comprehensive(
 }
 
 /// Validate parameter consistency
-fn validate_parameter_consistency_comprehensive(
-    _config: &TestSignalConfig,
-) -> SignalResult<f64> {
+fn validate_parameter_consistency_comprehensive(_config: &TestSignalConfig) -> SignalResult<f64> {
     // Simplified implementation
     Ok(0.92)
 }
@@ -364,19 +359,21 @@ fn calculate_enhanced_score(
     let param_weight = 0.05;
     let precision_weight = 0.05;
 
-    let robustness_score = (robustness.extreme_case_stability +
-                           robustness.numerical_consistency +
-                           robustness.memory_scaling +
-                           robustness.convergence_stability +
-                           robustness.noise_robustness) / 5.0 * 100.0;
+    let robustness_score = (robustness.extreme_case_stability
+        + robustness.numerical_consistency
+        + robustness.memory_scaling
+        + robustness.convergence_stability
+        + robustness.noise_robustness)
+        / 5.0
+        * 100.0;
 
     let simd_score = simd.correctness_score * 100.0;
 
-    standard.overall_score * standard_weight +
-    robustness_score * robustness_weight +
-    simd_score * simd_weight +
-    parameter_consistency * 100.0 * param_weight +
-    precision_validation * 100.0 * precision_weight
+    standard.overall_score * standard_weight
+        + robustness_score * robustness_weight
+        + simd_score * simd_weight
+        + parameter_consistency * 100.0 * param_weight
+        + precision_validation * 100.0 * precision_weight
 }
 
 /// Generate recommendations based on validation results
@@ -389,33 +386,46 @@ fn generate_recommendations(
 
     // Check standard metrics
     if standard.overall_score < 70.0 {
-        recommendations.push("Overall validation score is low. Consider reviewing implementation.".to_string());
+        recommendations.push(
+            "Overall validation score is low. Consider reviewing implementation.".to_string(),
+        );
     }
 
     if standard.dpss_validation.orthogonality_error > 1e-6 {
-        recommendations.push("DPSS orthogonality error is high. Check eigenvalue computation.".to_string());
+        recommendations
+            .push("DPSS orthogonality error is high. Check eigenvalue computation.".to_string());
     }
 
     if standard.spectral_accuracy.mse > 1e-3 {
-        recommendations.push("Spectral estimation MSE is high. Review windowing and estimation parameters.".to_string());
+        recommendations.push(
+            "Spectral estimation MSE is high. Review windowing and estimation parameters."
+                .to_string(),
+        );
     }
 
     if !standard.numerical_stability.extreme_input_stable {
-        recommendations.push("Numerical instability detected with extreme inputs. Add input validation.".to_string());
+        recommendations.push(
+            "Numerical instability detected with extreme inputs. Add input validation.".to_string(),
+        );
     }
 
     // Check robustness
     if robustness.extreme_case_stability < 0.8 {
-        recommendations.push("Poor stability with extreme cases. Implement robust parameter validation.".to_string());
+        recommendations.push(
+            "Poor stability with extreme cases. Implement robust parameter validation.".to_string(),
+        );
     }
 
     if robustness.memory_scaling < 0.8 {
-        recommendations.push("Memory scaling issues detected. Optimize memory usage for large signals.".to_string());
+        recommendations.push(
+            "Memory scaling issues detected. Optimize memory usage for large signals.".to_string(),
+        );
     }
 
     // Check SIMD
     if simd.platform_compatible && simd.performance_improvement < 1.5 {
-        recommendations.push("SIMD performance improvement is low. Review SIMD implementation.".to_string());
+        recommendations
+            .push("SIMD performance improvement is low. Review SIMD implementation.".to_string());
     }
 
     if recommendations.is_empty() {

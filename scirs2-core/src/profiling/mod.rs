@@ -70,6 +70,14 @@ pub mod performance_hints;
 pub mod production;
 pub mod system_monitor;
 
+// v0.2.0 Advanced profiling and instrumentation modules
+pub mod instrumentation;
+pub mod memory_profiling;
+pub mod opentelemetry_integration;
+pub mod perf_integration;
+pub mod prometheus_metrics;
+pub mod tracing_framework;
+
 // Re-exports for backward compatibility and convenient access
 pub use entries::{MemoryEntry, TimingEntry};
 pub use memory::{profiling_memory_tracker, MemoryTracker};
@@ -86,6 +94,35 @@ pub use advanced::{
 
 // Comprehensive profiling re-exports
 pub use comprehensive::{ComprehensiveConfig, ComprehensiveProfiler, ComprehensiveReport};
+
+// v0.2.0 Advanced profiling re-exports
+pub use tracing_framework::{init_tracing, TracingConfig};
+#[cfg(feature = "profiling_advanced")]
+pub use tracing_framework::{PerfZone, SpanGuard, TracingFormat};
+
+#[cfg(feature = "profiling_opentelemetry")]
+pub use opentelemetry_integration::{get_tracer, init_opentelemetry, OtelConfig};
+
+pub use instrumentation::{clear_events, record_event};
+#[cfg(feature = "instrumentation")]
+pub use instrumentation::{
+    get_all_counters, get_counter, get_events, print_counter_summary, record_event_with_duration,
+    InstrumentationEvent, InstrumentationScope, PerformanceCounter,
+};
+pub use perf_integration::PerfCounter;
+pub use perf_integration::PerfEvent;
+#[cfg(all(target_os = "linux", feature = "profiling_perf"))]
+pub use perf_integration::{PerfCounterGroup, PerfMarker};
+pub use prometheus_metrics::MetricsRegistry;
+#[cfg(feature = "profiling_prometheus")]
+pub use prometheus_metrics::{
+    latency_buckets, register_counter, register_counter_vec, register_gauge, register_gauge_vec,
+    register_histogram, register_histogram_vec, size_buckets, PrometheusTimer, SciRS2Metrics,
+};
+
+#[cfg(feature = "profiling_memory")]
+pub use memory_profiling::{disable_profiling, AllocationAnalysis, AllocationTracker, MemoryDelta};
+pub use memory_profiling::{enable_profiling, MemoryProfiler, MemoryStats};
 
 /// Macro for timing a block of code
 #[macro_export]

@@ -828,9 +828,14 @@ impl BenchmarkSuite {
 
     /// Collect system information
     fn collect_system_info(&self) -> SystemInfo {
+        #[cfg(target_pointer_width = "32")]
+        let total_memory = 512 * 1024 * 1024; // 512MB placeholder for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let total_memory = 8usize * 1024 * 1024 * 1024; // 8GB placeholder for 64-bit
+
         SystemInfo {
             cpu_info: "Generic CPU".to_string(), // Would use actual CPU detection
-            total_memory: 8 * 1024 * 1024 * 1024, // 8GB placeholder
+            total_memory,
             cpu_cores: num_threads(),
             simd_capabilities: vec!["SSE2".to_string(), "AVX2".to_string()], // Placeholder
             os_info: std::env::consts::OS.to_string(),

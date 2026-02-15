@@ -10,10 +10,11 @@
 //! - PCG (Preconditioned Conjugate Gradient): 10 benchmarks
 //! - Solver comparison: 10 benchmarks
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use scirs2_autograd as ag;
 use scirs2_autograd::tensor_ops as T;
 use scirs2_core::ndarray::Array2;
+use std::hint::black_box;
 
 /// Helper function to create a symmetric positive definite matrix
 fn create_spd_matrix(size: usize, condition_number: f64) -> Array2<f64> {

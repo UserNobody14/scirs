@@ -79,10 +79,7 @@ fn calculate_mean_absolute_error(config: &TestSignalConfig) -> SignalResult<f64>
 }
 
 /// Validate confidence intervals
-fn validate_confidence_intervals(
-    config: &TestSignalConfig,
-    _tolerance: f64,
-) -> SignalResult<f64> {
+fn validate_confidence_intervals(config: &TestSignalConfig, _tolerance: f64) -> SignalResult<f64> {
     // Confidence interval coverage should be close to nominal level
     let nominal_coverage = 0.95;
     let coverage_error = estimate_coverage_error(config);
@@ -124,10 +121,10 @@ fn simulate_reference_validation(
     reference: &str,
 ) -> SignalResult<CrossValidationMetrics> {
     let (correlation, error_factor) = match reference {
-        "scipy" => (0.995, 0.8),   // High quality reference
-        "matlab" => (0.990, 1.0),  // Good reference
-        "custom" => (0.985, 1.2),  // Custom implementation
-        _ => (0.980, 1.5),         // Unknown reference
+        "scipy" => (0.995, 0.8),  // High quality reference
+        "matlab" => (0.990, 1.0), // Good reference
+        "custom" => (0.985, 1.2), // Custom implementation
+        _ => (0.980, 1.5),        // Unknown reference
     };
 
     let base_error = 0.005 * error_factor;

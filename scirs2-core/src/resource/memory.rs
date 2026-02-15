@@ -33,8 +33,8 @@ pub struct MemoryInfo {
 impl Default for MemoryInfo {
     fn default() -> Self {
         Self {
-            total_memory: 8 * 1024 * 1024 * 1024,     // 8GB default
-            available_memory: 4 * 1024 * 1024 * 1024, // 4GB default
+            total_memory: (8u64 * 1024 * 1024 * 1024) as usize, // 8GB default
+            available_memory: (4u64 * 1024 * 1024 * 1024) as usize, // 4GB default
             page_size: 4096,
             bandwidth_gbps: 20.0,
             latency_ns: 100.0,

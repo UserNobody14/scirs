@@ -6,6 +6,11 @@
  */
 
 use crate::error::{FFTError, FFTResult};
+#[cfg(feature = "oxifft")]
+use crate::oxifft_plan_cache;
+#[cfg(feature = "oxifft")]
+use oxifft::{Complex as OxiComplex, Direction};
+#[cfg(feature = "rustfft-backend")]
 use rustfft::{num_complex::Complex as RustComplex, FftPlanner};
 use scirs2_core::ndarray::{Array2, ArrayD, Axis, IxDyn};
 use scirs2_core::numeric::Complex64;
@@ -181,24 +186,57 @@ where
         }
     }
 
-    // Use rustfft library for computation
-    let mut planner = FftPlanner::new();
-    let fft = planner.plan_fft_forward(fft_size);
+    // Use FFT library for computation
+    #[cfg(feature = "oxifft")]
+    {
+        // Convert to OxiFFT-compatible complex type
+        let input_oxi: Vec<OxiComplex<f64>> =
+            data.iter().map(|c| OxiComplex::new(c.re, c.im)).collect();
+        let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); fft_size];
 
-    // Convert to rustfft-compatible complex type
-    let mut buffer: Vec<RustComplex<f64>> =
-        data.iter().map(|c| RustComplex::new(c.re, c.im)).collect();
+        // Execute FFT with cached plan
+        oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Forward)?;
 
-    // Perform FFT in-place
-    fft.process(&mut buffer);
+        // Convert back to our Complex64 type
+        let result: Vec<Complex64> = output
+            .into_iter()
+            .map(|c| Complex64::new(c.re, c.im))
+            .collect();
 
-    // Convert back to our Complex64 type
-    let result: Vec<Complex64> = buffer
-        .into_iter()
-        .map(|c| Complex64::new(c.re, c.im))
-        .collect();
+        Ok(result)
+    }
 
-    Ok(result)
+    #[cfg(not(feature = "oxifft"))]
+    {
+        #[cfg(feature = "rustfft-backend")]
+        {
+            let mut planner = FftPlanner::new();
+            let fft_plan = planner.plan_fft_forward(fft_size);
+
+            // Convert to rustfft-compatible complex type
+            let mut buffer: Vec<RustComplex<f64>> =
+                data.iter().map(|c| RustComplex::new(c.re, c.im)).collect();
+
+            // Perform FFT in-place
+            fft_plan.process(&mut buffer);
+
+            // Convert back to our Complex64 type
+            let result: Vec<Complex64> = buffer
+                .into_iter()
+                .map(|c| Complex64::new(c.re, c.im))
+                .collect();
+
+            Ok(result)
+        }
+
+        #[cfg(not(feature = "rustfft-backend"))]
+        {
+            Err(FFTError::ComputationError(
+                "No FFT backend available. Enable either 'oxifft' or 'rustfft-backend' feature."
+                    .to_string(),
+            ))
+        }
+    }
 }
 
 /// Compute the inverse 1-dimensional Fast Fourier Transform
@@ -262,24 +300,62 @@ where
     }
 
     // Create FFT planner and plan
-    let mut planner = FftPlanner::new();
-    let ifft = planner.plan_fft_inverse(fft_size);
+    #[cfg(feature = "oxifft")]
+    let mut result = {
+        // Convert to OxiFFT-compatible complex type
+        let input_oxi: Vec<OxiComplex<f64>> =
+            data.iter().map(|c| OxiComplex::new(c.re, c.im)).collect();
+        let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); fft_size];
 
-    // Convert to rustfft-compatible complex type
-    let mut buffer: Vec<RustComplex<f64>> =
-        data.iter().map(|c| RustComplex::new(c.re, c.im)).collect();
+        // Execute IFFT with cached plan
+        oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Backward)?;
 
-    // Perform inverse FFT in-place
-    ifft.process(&mut buffer);
+        // Convert back to our Complex64 type
+        let mut result: Vec<Complex64> = output
+            .into_iter()
+            .map(|c| Complex64::new(c.re, c.im))
+            .collect();
 
-    // Convert back to our Complex64 type with normalization
-    let mut result: Vec<Complex64> = buffer
-        .into_iter()
-        .map(|c| Complex64::new(c.re, c.im))
-        .collect();
+        // Apply 1/N normalization (standard for IFFT)
+        apply_normalization(&mut result, fft_size, NormMode::Backward)?;
 
-    // Apply 1/N normalization (standard for IFFT)
-    apply_normalization(&mut result, fft_size, NormMode::Backward)?;
+        result
+    };
+
+    #[cfg(not(feature = "oxifft"))]
+    let mut result: Vec<Complex64> = {
+        #[cfg(feature = "rustfft-backend")]
+        {
+            let mut planner = FftPlanner::new();
+            let ifft_plan = planner.plan_fft_inverse(fft_size);
+
+            // Convert to rustfft-compatible complex type
+            let mut buffer: Vec<RustComplex<f64>> =
+                data.iter().map(|c| RustComplex::new(c.re, c.im)).collect();
+
+            // Perform inverse FFT in-place
+            ifft_plan.process(&mut buffer);
+
+            // Convert back to our Complex64 type with normalization
+            let mut result: Vec<Complex64> = buffer
+                .into_iter()
+                .map(|c| Complex64::new(c.re, c.im))
+                .collect();
+
+            // Apply 1/N normalization (standard for IFFT)
+            apply_normalization(&mut result, fft_size, NormMode::Backward)?;
+
+            result
+        }
+
+        #[cfg(not(feature = "rustfft-backend"))]
+        {
+            return Err(FFTError::ComputationError(
+                "No FFT backend available. Enable either 'oxifft' or 'rustfft-backend' feature."
+                    .to_string(),
+            ));
+        }
+    };
 
     // Truncate if necessary to match the original _input length
     if n.is_none() && fft_size > input_len {
@@ -374,38 +450,88 @@ where
         complex_input
     };
 
-    // Create FFT planner
-    let mut planner = FftPlanner::new();
+    // Perform FFT along rows and columns
+    #[cfg(feature = "oxifft")]
+    {
+        // Perform FFT along each row
+        for mut row in padded_input.rows_mut() {
+            // Convert to OxiFFT compatible format
+            let input_oxi: Vec<OxiComplex<f64>> =
+                row.iter().map(|&c| OxiComplex::new(c.re, c.im)).collect();
+            let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); outputshape.1];
 
-    // Perform FFT along each row
-    let row_fft = planner.plan_fft_forward(outputshape.1);
-    for mut row in padded_input.rows_mut() {
-        // Convert to rustfft compatible format
-        let mut buffer: Vec<RustComplex<f64>> =
-            row.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+            // Perform FFT
+            oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Forward)?;
 
-        // Perform FFT
-        row_fft.process(&mut buffer);
+            // Update row with FFT result
+            for (i, val) in output.iter().enumerate() {
+                row[i] = Complex64::new(val.re, val.im);
+            }
+        }
 
-        // Update row with FFT result
-        for (i, val) in buffer.iter().enumerate() {
-            row[i] = Complex64::new(val.re, val.im);
+        // Perform FFT along each column
+        for mut col in padded_input.columns_mut() {
+            // Convert to OxiFFT compatible format
+            let input_oxi: Vec<OxiComplex<f64>> =
+                col.iter().map(|&c| OxiComplex::new(c.re, c.im)).collect();
+            let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); outputshape.0];
+
+            // Perform FFT
+            oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Forward)?;
+
+            // Update column with FFT result
+            for (i, val) in output.iter().enumerate() {
+                col[i] = Complex64::new(val.re, val.im);
+            }
         }
     }
 
-    // Perform FFT along each column
-    let col_fft = planner.plan_fft_forward(outputshape.0);
-    for mut col in padded_input.columns_mut() {
-        // Convert to rustfft compatible format
-        let mut buffer: Vec<RustComplex<f64>> =
-            col.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+    #[cfg(not(feature = "oxifft"))]
+    {
+        #[cfg(feature = "rustfft-backend")]
+        {
+            // Create FFT planner
+            let mut planner = FftPlanner::new();
 
-        // Perform FFT
-        col_fft.process(&mut buffer);
+            // Perform FFT along each row
+            let row_fft = planner.plan_fft_forward(outputshape.1);
+            for mut row in padded_input.rows_mut() {
+                // Convert to rustfft compatible format
+                let mut buffer: Vec<RustComplex<f64>> =
+                    row.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
 
-        // Update column with FFT result
-        for (i, val) in buffer.iter().enumerate() {
-            col[i] = Complex64::new(val.re, val.im);
+                // Perform FFT
+                row_fft.process(&mut buffer);
+
+                // Update row with FFT result
+                for (i, val) in buffer.iter().enumerate() {
+                    row[i] = Complex64::new(val.re, val.im);
+                }
+            }
+
+            // Perform FFT along each column
+            let col_fft = planner.plan_fft_forward(outputshape.0);
+            for mut col in padded_input.columns_mut() {
+                // Convert to rustfft compatible format
+                let mut buffer: Vec<RustComplex<f64>> =
+                    col.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+
+                // Perform FFT
+                col_fft.process(&mut buffer);
+
+                // Update column with FFT result
+                for (i, val) in buffer.iter().enumerate() {
+                    col[i] = Complex64::new(val.re, val.im);
+                }
+            }
+        }
+
+        #[cfg(not(feature = "rustfft-backend"))]
+        {
+            return Err(FFTError::ComputationError(
+                "No FFT backend available. Enable either 'oxifft' or 'rustfft-backend' feature."
+                    .to_string(),
+            ));
         }
     }
 
@@ -518,38 +644,88 @@ where
         complex_input
     };
 
-    // Create FFT planner
-    let mut planner = FftPlanner::new();
+    // Perform inverse FFT along rows and columns
+    #[cfg(feature = "oxifft")]
+    {
+        // Perform inverse FFT along each row
+        for mut row in padded_input.rows_mut() {
+            // Convert to OxiFFT compatible format
+            let input_oxi: Vec<OxiComplex<f64>> =
+                row.iter().map(|&c| OxiComplex::new(c.re, c.im)).collect();
+            let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); outputshape.1];
 
-    // Perform inverse FFT along each row
-    let row_ifft = planner.plan_fft_inverse(outputshape.1);
-    for mut row in padded_input.rows_mut() {
-        // Convert to rustfft compatible format
-        let mut buffer: Vec<RustComplex<f64>> =
-            row.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+            // Perform inverse FFT
+            oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Backward)?;
 
-        // Perform inverse FFT
-        row_ifft.process(&mut buffer);
+            // Update row with IFFT result
+            for (i, val) in output.iter().enumerate() {
+                row[i] = Complex64::new(val.re, val.im);
+            }
+        }
 
-        // Update row with IFFT result
-        for (i, val) in buffer.iter().enumerate() {
-            row[i] = Complex64::new(val.re, val.im);
+        // Perform inverse FFT along each column
+        for mut col in padded_input.columns_mut() {
+            // Convert to OxiFFT compatible format
+            let input_oxi: Vec<OxiComplex<f64>> =
+                col.iter().map(|&c| OxiComplex::new(c.re, c.im)).collect();
+            let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); outputshape.0];
+
+            // Perform inverse FFT
+            oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Backward)?;
+
+            // Update column with IFFT result
+            for (i, val) in output.iter().enumerate() {
+                col[i] = Complex64::new(val.re, val.im);
+            }
         }
     }
 
-    // Perform inverse FFT along each column
-    let col_ifft = planner.plan_fft_inverse(outputshape.0);
-    for mut col in padded_input.columns_mut() {
-        // Convert to rustfft compatible format
-        let mut buffer: Vec<RustComplex<f64>> =
-            col.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+    #[cfg(not(feature = "oxifft"))]
+    {
+        #[cfg(feature = "rustfft-backend")]
+        {
+            // Create FFT planner
+            let mut planner = FftPlanner::new();
 
-        // Perform inverse FFT
-        col_ifft.process(&mut buffer);
+            // Perform inverse FFT along each row
+            let row_ifft = planner.plan_fft_inverse(outputshape.1);
+            for mut row in padded_input.rows_mut() {
+                // Convert to rustfft compatible format
+                let mut buffer: Vec<RustComplex<f64>> =
+                    row.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
 
-        // Update column with IFFT result
-        for (i, val) in buffer.iter().enumerate() {
-            col[i] = Complex64::new(val.re, val.im);
+                // Perform inverse FFT
+                row_ifft.process(&mut buffer);
+
+                // Update row with IFFT result
+                for (i, val) in buffer.iter().enumerate() {
+                    row[i] = Complex64::new(val.re, val.im);
+                }
+            }
+
+            // Perform inverse FFT along each column
+            let col_ifft = planner.plan_fft_inverse(outputshape.0);
+            for mut col in padded_input.columns_mut() {
+                // Convert to rustfft compatible format
+                let mut buffer: Vec<RustComplex<f64>> =
+                    col.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+
+                // Perform inverse FFT
+                col_ifft.process(&mut buffer);
+
+                // Update column with IFFT result
+                for (i, val) in buffer.iter().enumerate() {
+                    col[i] = Complex64::new(val.re, val.im);
+                }
+            }
+        }
+
+        #[cfg(not(feature = "rustfft-backend"))]
+        {
+            return Err(FFTError::ComputationError(
+                "No FFT backend available. Enable either 'oxifft' or 'rustfft-backend' feature."
+                    .to_string(),
+            ));
         }
     }
 
@@ -692,29 +868,69 @@ where
         complex_input
     };
 
-    // Create FFT planner
-    let mut planner = FftPlanner::new();
-
     // Perform FFT along each axis
-    for &axis in &axes {
-        let axis_len = outputshape[axis];
-        let fft = planner.plan_fft_forward(axis_len);
+    #[cfg(feature = "oxifft")]
+    {
+        for &axis in &axes {
+            let axis_len = outputshape[axis];
 
-        // For each slice along the current axis
-        let axis = Axis(axis);
+            // For each slice along the current axis
+            let axis_obj = Axis(axis);
 
-        for mut lane in result.lanes_mut(axis) {
-            // Convert to rustfft compatible format
-            let mut buffer: Vec<RustComplex<f64>> =
-                lane.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+            for mut lane in result.lanes_mut(axis_obj) {
+                // Convert to OxiFFT compatible format
+                let input_oxi: Vec<OxiComplex<f64>> =
+                    lane.iter().map(|&c| OxiComplex::new(c.re, c.im)).collect();
+                let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); axis_len];
 
-            // Perform FFT
-            fft.process(&mut buffer);
+                // Perform FFT
+                oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Forward)?;
 
-            // Update lane with FFT result
-            for (i, val) in buffer.iter().enumerate() {
-                lane[i] = Complex64::new(val.re, val.im);
+                // Update lane with FFT result
+                for (i, val) in output.iter().enumerate() {
+                    lane[i] = Complex64::new(val.re, val.im);
+                }
             }
+        }
+    }
+
+    #[cfg(not(feature = "oxifft"))]
+    {
+        #[cfg(feature = "rustfft-backend")]
+        {
+            // Create FFT planner
+            let mut planner = FftPlanner::new();
+
+            // Perform FFT along each axis
+            for &axis in &axes {
+                let axis_len = outputshape[axis];
+                let fft = planner.plan_fft_forward(axis_len);
+
+                // For each slice along the current axis
+                let axis_obj = Axis(axis);
+
+                for mut lane in result.lanes_mut(axis_obj) {
+                    // Convert to rustfft compatible format
+                    let mut buffer: Vec<RustComplex<f64>> =
+                        lane.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+
+                    // Perform FFT
+                    fft.process(&mut buffer);
+
+                    // Update lane with FFT result
+                    for (i, val) in buffer.iter().enumerate() {
+                        lane[i] = Complex64::new(val.re, val.im);
+                    }
+                }
+            }
+        }
+
+        #[cfg(not(feature = "rustfft-backend"))]
+        {
+            return Err(FFTError::ComputationError(
+                "No FFT backend available. Enable either 'oxifft' or 'rustfft-backend' feature."
+                    .to_string(),
+            ));
         }
     }
 
@@ -874,29 +1090,69 @@ where
         complex_input
     };
 
-    // Create FFT planner
-    let mut planner = FftPlanner::new();
-
     // Perform inverse FFT along each axis
-    for &axis in &axes {
-        let axis_len = outputshape[axis];
-        let ifft = planner.plan_fft_inverse(axis_len);
+    #[cfg(feature = "oxifft")]
+    {
+        for &axis in &axes {
+            let axis_len = outputshape[axis];
 
-        // For each slice along the current axis
-        let axis = Axis(axis);
+            // For each slice along the current axis
+            let axis_obj = Axis(axis);
 
-        for mut lane in result.lanes_mut(axis) {
-            // Convert to rustfft compatible format
-            let mut buffer: Vec<RustComplex<f64>> =
-                lane.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+            for mut lane in result.lanes_mut(axis_obj) {
+                // Convert to OxiFFT compatible format
+                let input_oxi: Vec<OxiComplex<f64>> =
+                    lane.iter().map(|&c| OxiComplex::new(c.re, c.im)).collect();
+                let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); axis_len];
 
-            // Perform inverse FFT
-            ifft.process(&mut buffer);
+                // Perform inverse FFT
+                oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Backward)?;
 
-            // Update lane with IFFT result
-            for (i, val) in buffer.iter().enumerate() {
-                lane[i] = Complex64::new(val.re, val.im);
+                // Update lane with IFFT result
+                for (i, val) in output.iter().enumerate() {
+                    lane[i] = Complex64::new(val.re, val.im);
+                }
             }
+        }
+    }
+
+    #[cfg(not(feature = "oxifft"))]
+    {
+        #[cfg(feature = "rustfft-backend")]
+        {
+            // Create FFT planner
+            let mut planner = FftPlanner::new();
+
+            // Perform inverse FFT along each axis
+            for &axis in &axes {
+                let axis_len = outputshape[axis];
+                let ifft = planner.plan_fft_inverse(axis_len);
+
+                // For each slice along the current axis
+                let axis_obj = Axis(axis);
+
+                for mut lane in result.lanes_mut(axis_obj) {
+                    // Convert to rustfft compatible format
+                    let mut buffer: Vec<RustComplex<f64>> =
+                        lane.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+
+                    // Perform inverse FFT
+                    ifft.process(&mut buffer);
+
+                    // Update lane with IFFT result
+                    for (i, val) in buffer.iter().enumerate() {
+                        lane[i] = Complex64::new(val.re, val.im);
+                    }
+                }
+            }
+        }
+
+        #[cfg(not(feature = "rustfft-backend"))]
+        {
+            return Err(FFTError::ComputationError(
+                "No FFT backend available. Enable either 'oxifft' or 'rustfft-backend' feature."
+                    .to_string(),
+            ));
         }
     }
 

@@ -107,6 +107,9 @@ pub mod image;
 /// Utility functions and helpers for data transformation
 pub mod utils;
 
+/// Signal transforms (DWT, CWT, WPT, STFT, MFCC, CQT, Chromagram)
+pub mod signal_transforms;
+
 /// Test module for advanced implementations
 #[cfg(test)]
 mod advanced_test;
@@ -211,6 +214,20 @@ pub use utils::{
     ArrayMemoryPool, DataChunker, PerfUtils, ProcessingStrategy, StatUtils, TypeConverter,
     ValidationUtils,
 };
+
+// Signal transforms exports
+pub use signal_transforms::cqt::{CQTConfig, Chromagram, WindowFunction, CQT};
+pub use signal_transforms::cwt::{
+    ComplexMorletWavelet, ContinuousWavelet, GaussianWavelet, MexicanHatWavelet, MorletWavelet, CWT,
+};
+pub use signal_transforms::dwt::{
+    BoundaryMode, Dwt2dCoeffs, WaveletFilters, WaveletType, DWT, DWT2D, DWTN,
+};
+pub use signal_transforms::mfcc::{MFCCConfig, MelFilterbank, MFCC};
+pub use signal_transforms::stft::{
+    PaddingMode, STFTConfig, Spectrogram, SpectrogramScaling, WindowType, STFT,
+};
+pub use signal_transforms::wpt::{denoise_wpt, BestBasisCriterion, WaveletPacketNode, WPT};
 
 // GPU acceleration exports
 #[cfg(feature = "gpu")]

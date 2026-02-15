@@ -210,6 +210,22 @@ impl<
 
         let n_points = points.shape()[0];
 
+        // Check for duplicate points
+        for i in 0..n_points {
+            for j in (i + 1)..n_points {
+                let point_i = points.slice(scirs2_core::ndarray::s![i, ..]);
+                let point_j = points.slice(scirs2_core::ndarray::s![j, ..]);
+                let dist = Self::distance(&point_i, &point_j);
+                if dist < F::from_f64(1e-14).unwrap_or_else(|| F::epsilon()) {
+                    return Err(InterpolateError::invalid_input(format!(
+                        "Duplicate points detected at indices {} and {} (distance: {:?}). \
+                             RBF interpolation requires all points to be distinct.",
+                        i, j, dist
+                    )));
+                }
+            }
+        }
+
         // Set up _parallel workers if specified
         if use_parallel && workers > 0 {
             // Thread pool configuration is now handled globally by scirs2-core

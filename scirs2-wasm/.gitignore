@@ -1,0 +1,41 @@
+# WASM build outputs
+pkg/
+pkg-web/
+pkg-node/
+pkg-simd/
+*_bg.wasm
+*_bg.wasm.d.ts
+*.js
+*.d.ts
+
+# Node modules
+node_modules/
+www/node_modules/
+examples/**/node_modules/
+
+# NPM
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build artifacts
+target/
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test outputs
+wasm-pack.log
+
+# Temporary files
+*.tmp
+tmp/

@@ -8,7 +8,7 @@
 
 use super::*;
 use crate::error::{SignalError, SignalResult};
-use rustfft::{num_complex::Complex, FftPlanner};
+use scirs2_core::numeric::Complex64;
 use std::collections::VecDeque;
 use std::fmt::Debug;
 
@@ -795,15 +795,13 @@ pub struct FdlmsFilter {
     /// Block size (typically 2 * filter_length)
     block_size: usize,
     /// Filter coefficients in frequency domain
-    freq_weights: Vec<Complex<f64>>,
+    freq_weights: Vec<Complex64>,
     /// Input buffer for overlap-save
     input_buffer: VecDeque<f64>,
     /// Error buffer for overlap-save
     error_buffer: VecDeque<f64>,
     /// Step size
     step_size: f64,
-    /// FFT planner
-    fft_planner: FftPlanner<f64>,
     /// Leakage factor for weight constraint
     leakage: f64,
 }
@@ -820,7 +818,7 @@ impl FdlmsFilter {
     /// # Returns
     ///
     /// * A new FDLMS filter instance
-    pub fn new(filter_length: usize, stepsize: f64, leakage: f64) -> SignalResult<Self> {
+    pub fn new(filter_length: usize, step_size: f64, leakage: f64) -> SignalResult<Self> {
         if filter_length == 0 {
             return Err(SignalError::ValueError(
                 "Filter length must be positive".to_string(),
@@ -838,11 +836,10 @@ impl FdlmsFilter {
         Ok(FdlmsFilter {
             filter_length,
             block_size,
-            freq_weights: vec![Complex::new(0.0, 0.0); block_size],
+            freq_weights: vec![Complex64::new(0.0, 0.0); block_size],
             input_buffer: VecDeque::with_capacity(block_size),
             error_buffer: VecDeque::with_capacity(block_size),
             step_size,
-            fft_planner: FftPlanner::new(),
             leakage,
         })
     }
@@ -891,33 +888,29 @@ impl FdlmsFilter {
         inputs: &[f64],
         desired: &[f64],
     ) -> SignalResult<(Vec<f64>, Vec<f64>)> {
-        // Convert input buffer to vector for FFT
-        let mut input_vec: Vec<Complex<f64>> = self
-            .input_buffer
-            .iter()
-            .map(|&x| Complex::new(x, 0.0))
-            .collect();
+        // Convert input buffer to f64 vec for FFT
+        let input_f64: Vec<f64> = self.input_buffer.iter().copied().collect();
 
-        // FFT of input
-        let fft = self.fft_planner.plan_fft_forward(self.block_size);
-        fft.process(&mut input_vec);
+        // FFT of input using scirs2_fft
+        let input_freq = scirs2_fft::fft(&input_f64, Some(self.block_size))
+            .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
         // Frequency domain filtering
-        let mut freq_output: Vec<Complex<f64>> = input_vec
+        let freq_output: Vec<Complex64> = input_freq
             .iter()
-            .zip(self.freqweights.iter())
+            .zip(self.freq_weights.iter())
             .map(|(&x, &w)| x * w)
             .collect();
 
-        // IFFT to get time domain output
-        let ifft = self.fft_planner.plan_fft_inverse(self.block_size);
-        ifft.process(&mut freq_output);
+        // IFFT to get time domain output using scirs2_fft
+        let time_output = scirs2_fft::ifft(&freq_output, Some(self.block_size))
+            .map_err(|e| SignalError::ComputationError(format!("IFFT failed: {}", e)))?;
 
         // Extract outputs (last half due to overlap-save)
-        let outputs: Vec<f64> = freq_output[self.filter_length..]
+        let outputs: Vec<f64> = time_output[self.filter_length..]
             .iter()
             .take(inputs.len())
-            .map(|c| c.re / self.block_size as f64)
+            .map(|c| c.re)
             .collect();
 
         // Compute errors
@@ -928,29 +921,29 @@ impl FdlmsFilter {
             .collect();
 
         // Update weights in frequency domain
-        self.update_weights(&input_vec, &errors)?;
+        self.update_weights(&input_freq, &errors)?;
 
         Ok((outputs, errors))
     }
 
-    fn update_weights(&mut self, freqinput: &[Complex<f64>], errors: &[f64]) -> SignalResult<()> {
+    fn update_weights(&mut self, freq_input: &[Complex64], errors: &[f64]) -> SignalResult<()> {
         // Create error signal in frequency domain
-        let mut error_padded = vec![Complex::new(0.0, 0.0); self.block_size];
+        let mut error_padded_f64 = vec![0.0f64; self.block_size];
         for (i, &err) in errors.iter().enumerate() {
             if self.filter_length + i < self.block_size {
-                error_padded[self.filter_length + i] = Complex::new(err, 0.0);
+                error_padded_f64[self.filter_length + i] = err;
             }
         }
 
-        // FFT of error
-        let fft = self.fft_planner.plan_fft_forward(self.block_size);
-        fft.process(&mut error_padded);
+        // FFT of error using scirs2_fft
+        let error_freq = scirs2_fft::fft(&error_padded_f64, Some(self.block_size))
+            .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
         // Update frequency domain weights
         for i in 0..self.block_size {
-            let gradient = freq_input[i].conj() * error_padded[i];
+            let gradient = freq_input[i].conj() * error_freq[i];
             self.freq_weights[i] =
-                self.leakage * self.freq_weights[i] + Complex::new(self.step_size, 0.0) * gradient;
+                self.leakage * self.freq_weights[i] + Complex64::new(self.step_size, 0.0) * gradient;
         }
 
         Ok(())
@@ -958,21 +951,21 @@ impl FdlmsFilter {
 
     /// Get current filter weights (time domain)
     pub fn weights(&self) -> Vec<f64> {
-        // Convert frequency domain weights to time domain
-        let mut time_weights = self.freqweights.clone();
-        let mut planner = FftPlanner::new();
-        let ifft = planner.plan_fft_inverse(self.block_size);
-        ifft.process(&mut time_weights);
-
-        time_weights[..self.filter_length]
-            .iter()
-            .map(|c| c.re / self.block_size as f64)
-            .collect()
+        // Convert frequency domain weights to time domain using scirs2_fft
+        match scirs2_fft::ifft(&self.freq_weights, Some(self.block_size)) {
+            Ok(time_weights) => {
+                time_weights[..self.filter_length]
+                    .iter()
+                    .map(|c| c.re)
+                    .collect()
+            }
+            Err(_) => vec![0.0; self.filter_length],
+        }
     }
 
     /// Reset the filter
     pub fn reset(&mut self) {
-        self.freqweights.fill(Complex::new(0.0, 0.0));
+        self.freq_weights.fill(Complex64::new(0.0, 0.0));
         self.input_buffer.clear();
         self.error_buffer.clear();
     }

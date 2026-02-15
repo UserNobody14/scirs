@@ -6,7 +6,7 @@
 use crate::error::{NeuralError, Result};
 use crate::layers::Layer;
 use scirs2_core::ndarray::{Array, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::{Arc, RwLock};
@@ -65,8 +65,8 @@ impl Default for EmbeddingConfig {
 /// let output = embedding.forward(&indices.into_dyn()).expect("Operation failed");
 /// assert_eq!(output.shape(), &[2, 3, 64]);
 /// ```
-#[derive(Debug)]
-pub struct Embedding<F: Float + Debug + Send + Sync> {
+#[derive(Debug, Clone)]
+pub struct Embedding<F: Float + Debug + Send + Sync + NumAssign> {
     /// Configuration for the embedding layer
     config: EmbeddingConfig,
     /// Weight matrix containing the embeddings (num_embeddings x embedding_dim)
@@ -81,7 +81,7 @@ pub struct Embedding<F: Float + Debug + Send + Sync> {
     _phantom: PhantomData<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Embedding<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign> Embedding<F> {
     /// Create a new Embedding layer with the given configuration
     pub fn new(config: EmbeddingConfig) -> Result<Self> {
         if config.num_embeddings == 0 {
@@ -228,9 +228,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Embedding<F> {
                 for j in 0..self.config.embedding_dim {
                     let val = weights[[i, j]];
                     if p == F::from(2.0).expect("Failed to convert constant to float") {
-                        norm = norm + val * val;
+                        norm += val * val;
                     } else {
-                        norm = norm + val.abs().powf(p);
+                        norm += val.abs().powf(p);
                     }
                 }
 
@@ -244,7 +244,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Embedding<F> {
                 if norm > max_norm_f {
                     let scale = max_norm_f / norm;
                     for j in 0..self.config.embedding_dim {
-                        weights[[i, j]] = weights[[i, j]] * scale;
+                        weights[[i, j]] *= scale;
                     }
                 }
             }
@@ -286,7 +286,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Embedding<F> {
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for Embedding<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign> Layer<F>
+    for Embedding<F>
+{
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
         // Cache input for backward pass
         if let Ok(mut cache) = self.input_cache.write() {
@@ -357,11 +359,11 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for Embe
                     // For now, use flat index
                     let flat_grad_idx = i * embedding_dim + j;
                     if flat_grad_idx < grad_output.len() {
-                        weight_grad[[idx, j]] = weight_grad[[idx, j]]
-                            + grad_output.as_slice().expect("Operation failed")[flat_grad_idx];
+                        weight_grad[[idx, j]] +=
+                            grad_output.as_slice().expect("Operation failed")[flat_grad_idx];
                     }
                 } else {
-                    weight_grad[[idx, j]] = weight_grad[[idx, j]] + grad_output[[i, j]];
+                    weight_grad[[idx, j]] += grad_output[[i, j]];
                 }
             }
         }
@@ -398,7 +400,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for Embe
                 };
 
                 for j in 0..self.config.embedding_dim {
-                    weights[[i, j]] = weights[[i, j]] - lr * scale * weight_grad[[i, j]];
+                    weights[[i, j]] -= lr * scale * weight_grad[[i, j]];
                 }
             }
         } else {
@@ -412,7 +414,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for Embe
                 }
 
                 for j in 0..self.config.embedding_dim {
-                    weights[[i, j]] = weights[[i, j]] - lr * weight_grad[[i, j]];
+                    weights[[i, j]] -= lr * weight_grad[[i, j]];
                 }
             }
         }
@@ -460,7 +462,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for Embe
 /// This layer adds positional information to embeddings to help models
 /// understand the position of elements in a sequence.
 #[derive(Debug)]
-pub struct PositionalEmbedding<F: Float + Debug + Send + Sync> {
+pub struct PositionalEmbedding<F: Float + Debug + Send + Sync + NumAssign> {
     /// Maximum sequence length supported
     max_seq_length: usize,
     /// Embedding dimension
@@ -475,7 +477,7 @@ pub struct PositionalEmbedding<F: Float + Debug + Send + Sync> {
     _phantom: PhantomData<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> PositionalEmbedding<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign> PositionalEmbedding<F> {
     /// Create a new PositionalEmbedding layer
     pub fn new(max_seq_length: usize, embedding_dim: usize, learned: bool) -> Result<Self> {
         if max_seq_length == 0 {
@@ -551,7 +553,9 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> PositionalEmbeddi
     }
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for PositionalEmbedding<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign> Layer<F>
+    for PositionalEmbedding<F>
+{
     fn forward(&self, input: &Array<F, IxDyn>) -> Result<Array<F, IxDyn>> {
         // Validate input shape - at least 2D with last dimension being embedding_dim
         if input.ndim() < 2 {
@@ -619,12 +623,10 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for Posi
                     // For a simple 3D case (batch, seq, emb), this is straightforward
                     if input_shape.len() == 3 {
                         let b = batch_idx;
-                        output[[b, pos, emb_idx]] =
-                            output[[b, pos, emb_idx]] + pos_embeddings[[pos, emb_idx]];
+                        output[[b, pos, emb_idx]] += pos_embeddings[[pos, emb_idx]];
                     } else if input_shape.len() == 2 {
                         // 2D case (seq, emb)
-                        output[[pos, emb_idx]] =
-                            output[[pos, emb_idx]] + pos_embeddings[[pos, emb_idx]];
+                        output[[pos, emb_idx]] += pos_embeddings[[pos, emb_idx]];
                     }
                 }
             }
@@ -664,7 +666,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> Layer<F> for Posi
 
                 for i in 0..self.max_seq_length {
                     for j in 0..self.embedding_dim {
-                        weights[[i, j]] = weights[[i, j]] - lr * weight_grad[[i, j]];
+                        weights[[i, j]] -= lr * weight_grad[[i, j]];
                     }
                 }
 

@@ -6,6 +6,11 @@
 
 use crate::error::{FFTError, FFTResult};
 use crate::fft::{fft, ifft};
+#[cfg(feature = "oxifft")]
+use crate::oxifft_plan_cache;
+#[cfg(feature = "oxifft")]
+use oxifft::{Complex as OxiComplex, Direction};
+#[cfg(feature = "rustfft-backend")]
 use rustfft::FftPlanner;
 use scirs2_core::ndarray::{Array, ArrayBase, Data};
 use scirs2_core::numeric::Complex64;
@@ -449,15 +454,47 @@ impl OptimizedFFT {
         }
     }
 
-    /// Default FFT implementation using rustfft
+    /// Default FFT implementation using OxiFFT (or rustfft as fallback)
     fn default_fft(&self, input: &[Complex64]) -> FFTResult<Vec<Complex64>> {
-        let mut planner = FftPlanner::new();
-        let fft = planner.plan_fft_forward(input.len());
+        #[cfg(feature = "oxifft")]
+        {
+            // Convert to OxiFFT-compatible complex type
+            let input_oxi: Vec<OxiComplex<f64>> =
+                input.iter().map(|c| OxiComplex::new(c.re, c.im)).collect();
+            let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); input.len()];
 
-        let mut buffer = input.to_vec();
-        fft.process(&mut buffer);
+            // Execute FFT with cached plan
+            oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Forward)?;
 
-        Ok(buffer)
+            // Convert back to our Complex64 type
+            let result: Vec<Complex64> = output
+                .into_iter()
+                .map(|c| Complex64::new(c.re, c.im))
+                .collect();
+
+            Ok(result)
+        }
+
+        #[cfg(not(feature = "oxifft"))]
+        {
+            #[cfg(feature = "rustfft-backend")]
+            {
+                let mut planner = FftPlanner::new();
+                let fft = planner.plan_fft_forward(input.len());
+
+                let mut buffer = input.to_vec();
+                fft.process(&mut buffer);
+
+                Ok(buffer)
+            }
+
+            #[cfg(not(feature = "rustfft-backend"))]
+            {
+                Err(FFTError::ComputationError(
+                    "No FFT backend available. Enable either 'oxifft' or 'rustfft-backend' feature.".to_string()
+                ))
+            }
+        }
     }
 
     /// Benchmark different FFT sizes to find optimal algorithms

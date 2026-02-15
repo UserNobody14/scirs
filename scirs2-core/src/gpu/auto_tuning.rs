@@ -562,21 +562,21 @@ impl AutoTuner {
         match backend {
             GpuBackend::Cuda => Ok(DeviceInfo {
                 compute_capability: "8.0".to_string(),
-                memory_size: 12 * 1024 * 1024 * 1024, // 12 GB
+                memory_size: (12u64 * 1024 * 1024 * 1024) as usize, // 12 GB
                 max_work_group_size: 1024,
                 max_local_memory_size: 48 * 1024, // 48 KB
                 warp_size: 32,
             }),
             GpuBackend::Rocm => Ok(DeviceInfo {
                 compute_capability: "RDNA2".to_string(),
-                memory_size: 16 * 1024 * 1024 * 1024, // 16 GB
+                memory_size: (16u64 * 1024 * 1024 * 1024) as usize, // 16 GB
                 max_work_group_size: 1024,
                 max_local_memory_size: 64 * 1024, // 64 KB
                 warp_size: 64,                    // Wavefront size
             }),
             _ => Ok(DeviceInfo {
                 compute_capability: "Unknown".to_string(),
-                memory_size: 8 * 1024 * 1024 * 1024, // 8 GB
+                memory_size: (8u64 * 1024 * 1024 * 1024) as usize, // 8 GB
                 max_work_group_size: 256,
                 max_local_memory_size: 16 * 1024, // 16 KB
                 warp_size: 32,

@@ -7,7 +7,6 @@ use scirs2_core::random::rngs::StdRng;
 use scirs2_core::random::seq::SliceRandom;
 use scirs2_core::random::{Rng, SeedableRng};
 use scirs2_core::random::Distribution;
-use rustfft::{num_complex::Complex, FftPlanner};
 use scirs2_linalg::{solve, vector_norm};
 use std::cmp::min;
 
@@ -1216,47 +1215,40 @@ pub fn recover_missing_samples(
 
     // Define FFT-based transforms
     let forward_transform = |signal: &Array1<f64>| -> SignalResult<Array1<f64>> {
-        // Create FFT planner
-        let mut planner = FftPlanner::new();
-        let fft = planner.plan_fft_forward(n);
-
         // Convert to complex
-        let mut complex_signal = vec![Complex::new(0.0, 0.0); n];
-        for i in 0..n {
-            complex_signal[i] = Complex::new(signal[i], 0.0);
-        }
+        let complex_signal: Vec<Complex64> = signal
+            .iter()
+            .map(|&x| Complex64::new(x, 0.0))
+            .collect();
 
-        // Perform FFT
-        fft.process(&mut complex_signal);
+        // Perform FFT using scirs2_fft
+        let fft_result = scirs2_fft::fft(&complex_signal, Some(n))
+            .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
         // Convert back to real (taking magnitude)
         let mut result = Array1::<f64>::zeros(n);
         for i in 0..n {
-            result[i] = (complex_signal[i].re.powi(2) + complex_signal[i].im.powi(2)).sqrt();
+            result[i] = (fft_result[i].re.powi(2) + fft_result[i].im.powi(2)).sqrt();
         }
 
         Ok(result)
     };
 
     let inverse_transform = |spectrum: &Array1<f64>| -> SignalResult<Array1<f64>> {
-        // Create FFT planner
-        let mut planner = FftPlanner::new();
-        let ifft = planner.plan_fft_inverse(n);
-
         // Convert to complex (assuming phase = 0)
-        let mut complex_spectrum = vec![Complex::new(0.0, 0.0); n];
-        for i in 0..n {
-            complex_spectrum[i] = Complex::new(spectrum[i], 0.0);
-        }
+        let complex_spectrum: Vec<Complex64> = spectrum
+            .iter()
+            .map(|&x| Complex64::new(x, 0.0))
+            .collect();
 
-        // Perform IFFT
-        ifft.process(&mut complex_spectrum);
+        // Perform IFFT using scirs2_fft (already normalizes by 1/N internally)
+        let ifft_result = scirs2_fft::ifft(&complex_spectrum, Some(n))
+            .map_err(|e| SignalError::ComputationError(format!("IFFT failed: {}", e)))?;
 
-        // Scale and convert back to real
-        let scale = 1.0 / n as f64;
+        // Convert back to real
         let mut result = Array1::<f64>::zeros(n);
         for i in 0..n {
-            result[i] = complex_spectrum[i].re * scale;
+            result[i] = ifft_result[i].re;
         }
 
         Ok(result)
@@ -1553,27 +1545,23 @@ pub fn sparse_denoise(
 
     // Define FFT transform functions
     let fft_forward = |signal: &Array1<f64>| -> SignalResult<Array1<Complex64>> {
-        let mut planner = FftPlanner::new();
-        let fft = planner.plan_fft_forward(n);
-
-        let mut complex_signal: Vec<Complex64> =
+        let complex_signal: Vec<Complex64> =
             signal.iter().map(|&x| Complex64::new(x, 0.0)).collect();
 
-        fft.process(&mut complex_signal);
+        let fft_result = scirs2_fft::fft(&complex_signal, Some(n))
+            .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
 
-        Ok(Array1::from_vec(complex_signal))
+        Ok(Array1::from_vec(fft_result))
     };
 
     let fft_inverse = |spectrum: &Array1<Complex64>| -> SignalResult<Array1<f64>> {
-        let mut planner = FftPlanner::new();
-        let ifft = planner.plan_fft_inverse(n);
+        let complex_spectrum = spectrum.to_vec();
 
-        let mut complex_spectrum = spectrum.to_vec();
+        // Perform IFFT using scirs2_fft (already normalizes by 1/N internally)
+        let ifft_result = scirs2_fft::ifft(&complex_spectrum, Some(n))
+            .map_err(|e| SignalError::ComputationError(format!("IFFT failed: {}", e)))?;
 
-        ifft.process(&mut complex_spectrum);
-
-        let scale = 1.0 / n as f64;
-        let result = complex_spectrum.iter().map(|&x| x.re * scale).collect();
+        let result: Vec<f64> = ifft_result.iter().map(|&x| x.re).collect();
 
         Ok(Array1::from_vec(result))
     };

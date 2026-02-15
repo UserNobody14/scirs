@@ -109,32 +109,62 @@ impl<T: Float> op::Op<T> for InferBinOpShape {
     fn compute(&self, ctx: &mut op::ComputeContext<T>) -> Result<(), op::OpError> {
         let ashape_float = ctx.input(0);
         let bshape_float = ctx.input(1);
-        let ashape: Vec<usize> = ashape_float
-            .map(|x| x.to_usize().expect("Operation failed"))
-            .iter()
-            .cloned()
-            .collect();
-        let bshape: Vec<usize> = bshape_float
-            .map(|x| x.to_usize().expect("Operation failed"))
-            .iter()
-            .cloned()
-            .collect();
+
+        // Check for negative values (e.g. -1 from reshape/flatten).
+        // These indicate "infer this dimension" and cannot be converted
+        // to usize.  If either operand has a negative dimension, we
+        // take the other operand's value for that dimension.  If both
+        // are negative, we propagate the negative value as float.
+        let a_has_neg = ashape_float.iter().any(|x| *x < T::zero());
+        let b_has_neg = bshape_float.iter().any(|x| *x < T::zero());
+
+        // Helper: convert to usize, treating negatives as 0 for
+        // is_scalarshape check purposes only.
+        let to_usize_safe = |x: &T| -> usize { x.to_usize().unwrap_or(0) };
+
+        let ashape: Vec<usize> = ashape_float.iter().map(to_usize_safe).collect();
+        let bshape: Vec<usize> = bshape_float.iter().map(to_usize_safe).collect();
+
         let a_is_scalar = ndarray_ext::is_scalarshape(ashape.as_slice());
         let b_is_scalar = ndarray_ext::is_scalarshape(bshape.as_slice());
 
         if !a_is_scalar && !b_is_scalar {
-            let a_rank = ashape.len();
-            let b_rank = bshape.len();
+            let a_rank = ashape_float.len();
+            let b_rank = bshape_float.len();
             if a_rank != b_rank {
                 return Err(op::OpError::IncompatibleShape(
                     "InferBinOpShape: rank of lhs and rhs must match.".to_string(),
                 ));
             }
-            let max = ashape
+            // Element-wise max, but handle negative sentinel values:
+            // - If both are non-negative, take max
+            // - If one is negative, take the other (it's the known dimension)
+            // - If both are negative, propagate the negative value
+            let max: Vec<T> = ashape_float
                 .iter()
-                .zip(bshape)
-                .map(|(a, b)| T::from((*a).max(b)).expect("Operation failed"))
-                .collect::<Vec<T>>();
+                .zip(bshape_float.iter())
+                .map(|(a, b)| {
+                    let a_neg = *a < T::zero();
+                    let b_neg = *b < T::zero();
+                    if !a_neg && !b_neg {
+                        // Both known: take max
+                        if *a > *b {
+                            *a
+                        } else {
+                            *b
+                        }
+                    } else if a_neg && !b_neg {
+                        // a is unknown, use b
+                        *b
+                    } else if !a_neg && b_neg {
+                        // b is unknown, use a
+                        *a
+                    } else {
+                        // Both unknown, propagate sentinel
+                        *a
+                    }
+                })
+                .collect();
             ctx.append_output(
                 NdArray::from_shape_vec(scirs2_core::ndarray::IxDyn(&[a_rank]), max)
                     .expect("Operation failed"),
@@ -836,6 +866,10 @@ impl<T: Float> op::Op<T> for Slice {
             .setshape(&shape(x))
             .build(op);
         ctx.append_input_grad(0, Some(gx));
+    }
+
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
     }
 }
 

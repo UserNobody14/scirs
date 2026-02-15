@@ -73,6 +73,7 @@ pub struct VisualizationSuite<F>
 where
     F: scirs2_core::numeric::Float
         + std::fmt::Debug
+        + scirs2_core::numeric::NumAssign
         + scirs2_core::ndarray::ScalarOperand
         + 'static
         + scirs2_core::numeric::FromPrimitive
@@ -96,6 +97,8 @@ impl<F> VisualizationSuite<F>
 where
     F: scirs2_core::numeric::Float
         + std::fmt::Debug
+        + std::fmt::Display
+        + scirs2_core::numeric::NumAssign
         + scirs2_core::ndarray::ScalarOperand
         + 'static
         + scirs2_core::numeric::FromPrimitive

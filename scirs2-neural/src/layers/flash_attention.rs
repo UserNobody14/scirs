@@ -11,7 +11,7 @@ use crate::error::{NeuralError, Result};
 use crate::layers::attention::AttentionConfig;
 use crate::layers::Layer;
 use scirs2_core::ndarray::{s, Array, Array2, Array4, ArrayView2, IxDyn, ScalarOperand, Zip};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use scirs2_core::random::Rng;
 use std::fmt::Debug;
 
@@ -127,7 +127,7 @@ impl FlashAttentionConfig {
 /// let output = flash_attn.forward(&input).expect("Operation failed");
 /// ```
 #[derive(Debug)]
-pub struct FlashAttention<F: Float + Debug + Send + Sync> {
+pub struct FlashAttention<F: Float + Debug + Send + Sync + NumAssign> {
     /// Model dimension
     d_model: usize,
     /// Configuration
@@ -144,7 +144,7 @@ pub struct FlashAttention<F: Float + Debug + Send + Sync> {
     scale: F,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> FlashAttention<F> {
+impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign> FlashAttention<F> {
     /// Create a new Flash Attention layer
     ///
     /// # Arguments
@@ -283,7 +283,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> FlashAttention<F>
             if row_sum[i] > F::zero() {
                 let inv_sum = F::one() / row_sum[i];
                 for j in 0..head_dim {
-                    output[[i, j]] = output[[i, j]] * inv_sum;
+                    output[[i, j]] *= inv_sum;
                 }
             }
         }
@@ -303,7 +303,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> FlashAttention<F>
             for j in 0..k_size {
                 let mut dot = F::zero();
                 for d in 0..q_block.ncols() {
-                    dot = dot + q_block[[i, d]] * k_block[[j, d]];
+                    dot += q_block[[i, d]] * k_block[[j, d]];
                 }
                 scores[[i, j]] = dot * self.scale;
             }
@@ -386,21 +386,21 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> FlashAttention<F>
 
             // Update output with correction factor
             for d in 0..head_dim {
-                output[[global_i, d]] = output[[global_i, d]] * correction;
+                output[[global_i, d]] *= correction;
             }
 
             // Update row sum with correction
-            row_sum[global_i] = row_sum[global_i] * correction;
+            row_sum[global_i] *= correction;
 
             // Accumulate new values with stable softmax
             for j in 0..k_size {
                 if scores[[local_i, j]] > F::neg_infinity() {
                     let exp_score = (scores[[local_i, j]] - new_max).exp();
-                    row_sum[global_i] = row_sum[global_i] + exp_score;
+                    row_sum[global_i] += exp_score;
 
                     // Accumulate weighted values
                     for d in 0..head_dim {
-                        output[[global_i, d]] = output[[global_i, d]] + exp_score * v_block[[j, d]];
+                        output[[global_i, d]] += exp_score * v_block[[j, d]];
                     }
                 }
             }
@@ -422,7 +422,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> FlashAttention<F>
 
 impl<F> Layer<F> for FlashAttention<F>
 where
-    F: Float + Debug + ScalarOperand + Send + Sync + 'static,
+    F: Float + Debug + ScalarOperand + Send + Sync + 'static + NumAssign,
 {
     fn as_any(&self) -> &dyn std::any::Any {
         self
@@ -604,7 +604,7 @@ where
 ///
 /// # Returns
 /// * Attention output [batch, seq_q, head_dim]
-pub fn flash_attention_compute<F: Float + Debug + ScalarOperand>(
+pub fn flash_attention_compute<F: Float + Debug + ScalarOperand + NumAssign>(
     query: &Array<F, IxDyn>,
     key: &Array<F, IxDyn>,
     value: &Array<F, IxDyn>,
@@ -665,7 +665,7 @@ pub fn flash_attention_compute<F: Float + Debug + ScalarOperand>(
 }
 
 /// Core tiled attention computation
-fn tiled_attention_compute<F: Float + Debug>(
+fn tiled_attention_compute<F: Float + Debug + NumAssign>(
     query: &Array2<F>,
     key: &Array2<F>,
     value: &Array2<F>,
@@ -706,7 +706,7 @@ fn tiled_attention_compute<F: Float + Debug>(
                 for j in 0..kv_block_size {
                     let mut dot = F::zero();
                     for d in 0..head_dim {
-                        dot = dot + query[[q_start + i, d]] * key[[kv_start + j, d]];
+                        dot += query[[q_start + i, d]] * key[[kv_start + j, d]];
                     }
                     let s = dot * scale;
 
@@ -744,18 +744,17 @@ fn tiled_attention_compute<F: Float + Debug>(
                 };
 
                 for d in 0..head_dim {
-                    output[[global_i, d]] = output[[global_i, d]] * correction;
+                    output[[global_i, d]] *= correction;
                 }
-                row_sum[global_i] = row_sum[global_i] * correction;
+                row_sum[global_i] *= correction;
 
                 for j in 0..kv_block_size {
                     if scores[[local_i, j]] > F::neg_infinity() {
                         let exp_score = (scores[[local_i, j]] - new_max).exp();
-                        row_sum[global_i] = row_sum[global_i] + exp_score;
+                        row_sum[global_i] += exp_score;
 
                         for d in 0..head_dim {
-                            output[[global_i, d]] =
-                                output[[global_i, d]] + exp_score * value[[kv_start + j, d]];
+                            output[[global_i, d]] += exp_score * value[[kv_start + j, d]];
                         }
                     }
                 }
@@ -770,7 +769,7 @@ fn tiled_attention_compute<F: Float + Debug>(
         if row_sum[i] > F::zero() {
             let inv_sum = F::one() / row_sum[i];
             for d in 0..head_dim {
-                output[[i, d]] = output[[i, d]] * inv_sum;
+                output[[i, d]] *= inv_sum;
             }
         }
     }

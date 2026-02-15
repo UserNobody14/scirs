@@ -451,7 +451,7 @@ pub mod reduction;
 
 // Internal operation modules (keep existing structure)
 mod activation_ops;
-mod array_ops;
+pub(crate) mod array_ops;
 pub(crate) mod basic_source_ops;
 pub(crate) mod binary_ops;
 // mod blas_ffi; // Removed - all BLAS operations now go through scirs2-core
@@ -465,7 +465,7 @@ pub(crate) mod higher_order_ops;
 pub(crate) mod hook_ops;
 mod math_ops;
 mod random_ops;
-mod reduction_ops;
+pub(crate) mod reduction_ops;
 mod xent_ops;
 
 // New linear algebra modules
@@ -476,7 +476,7 @@ mod linalg_ops;
 mod matrix_ops;
 mod norm_ops;
 mod scalar_ops;
-mod solver_ops;
+pub(crate) mod solver_ops;
 mod special_matrices;
 
 // Enhanced linear algebra modules
@@ -1099,8 +1099,8 @@ where
     let x = x.as_ref();
     let _g = x.graph();
     // Use a reshape operation to flatten to 1D
-    // For now, use a simple approach that preserves the tensor structure
-    let shape_val = [-1i32]; // Use -1 to indicate flatten to 1D
+    // -1 means "infer dimension from total element count"
+    let shape_val = [-1i32];
     reshape(x, &shape_val)
 }
 

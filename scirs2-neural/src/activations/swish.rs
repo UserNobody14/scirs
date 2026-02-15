@@ -4,7 +4,7 @@ use crate::activations::Activation;
 use crate::error::{NeuralError, Result};
 use crate::layers::Layer;
 use scirs2_core::ndarray::{Array, IxDyn, ScalarOperand, Zip};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 
 /// Swish activation function, also known as SiLU (Sigmoid-weighted Linear Unit).
@@ -17,7 +17,7 @@ use std::fmt::Debug;
 /// use scirs2_neural::activations::Swish;
 /// use scirs2_neural::activations::Activation;
 /// use scirs2_core::ndarray::Array;
-/// 
+///
 /// let swish = Swish::new(1.0);
 /// let input = Array::from_vec(vec![1.0, -1.0, 2.0, -2.0]).into_dyn();
 /// let output = swish.forward(&input).unwrap();
@@ -44,8 +44,11 @@ impl Default for Swish {
     }
 }
 
-impl<F: Float + Debug> Activation<F> for Swish {
-    fn forward(&self, input: &Array<F, scirs2_core::ndarray::IxDyn>) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
+impl<F: Float + Debug + NumAssign> Activation<F> for Swish {
+    fn forward(
+        &self,
+        input: &Array<F, scirs2_core::ndarray::IxDyn>,
+    ) -> Result<Array<F, scirs2_core::ndarray::IxDyn>> {
         let beta = F::from(self.beta).ok_or_else(|| {
             NeuralError::InferenceError(
                 "Could not convert beta to the required float type".to_string(),
@@ -53,11 +56,11 @@ impl<F: Float + Debug> Activation<F> for Swish {
         })?;
 
         let mut output = input.clone();
-        
+
         // Compute x * sigmoid(β * x)
         Zip::from(&mut output).for_each(|x| {
             let sigmoid_beta_x = F::one() / (F::one() + (-beta * *x).exp());
-            *x = *x * sigmoid_beta_x;
+            *x *= sigmoid_beta_x;
         });
 
         Ok(output)
@@ -85,7 +88,7 @@ impl<F: Float + Debug> Activation<F> for Swish {
                 let beta_x = beta * x;
                 let sigmoid_beta_x = F::one() / (F::one() + (-beta_x).exp());
                 let swish_x = x * sigmoid_beta_x;
-                
+
                 // Derivative: β * swish(x) + sigmoid(β * x) * (1 - β * swish(x))
                 let derivative = beta * swish_x + sigmoid_beta_x * (F::one() - beta * swish_x);
                 *grad_in = grad_out * derivative;
@@ -95,7 +98,7 @@ impl<F: Float + Debug> Activation<F> for Swish {
     }
 }
 
-impl<F: Float + Debug + ScalarOperand> Layer<F> for Swish {
+impl<F: Float + Debug + ScalarOperand + NumAssign> Layer<F> for Swish {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

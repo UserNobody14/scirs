@@ -3,7 +3,7 @@
 use crate::error::{NeuralError, Result};
 use crate::optimizers::Optimizer;
 use scirs2_core::ndarray::{Array, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 /// Adam optimizer for neural networks
 ///
@@ -24,7 +24,7 @@ use std::fmt::Debug;
 /// // or with custom configuration
 /// let mut adam_custom = Adam::new(0.001, 0.9, 0.999, 1e-8);
 #[derive(Debug, Clone)]
-pub struct Adam<F: Float + ScalarOperand + Debug> {
+pub struct Adam<F: Float + NumAssign + ScalarOperand + Debug> {
     /// Learning rate
     learning_rate: F,
     /// Exponential decay rate for the first moment estimates
@@ -42,7 +42,7 @@ pub struct Adam<F: Float + ScalarOperand + Debug> {
     /// Current timestep
     t: usize,
 }
-impl<F: Float + ScalarOperand + Debug> Adam<F> {
+impl<F: Float + NumAssign + ScalarOperand + Debug> Adam<F> {
     /// Creates a new Adam optimizer with the given hyperparameters
     ///
     /// # Arguments
@@ -50,7 +50,7 @@ impl<F: Float + ScalarOperand + Debug> Adam<F> {
     /// * `beta1` - Exponential decay rate for the first moment estimates (default: 0.9)
     /// * `beta2` - Exponential decay rate for the second moment estimates (default: 0.999)
     /// * `epsilon` - Small constant for numerical stability (default: 1e-8)
-    pub fn new(_learningrate: F, beta1: F, beta2: F, epsilon: F) -> Self {
+    pub fn new(learning_rate: F, beta1: F, beta2: F, epsilon: F) -> Self {
         Self {
             learning_rate,
             beta1,
@@ -62,8 +62,9 @@ impl<F: Float + ScalarOperand + Debug> Adam<F> {
             t: 0,
         }
     }
+
     /// Creates a new Adam optimizer with default hyperparameters
-    pub fn default_with_lr(_learningrate: F) -> Result<Self> {
+    pub fn default_with_lr(learning_rate: F) -> Result<Self> {
         let beta1 = F::from(0.9).ok_or_else(|| {
             NeuralError::InvalidArgument(
                 "Failed to convert 0.9 to the appropriate floating point type".to_string(),
@@ -94,38 +95,71 @@ impl<F: Float + ScalarOperand + Debug> Adam<F> {
         epsilon: F,
         weight_decay: F,
     ) -> Self {
+        Self {
+            learning_rate,
+            beta1,
+            beta2,
+            epsilon,
             weight_decay,
+            m: Vec::new(),
+            v: Vec::new(),
+            t: 0,
+        }
+    }
+
     /// Gets the beta1 parameter
     pub fn get_beta1(&self) -> F {
         self.beta1
+    }
+
     /// Sets the beta1 parameter
     pub fn set_beta1(&mut self, beta1: F) -> &mut Self {
         self.beta1 = beta1;
         self
+    }
+
     /// Gets the beta2 parameter
     pub fn get_beta2(&self) -> F {
         self.beta2
+    }
+
     /// Sets the beta2 parameter
     pub fn set_beta2(&mut self, beta2: F) -> &mut Self {
         self.beta2 = beta2;
+        self
+    }
+
     /// Gets the epsilon parameter
     pub fn get_epsilon(&self) -> F {
         self.epsilon
+    }
+
     /// Sets the epsilon parameter
     pub fn set_epsilon(&mut self, epsilon: F) -> &mut Self {
         self.epsilon = epsilon;
+        self
+    }
+
     /// Gets the weight decay parameter
     pub fn get_weight_decay(&self) -> F {
         self.weight_decay
+    }
+
     /// Sets the weight decay parameter
-    pub fn set_weight_decay(&mut self, weightdecay: F) -> &mut Self {
+    pub fn set_weight_decay(&mut self, weight_decay: F) -> &mut Self {
         self.weight_decay = weight_decay;
+        self
+    }
+
     /// Resets the internal state of the optimizer
     pub fn reset(&mut self) {
         self.m.clear();
         self.v.clear();
         self.t = 0;
-impl<F: Float + ScalarOperand + Debug> Optimizer<F> for Adam<F> {
+    }
+}
+
+impl<F: Float + NumAssign + ScalarOperand + Debug> Optimizer<F> for Adam<F> {
     fn update(
         &mut self,
         params: &mut [Array<F, scirs2_core::ndarray::IxDyn>],
@@ -137,12 +171,16 @@ impl<F: Float + ScalarOperand + Debug> Optimizer<F> for Adam<F> {
                 params.len(),
                 grads.len()
             )));
+        }
+
         // Increment timestep
         self.t += 1;
+
         // Initialize moment estimates if needed
         if self.m.len() != params.len() {
             self.m = params.iter().map(|p| Array::zeros(p.raw_dim())).collect();
             self.v = params.iter().map(|p| Array::zeros(p.raw_dim())).collect();
+        }
         let one_minus_beta1 = F::one() - self.beta1;
         let one_minus_beta2 = F::one() - self.beta2;
         let beta1_pow_t = self.beta1.powi(self.t as i32);
@@ -169,11 +207,24 @@ impl<F: Float + ScalarOperand + Debug> Optimizer<F> for Adam<F> {
             // Perform parameter update
             let denom = v_hat.mapv(|x| x.sqrt()) + self.epsilon;
             params[i] = &params[i] - &(m_hat / denom * self.learning_rate);
+        }
+
         Ok(())
+    }
+
     fn get_learning_rate(&self) -> F {
         self.learning_rate
+    }
+
     fn set_learning_rate(&mut self, lr: F) {
         self.learning_rate = lr;
+    }
+
+    fn name(&self) -> &'static str {
+        "Adam"
+    }
+}
+
 // Enable direct usage of scirs2-optim's Adam when the optim feature is enabled
-#[cfg(feature = "optim")]
-pub use scirs2_optim::Adam as OptimAdam;
+// #[cfg(feature = "optim")]
+// pub use scirs2_optim::Adam as OptimAdam;

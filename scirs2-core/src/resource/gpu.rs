@@ -271,8 +271,8 @@ impl GpuInfo {
         Self {
             name,
             vendor,
-            memory_total: 8 * 1024 * 1024 * 1024, // 8GB default
-            memory_available: 8 * 1024 * 1024 * 1024,
+            memory_total: (8u64 * 1024 * 1024 * 1024) as usize, // 8GB default
+            memory_available: (8u64 * 1024 * 1024 * 1024) as usize,
             memorybandwidth_gbps: 400.0,
             compute_capability: ComputeCapability::Cuda(7, 0), // Default compute capability
             compute_units: 128,
@@ -439,8 +439,8 @@ impl Default for GpuInfo {
         Self {
             name: "Default GPU".to_string(),
             vendor: GpuVendor::Unknown,
-            memory_total: 4 * 1024 * 1024 * 1024,     // 4GB
-            memory_available: 3 * 1024 * 1024 * 1024, // 3GB
+            memory_total: (4u64 * 1024 * 1024 * 1024) as usize, // 4GB
+            memory_available: (3u64 * 1024 * 1024 * 1024) as usize, // 3GB
             memorybandwidth_gbps: 200.0,
             compute_units: 512,
             base_clock_mhz: 1000,

@@ -3,7 +3,7 @@
 use crate::error::{NeuralError, Result};
 use crate::losses::Loss;
 use scirs2_core::ndarray::Array;
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 
 /// Focal loss function.
@@ -82,7 +82,7 @@ impl Default for FocalLoss {
     }
 }
 
-impl<F: Float + Debug> Loss<F> for FocalLoss {
+impl<F: Float + Debug + NumAssign> Loss<F> for FocalLoss {
     fn forward(
         &self,
         predictions: &Array<F, scirs2_core::ndarray::IxDyn>,
@@ -160,13 +160,13 @@ impl<F: Float + Debug> Loss<F> for FocalLoss {
                         // Focal weight: (1 - p_t)^gamma
                         let focal_weight = (F::one() - p_t).powf(gamma);
                         // Term added to loss
-                        sample_loss = sample_loss - alpha * focal_weight * y_true * p_t.ln();
+                        sample_loss -= alpha * focal_weight * y_true * p_t.ln();
                     }
                 }
-                loss = loss + sample_loss;
+                loss += sample_loss;
             }
             // Average over batch
-            loss = loss / n;
+            loss /= n;
         } else {
             // Single sample case
             for j in 0..predictions.len() {
@@ -183,7 +183,7 @@ impl<F: Float + Debug> Loss<F> for FocalLoss {
                     };
                     let p_safe = p.max(epsilon).min(F::one() - epsilon);
                     let focal_weight = (F::one() - p_safe).powf(gamma);
-                    loss = loss - alpha * focal_weight * t * p_safe.ln();
+                    loss -= alpha * focal_weight * t * p_safe.ln();
                 }
             }
         }

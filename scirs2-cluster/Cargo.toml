@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Clustering algorithms module for SciRS2 (scirs2-cluster)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["clustering", "scientific", "scipy", "numerical", "kmeans"]

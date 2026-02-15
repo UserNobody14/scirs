@@ -1576,6 +1576,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_memristive_forward_pass() {
         let learning_system =
@@ -1608,6 +1609,7 @@ mod tests {
         assert!(pcm_output.is_finite());
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_memristive_training() {
         let mut learning_system =

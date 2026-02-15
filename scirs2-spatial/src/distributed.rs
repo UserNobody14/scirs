@@ -62,6 +62,7 @@ use scirs2_core::random::quick::random_f64;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+#[cfg(feature = "async")]
 use tokio::sync::{mpsc, RwLock as TokioRwLock};
 
 /// Node configuration for distributed cluster
@@ -1379,6 +1380,7 @@ mod tests {
         assert!(load_score > 0.0 && load_score < 1.0);
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_distributed_cluster_creation() {
         let config = NodeConfig::new()
@@ -1393,6 +1395,7 @@ mod tests {
         assert_eq!(cluster.master_node_id, 0);
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_data_distribution() {
         let config = NodeConfig::new()
@@ -1413,6 +1416,7 @@ mod tests {
         assert!(stats.total_partitions > 0);
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_distributed_kmeans() {
         let config = NodeConfig::new().with_node_count(2);

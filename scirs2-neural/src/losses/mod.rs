@@ -99,7 +99,7 @@
 
 use crate::error::Result;
 use scirs2_core::ndarray::Array;
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 /// Trait for loss functions used in neural networks
 ///
@@ -122,7 +122,7 @@ use std::fmt::Debug;
 /// # Ok(())
 /// # }
 /// ```
-pub trait Loss<F: Float + Debug> {
+pub trait Loss<F: Float + Debug + NumAssign> {
     /// Calculate the loss between predictions and targets
     ///
     /// # Arguments

@@ -130,7 +130,7 @@ impl MemoryPatternOptimizer {
 
         vec![NumaNodeInfo {
             nodeid: 0,
-            available_memory: 4 * 1024 * 1024 * 1024, // 4GB default
+            available_memory: (4u64 * 1024 * 1024 * 1024) as usize, // 4GB default
             cpu_cores: (0..cores).collect(),
             memorybandwidth: 25000, // 25GB/s typical
         }]

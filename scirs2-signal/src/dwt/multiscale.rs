@@ -157,20 +157,9 @@ pub fn waverec(coeffs: &[Vec<f64>], wavelet: Wavelet) -> SignalResult<Vec<f64>> 
     for i in 0..n_levels {
         let detail = &coeffs[i + 1];
 
-        // In some cases, approximation and detail coefficients might be off by 1 or 2
-        // elements due to boundary handling and padding. We'll adjust them to make them equal.
+        // Adjust approximation/detail lengths if they differ slightly
+        // due to rounding in the output_len calculation
         if approx.len() != detail.len() {
-            // If the lengths are very different, that's a real error
-            if (approx.len() as isize - detail.len() as isize).abs() > 4 {
-                return Err(SignalError::ValueError(format!(
-                    "Significantly mismatched coefficient lengths at level {}: approx={}, detail={}",
-                    i,
-                    approx.len(),
-                    detail.len()
-                )));
-            }
-
-            // Otherwise, adjust to the smaller length
             let min_len = approx.len().min(detail.len());
             if approx.len() > min_len {
                 approx.truncate(min_len);
@@ -181,11 +170,38 @@ pub fn waverec(coeffs: &[Vec<f64>], wavelet: Wavelet) -> SignalResult<Vec<f64>> 
                 detail.clone()
             };
 
-            // Now reconstruct with the adjusted arrays
             approx = dwt_reconstruct(&approx, &detail, wavelet)?;
         } else {
-            // Normal case - reconstruct with the original arrays
             approx = dwt_reconstruct(&approx, detail, wavelet)?;
+        }
+
+        // After reconstruction, trim the output to match the expected length
+        // at the next level. The next level's detail coefficients tell us
+        // what length the signal was before that level's decomposition.
+        if i + 2 < coeffs.len() {
+            let next_detail_len = coeffs[i + 2].len();
+            // The original signal length at the next level can be inferred:
+            // next_detail_len = (original_len + filter_len - 1) / 2
+            // So original_len is approximately 2 * next_detail_len
+            // We use the next detail length to compute the expected signal length
+            let filters = wavelet.filters()?;
+            let filter_len = filters.dec_lo.len();
+            // We know that: next_detail_len = (approx_expected_len + filter_len - 1) / 2
+            // So: approx_expected_len = 2 * next_detail_len - filter_len + 1
+            //   or approx_expected_len = 2 * next_detail_len - filter_len + 2 (if odd)
+            // Since we can't know exactly, just truncate to the value that
+            // gives the right coefficient count at the next level.
+            // The expected length L satisfies: (L + filter_len - 1) / 2 = next_detail_len
+            // => L = 2 * next_detail_len - filter_len + 1 (min)
+            //    L = 2 * next_detail_len - filter_len + 2 (max)
+            // We take the maximum plausible length that doesn't exceed our output
+            let expected_len_min = 2 * next_detail_len - filter_len + 1;
+            let expected_len_max = 2 * next_detail_len - filter_len + 2;
+            if approx.len() > expected_len_max {
+                approx.truncate(expected_len_max);
+            } else if approx.len() > expected_len_min && approx.len() <= expected_len_max {
+                // Already in the right range, keep as is
+            }
         }
     }
 

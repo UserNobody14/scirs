@@ -72,6 +72,11 @@ pub trait Op<F: Float> {
 
     /// Returns gradients for input nodes by use of output's gradients etc.
     fn grad<'a>(&self, ctx: &mut GradientContext<'a, 'a, F>);
+
+    /// Returns self as Any for downcasting. Default returns None.
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        None
+    }
 }
 
 #[allow(dead_code)]

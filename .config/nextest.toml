@@ -1,18 +1,73 @@
-# .config/nextest.toml
+# cargo-nextest configuration for SciRS2
+# https://nexte.st/book/configuration.html
+
+[store]
+# Directory where nextest stores its metadata
+dir = "target/.nextest"
+
 [profile.default]
-# Mark as SLOW after 30 seconds; force-terminate after 2 minutes (use grace-period=0s for immediate SIGKILL)
-slow-timeout = { period = "30s", terminate-after = 4, grace-period = "5s" }
+# Default test execution settings
+retries = 0
+fail-fast = false
+failure-output = "immediate"
+success-output = "never"
+status-level = "all"
 
-# Global upper limit (safety)
-# global-timeout = "2h"
+# Test execution
+test-threads = "num-cpus"
+slow-timeout = { period = "60s", terminate-after = 2 }
 
-# Stop at the first failure (to identify the cause quickly)
-fail-fast = true
+[profile.ci]
+# CI-specific settings for faster feedback
+retries = 1
+fail-fast = false
+failure-output = "immediate-final"
+success-output = "never"
+status-level = "all"
 
-# Show SLOW during the run / also show SLOW in the final summary
-status-level = "slow"
-final-status-level = "slow"
+# More lenient timeouts for CI runners
+slow-timeout = { period = "120s", terminate-after = 3 }
+test-threads = 4
 
-# Output JUnit so it can be reviewed later
+# JUnit output for CI integration
+final-status-level = "all"
+
 [profile.default.junit]
 path = "target/nextest/junit.xml"
+store-success-output = true
+store-failure-output = true
+
+[profile.ci.junit]
+path = "target/nextest/ci-junit.xml"
+store-success-output = false
+store-failure-output = true
+
+# Override settings for specific tests
+[[profile.default.overrides]]
+# Long-running integration tests
+filter = 'test(integration)'
+slow-timeout = { period = "300s" }
+threads-required = 1
+
+[[profile.default.overrides]]
+# GPU tests (when available)
+filter = 'test(gpu)'
+slow-timeout = { period = "180s" }
+threads-required = 1
+
+[[profile.default.overrides]]
+# Large dataset tests
+filter = 'test(large_dataset)'
+slow-timeout = { period = "600s" }
+threads-required = 2
+
+[[profile.default.overrides]]
+# Property-based tests
+filter = 'test(property_)'
+slow-timeout = { period = "300s" }
+
+[[profile.default.overrides]]
+# Stress tests
+filter = 'test(stress_)'
+slow-timeout = { period = "600s" }
+threads-required = 2

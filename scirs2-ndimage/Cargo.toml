@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "N-dimensional image processing module for SciRS2 (scirs2-ndimage)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["image", "processing", "scientific", "scipy", "numerical"]

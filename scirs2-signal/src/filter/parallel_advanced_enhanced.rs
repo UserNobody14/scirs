@@ -6,7 +6,6 @@
 
 use crate::error::{SignalError, SignalResult};
 use crate::filter::parallel::ParallelFilterConfig;
-use rustfft::{num_complex::Complex, FftPlanner};
 use scirs2_core::numeric::Complex64;
 use scirs2_core::numeric::Float;
 use scirs2_core::parallel_ops::*;
@@ -532,20 +531,22 @@ impl ParallelSpectralFilter {
                 let end = (start + self.fft_size).min(signal.len());
 
                 // Extract and window frame
-                let mut frame = vec![Complex::new(0.0, 0.0); self.fft_size];
+                let mut frame = vec![Complex64::new(0.0, 0.0); self.fft_size];
                 for i in 0..(end - start) {
-                    frame[i] = Complex::new(signal[start + i] * self.window[i], 0.0);
+                    frame[i] = Complex64::new(signal[start + i] * self.window[i], 0.0);
                 }
 
-                // Forward FFT
-                let mut planner = FftPlanner::new();
-                let fft = planner.plan_fft_forward(self.fft_size);
-                fft.process(&mut frame);
+                // Forward FFT using scirs2_fft
+                let fft_result = scirs2_fft::fft(&frame, Some(frame.len()))
+                    .map_err(|e| SignalError::ComputationError(format!("FFT failed: {}", e)))?;
+                for (i, c) in fft_result.iter().enumerate() {
+                    frame[i] = *c;
+                }
 
                 // Apply frequency domain filter
                 for i in 0..self.fft_size / 2 + 1 {
                     if i < self.frequency_response.len() {
-                        frame[i] *= Complex::new(
+                        frame[i] *= Complex64::new(
                             self.frequency_response[i].re,
                             self.frequency_response[i].im,
                         );
@@ -557,9 +558,12 @@ impl ParallelSpectralFilter {
                     frame[self.fft_size - i] = frame[i].conj();
                 }
 
-                // Inverse FFT
-                let ifft = planner.plan_fft_inverse(self.fft_size);
-                ifft.process(&mut frame);
+                // Inverse FFT using scirs2_fft
+                let ifft_result = scirs2_fft::ifft(&frame, Some(frame.len()))
+                    .map_err(|e| SignalError::ComputationError(format!("IFFT failed: {}", e)))?;
+                for (i, c) in ifft_result.iter().enumerate() {
+                    frame[i] = *c;
+                }
 
                 // Apply window and extract real part
                 let mut windowed_frame = vec![0.0; self.fft_size];
@@ -797,7 +801,6 @@ pub fn validate_parallel_filtering_accuracy(
 mod tests {
     use super::*;
     use approx::assert_relative_eq;
-    use scirs2_core::numeric::Complex64;
     use std::f64::consts::PI;
     #[test]
     #[ignore] // FIXME: Perfect reconstruction error is too high - needs algorithm review

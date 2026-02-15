@@ -958,7 +958,7 @@ impl ProductionProfiler {
         }
         #[cfg(not(feature = "serde"))]
         {
-            Ok(format!("Profiling data for workload: {workload_id}"))
+            Ok(format!("Profiling data for workload: {workloadid}"))
         }
     }
 }

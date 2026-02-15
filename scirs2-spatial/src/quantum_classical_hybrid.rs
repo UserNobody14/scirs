@@ -1034,6 +1034,7 @@ mod tests {
     use super::*;
     use scirs2_core::ndarray::array;
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn test_hybrid_spatial_optimizer() {
         let mut optimizer = HybridSpatialOptimizer::new()
@@ -1054,6 +1055,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "async")]
     #[tokio::test]
     #[ignore = "Test failure - assertion failed: metrics.total_time_ms > 0.0 at line 1078"]
     async fn test_hybrid_clusterer() {

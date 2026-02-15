@@ -39,6 +39,9 @@ pub mod metal;
 #[cfg(feature = "rocm")]
 pub mod rocm;
 
+#[cfg(feature = "vulkan")]
+pub mod vulkan;
+
 // Re-export common types and utilities
 pub use common::*;
 
@@ -56,6 +59,9 @@ pub use metal::MetalBackend;
 
 #[cfg(feature = "rocm")]
 pub use rocm::RocmBackend;
+
+#[cfg(feature = "vulkan")]
+pub use vulkan::VulkanBackend;
 
 // Note: When features are disabled, these backends are not available.
 // The select_best_backend() function will fall back to CPU implementation.
@@ -86,6 +92,13 @@ pub fn select_best_backend() -> Box<dyn GpuBackend> {
 
     #[cfg(feature = "rocm")]
     if let Ok(backend) = RocmBackend::new() {
+        if backend.is_available() {
+            return Box::new(backend);
+        }
+    }
+
+    #[cfg(feature = "vulkan")]
+    if let Ok(backend) = VulkanBackend::new() {
         if backend.is_available() {
             return Box::new(backend);
         }
@@ -125,6 +138,13 @@ pub fn available_backends() -> Vec<Box<dyn GpuBackend>> {
 
     #[cfg(feature = "rocm")]
     if let Ok(backend) = RocmBackend::new() {
+        if backend.is_available() {
+            backends.push(Box::new(backend));
+        }
+    }
+
+    #[cfg(feature = "vulkan")]
+    if let Ok(backend) = VulkanBackend::new() {
         if backend.is_available() {
             backends.push(Box::new(backend));
         }

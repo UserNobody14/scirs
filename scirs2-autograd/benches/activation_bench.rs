@@ -5,10 +5,11 @@
 //!
 //! Benchmarks: 5 activations × 4 sizes = 20 benchmarks
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use scirs2_autograd as ag;
 use scirs2_autograd::tensor_ops as T;
 use scirs2_core::ndarray::Array2;
+use std::hint::black_box;
 
 /// Activation function throughput benchmarks (20 benchmarks)
 fn activation_throughput_benchmark(c: &mut Criterion) {

@@ -49,7 +49,7 @@
 //! let filtered = convolve(&signal, &kernel, "same").unwrap();
 //! ```
 //!
-//! ## 🔒 Version: 0.1.5 (January 15, 2026)
+//! ## 🔒 Version: 0.2.0 (February 8, 2026)
 
 // Core error handling - ESSENTIAL
 pub mod error;
@@ -84,6 +84,11 @@ pub mod dwt2d_super_refined;
 
 // Comprehensive wavelets module (CWT, dual-tree complex, etc.)
 pub mod wavelets;
+
+// Advanced wavelet features for v0.2.0
+pub mod dwt2d_advanced;
+pub mod wavelet_advanced;
+pub mod wpt_enhanced;
 
 // Additional signal processing modules
 pub mod denoise_enhanced;
@@ -121,7 +126,14 @@ pub mod simd_advanced;
 // Signal processing submodules (temporarily disabled)
 // pub mod bss;
 // pub mod features;
-// pub mod multitaper;
+pub mod multitaper;
+
+// v0.2.0 Advanced Spectral Analysis Modules
+pub mod advanced_spectral_v2;
+pub mod memory_optimized;
+pub mod parallel_filtering_v2;
+pub mod parallel_spectral;
+pub mod spectral_scipy_validation_v2;
 
 // Re-export core functionality
 pub use convolve::{convolve, convolve_simd_ultra, correlate};
@@ -156,6 +168,37 @@ pub use parametric_advanced_enhanced::{
 pub use swt::{iswt, swt, swt_decompose_simd_pipelined};
 pub use tv::{tv_denoise_1d, tv_denoise_2d};
 pub use waveforms::{chirp, sawtooth, square};
+
+// Re-export advanced wavelet features for v0.2.0
+pub use dwt2d_advanced::{
+    denoise_2d, dwt2d_decompose, dwt2d_reconstruct, wavedec2, waverec2, Dwt2DCoeffs, EdgeMode2D,
+    MultilevelDwt2D,
+};
+pub use wavelet_advanced::{
+    advanced_denoise_1d, select_best_basis, BestBasisResult, CostFunction as WaveletCostFunction,
+    DenoisingConfig, ThresholdMode, ThresholdRule,
+};
+pub use wpt_enhanced::{
+    best_basis_analysis, wpt_denoise, CostFunction as WptCostFunction, WaveletPacketTree, WptNode,
+    WptValidationResult,
+};
+
+// Re-export v0.2.0 advanced spectral analysis functionality
+pub use advanced_spectral_v2::{
+    ar_spectral_estimation, arma_spectral_estimation, memory_optimized_ar_spectral,
+    ARMASpectralConfig, ARMASpectralMethod, ARMASpectralResult, ARSpectralConfig, ARSpectralMethod,
+    ARSpectralResult, MemoryOptimizedSpectralConfig, ParallelSpectralConfigV2,
+    StreamingSpectralEstimator,
+};
+pub use parallel_filtering_v2::{
+    batch_fir_filter, batch_iir_filter, parallel_fir_filter, parallel_iir_filter,
+    parallel_median_filter, parallel_moving_average, parallel_savgol_filter, BatchFilterConfig,
+    FIRFilterMethod, PaddingMode, ParallelFIRConfig, ParallelIIRConfig, StreamingFIRFilter,
+    StreamingIIRFilter,
+};
+pub use spectral_scipy_validation_v2::{
+    generate_validation_report, run_comprehensive_validation, ValidationResult, ValidationSuite,
+};
 
 #[cfg(test)]
 mod tests {

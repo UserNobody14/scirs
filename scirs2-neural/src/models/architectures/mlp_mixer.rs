@@ -38,7 +38,7 @@
 use crate::error::{NeuralError, Result};
 use crate::layers::{Dense, Dropout, Layer, LayerNorm};
 use scirs2_core::ndarray::{s, Array, Array2, Array3, Axis, IxDyn, ScalarOperand};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, FromPrimitive, NumAssign};
 use scirs2_core::random::Rng;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -154,7 +154,16 @@ impl MLPMixerConfig {
 /// This is the building block for both token-mixing and channel-mixing operations.
 /// Structure: Linear -> GELU -> Dropout -> Linear -> Dropout
 #[derive(Debug, Clone)]
-pub struct MixerMLP<F: Float + Debug + ScalarOperand + Send + Sync + 'static> {
+pub struct MixerMLP<
+    F: Float
+        + Debug
+        + ScalarOperand
+        + Send
+        + Sync
+        + NumAssign
+        + scirs2_core::simd_ops::SimdUnifiedOps
+        + 'static,
+> {
     /// First linear layer
     fc1: Dense<F>,
     /// Second linear layer
@@ -163,7 +172,17 @@ pub struct MixerMLP<F: Float + Debug + ScalarOperand + Send + Sync + 'static> {
     dropout: Dropout<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MixerMLP<F> {
+impl<
+        F: Float
+            + Debug
+            + ScalarOperand
+            + Send
+            + Sync
+            + NumAssign
+            + scirs2_core::simd_ops::SimdUnifiedOps
+            + 'static,
+    > MixerMLP<F>
+{
     /// Create a new MixerMLP
     ///
     /// # Arguments
@@ -172,7 +191,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MixerMLP<F> {
     /// * `out_features` - Output dimension
     /// * `dropout_rate` - Dropout probability
     /// * `rng` - Random number generator
-    pub fn new<R: Rng>(
+    pub fn new<R: Rng + Clone + Send + Sync + 'static>(
         in_features: usize,
         hidden_features: usize,
         out_features: usize,
@@ -181,7 +200,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MixerMLP<F> {
     ) -> Result<Self> {
         let fc1 = Dense::new(in_features, hidden_features, Some("gelu"), rng)?;
         let fc2 = Dense::new(hidden_features, out_features, None, rng)?;
-        let dropout = Dropout::new(dropout_rate);
+        let dropout = Dropout::new(dropout_rate, rng)?;
 
         Ok(Self { fc1, fc2, dropout })
     }
@@ -205,7 +224,16 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MixerMLP<F> {
 /// 5. Channel-mixing MLP (across channel dimension)
 /// 6. Skip connection
 #[derive(Debug, Clone)]
-pub struct MixerBlock<F: Float + Debug + ScalarOperand + Send + Sync + 'static> {
+pub struct MixerBlock<
+    F: Float
+        + Debug
+        + ScalarOperand
+        + Send
+        + Sync
+        + NumAssign
+        + scirs2_core::simd_ops::SimdUnifiedOps
+        + 'static,
+> {
     /// Layer norm before token-mixing
     norm1: LayerNorm<F>,
     /// Token-mixing MLP
@@ -220,7 +248,17 @@ pub struct MixerBlock<F: Float + Debug + ScalarOperand + Send + Sync + 'static> 
     hidden_dim: usize,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MixerBlock<F> {
+impl<
+        F: Float
+            + Debug
+            + ScalarOperand
+            + Send
+            + Sync
+            + NumAssign
+            + scirs2_core::simd_ops::SimdUnifiedOps
+            + 'static,
+    > MixerBlock<F>
+{
     /// Create a new MixerBlock
     ///
     /// # Arguments
@@ -230,7 +268,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MixerBlock<F> {
     /// * `channel_mlp_dim` - Channel-mixing MLP hidden dimension
     /// * `dropout_rate` - Dropout probability
     /// * `rng` - Random number generator
-    pub fn new<R: Rng>(
+    pub fn new<R: Rng + Clone + Send + Sync + 'static>(
         num_patches: usize,
         hidden_dim: usize,
         token_mlp_dim: usize,
@@ -238,10 +276,10 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MixerBlock<F> {
         dropout_rate: f64,
         rng: &mut R,
     ) -> Result<Self> {
-        let norm1 = LayerNorm::new(hidden_dim, F::from(1e-6).expect("Failed to convert constant to float"));
+        let norm1 = LayerNorm::new(hidden_dim, 1e-6, rng)?;
         let token_mixing =
             MixerMLP::new(num_patches, token_mlp_dim, num_patches, dropout_rate, rng)?;
-        let norm2 = LayerNorm::new(hidden_dim, F::from(1e-6).expect("Failed to convert constant to float"));
+        let norm2 = LayerNorm::new(hidden_dim, 1e-6, rng)?;
         let channel_mixing =
             MixerMLP::new(hidden_dim, channel_mlp_dim, hidden_dim, dropout_rate, rng)?;
 
@@ -276,9 +314,11 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MixerBlock<F> {
         for b in 0..batch_size {
             let slice = transposed.slice(s![b, .., ..]).to_owned().into_dyn();
             let mixed = self.token_mixing.forward(&slice)?;
-            let mixed_2d = mixed.into_dimensionality::<scirs2_core::ndarray::Ix2>().map_err(|e| {
-                NeuralError::InferenceError(format!("Failed to convert mixed to 2D: {}", e))
-            })?;
+            let mixed_2d = mixed
+                .into_dimensionality::<scirs2_core::ndarray::Ix2>()
+                .map_err(|e| {
+                    NeuralError::InferenceError(format!("Failed to convert mixed to 2D: {}", e))
+                })?;
             token_mixed.slice_mut(s![b, .., ..]).assign(&mixed_2d);
         }
 
@@ -296,9 +336,11 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MixerBlock<F> {
         for b in 0..batch_size {
             let slice = normed2.slice(s![b, .., ..]).to_owned().into_dyn();
             let mixed = self.channel_mixing.forward(&slice)?;
-            let mixed_2d = mixed.into_dimensionality::<scirs2_core::ndarray::Ix2>().map_err(|e| {
-                NeuralError::InferenceError(format!("Failed to convert mixed to 2D: {}", e))
-            })?;
+            let mixed_2d = mixed
+                .into_dimensionality::<scirs2_core::ndarray::Ix2>()
+                .map_err(|e| {
+                    NeuralError::InferenceError(format!("Failed to convert mixed to 2D: {}", e))
+                })?;
             channel_mixed.slice_mut(s![b, .., ..]).assign(&mixed_2d);
         }
 
@@ -318,15 +360,14 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MixerBlock<F> {
             for s in 0..seq_len {
                 let slice = input.slice(s![b, s, ..]).to_owned().into_dyn();
                 let normed = norm.forward(&slice)?;
-                let normed_1d =
-                    normed
-                        .into_dimensionality::<scirs2_core::ndarray::Ix1>()
-                        .map_err(|e| {
-                            NeuralError::InferenceError(format!(
-                                "Failed to convert normed to 1D: {}",
-                                e
-                            ))
-                        })?;
+                let normed_1d = normed
+                    .into_dimensionality::<scirs2_core::ndarray::Ix1>()
+                    .map_err(|e| {
+                        NeuralError::InferenceError(format!(
+                            "Failed to convert normed to 1D: {}",
+                            e
+                        ))
+                    })?;
                 output.slice_mut(s![b, s, ..]).assign(&normed_1d);
             }
         }
@@ -342,7 +383,16 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MixerBlock<F> {
 /// 2. Multiple Mixer blocks
 /// 3. Classification head
 #[derive(Debug)]
-pub struct MLPMixer<F: Float + Debug + ScalarOperand + Send + Sync + 'static> {
+pub struct MLPMixer<
+    F: Float
+        + Debug
+        + ScalarOperand
+        + Send
+        + Sync
+        + NumAssign
+        + scirs2_core::simd_ops::SimdUnifiedOps
+        + 'static,
+> {
     /// Model configuration
     config: MLPMixerConfig,
     /// Patch embedding projection
@@ -355,13 +405,27 @@ pub struct MLPMixer<F: Float + Debug + ScalarOperand + Send + Sync + 'static> {
     head: Dense<F>,
 }
 
-impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MLPMixer<F> {
+impl<
+        F: Float
+            + Debug
+            + ScalarOperand
+            + Send
+            + Sync
+            + NumAssign
+            + FromPrimitive
+            + scirs2_core::simd_ops::SimdUnifiedOps
+            + 'static,
+    > MLPMixer<F>
+{
     /// Create a new MLPMixer model
     ///
     /// # Arguments
     /// * `config` - Model configuration
     /// * `rng` - Random number generator
-    pub fn new<R: Rng>(config: MLPMixerConfig, rng: &mut R) -> Result<Self> {
+    pub fn new<R: Rng + Clone + Send + Sync + 'static>(
+        config: MLPMixerConfig,
+        rng: &mut R,
+    ) -> Result<Self> {
         let num_patches = config.num_patches();
         let patch_dim = config.in_channels * config.patch_size * config.patch_size;
 
@@ -382,7 +446,7 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MLPMixer<F> {
         }
 
         // Final layer norm
-        let norm = LayerNorm::new(config.hidden_dim, F::from(1e-6).expect("Failed to convert constant to float"));
+        let norm = LayerNorm::new(config.hidden_dim, 1e-6, rng)?;
 
         // Classification head
         let head = Dense::new(config.hidden_dim, config.num_classes, None, rng)?;
@@ -464,13 +528,19 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MLPMixer<F> {
         let patches = self.extract_patches(images)?;
 
         // Patch embedding: [B, num_patches, hidden_dim]
-        let mut embedded = Array3::zeros((batch_size, self.config.num_patches(), self.config.hidden_dim));
+        let mut embedded = Array3::zeros((
+            batch_size,
+            self.config.num_patches(),
+            self.config.hidden_dim,
+        ));
         for b in 0..batch_size {
             let patch_slice = patches.slice(s![b, .., ..]).to_owned().into_dyn();
             let emb = self.patch_embed.forward(&patch_slice)?;
-            let emb_2d = emb.into_dimensionality::<scirs2_core::ndarray::Ix2>().map_err(|e| {
-                NeuralError::InferenceError(format!("Failed to convert embedding to 2D: {}", e))
-            })?;
+            let emb_2d = emb
+                .into_dimensionality::<scirs2_core::ndarray::Ix2>()
+                .map_err(|e| {
+                    NeuralError::InferenceError(format!("Failed to convert embedding to 2D: {}", e))
+                })?;
             embedded.slice_mut(s![b, .., ..]).assign(&emb_2d);
         }
 
@@ -491,9 +561,11 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MLPMixer<F> {
         for b in 0..batch_size {
             let slice = pooled.slice(s![b, ..]).to_owned().into_dyn();
             let n = self.norm.forward(&slice)?;
-            let n_1d = n.into_dimensionality::<scirs2_core::ndarray::Ix1>().map_err(|e| {
-                NeuralError::InferenceError(format!("Failed to convert normed to 1D: {}", e))
-            })?;
+            let n_1d = n
+                .into_dimensionality::<scirs2_core::ndarray::Ix1>()
+                .map_err(|e| {
+                    NeuralError::InferenceError(format!("Failed to convert normed to 1D: {}", e))
+                })?;
             normed.slice_mut(s![b, ..]).assign(&n_1d);
         }
 
@@ -502,8 +574,16 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MLPMixer<F> {
         for b in 0..batch_size {
             let slice = normed.slice(s![b, ..]).to_owned().into_dyn();
             let logits = self.head.forward(&slice)?;
-            let logits_1d =
-                logits
+            // Dense layer may return [1, num_classes] for 1D input, so handle both shapes
+            if logits.ndim() == 2 && logits.shape()[0] == 1 {
+                let logits_1d = logits
+                    .into_shape_with_order(scirs2_core::ndarray::IxDyn(&[self.config.num_classes]))
+                    .map_err(|e| {
+                        NeuralError::InferenceError(format!(
+                            "Failed to reshape logits to 1D: {}",
+                            e
+                        ))
+                    })?
                     .into_dimensionality::<scirs2_core::ndarray::Ix1>()
                     .map_err(|e| {
                         NeuralError::InferenceError(format!(
@@ -511,7 +591,18 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MLPMixer<F> {
                             e
                         ))
                     })?;
-            output.slice_mut(s![b, ..]).assign(&logits_1d);
+                output.slice_mut(s![b, ..]).assign(&logits_1d);
+            } else {
+                let logits_1d = logits
+                    .into_dimensionality::<scirs2_core::ndarray::Ix1>()
+                    .map_err(|e| {
+                        NeuralError::InferenceError(format!(
+                            "Failed to convert logits to 1D: {}",
+                            e
+                        ))
+                    })?;
+                output.slice_mut(s![b, ..]).assign(&logits_1d);
+            }
         }
 
         Ok(output)
@@ -532,11 +623,12 @@ impl<F: Float + Debug + ScalarOperand + Send + Sync + 'static> MLPMixer<F> {
         let patch_embed_params = patch_dim * hidden_dim + hidden_dim;
 
         // Mixer blocks
-        let token_mlp_params = (num_patches * self.config.token_mlp_dim + self.config.token_mlp_dim)
+        let token_mlp_params = (num_patches * self.config.token_mlp_dim
+            + self.config.token_mlp_dim)
             + (self.config.token_mlp_dim * num_patches + num_patches);
-        let channel_mlp_params =
-            (hidden_dim * self.config.channel_mlp_dim + self.config.channel_mlp_dim)
-                + (self.config.channel_mlp_dim * hidden_dim + hidden_dim);
+        let channel_mlp_params = (hidden_dim * self.config.channel_mlp_dim
+            + self.config.channel_mlp_dim)
+            + (self.config.channel_mlp_dim * hidden_dim + hidden_dim);
         let norm_params = 2 * hidden_dim; // gamma and beta
         let block_params = 2 * norm_params + token_mlp_params + channel_mlp_params;
         let all_blocks_params = self.config.num_blocks * block_params;
@@ -593,11 +685,11 @@ mod tests {
     fn test_mixer_block() {
         let mut rng = scirs2_core::random::rngs::StdRng::seed_from_u64(42);
         let block = MixerBlock::<f32>::new(
-            16,   // num_patches
-            64,   // hidden_dim
-            32,   // token_mlp_dim
-            128,  // channel_mlp_dim
-            0.0,  // dropout
+            16,  // num_patches
+            64,  // hidden_dim
+            32,  // token_mlp_dim
+            128, // channel_mlp_dim
+            0.0, // dropout
             &mut rng,
         )
         .expect("Operation failed");
@@ -660,7 +752,9 @@ mod tests {
             }
         }
 
-        let patches = mixer.extract_patches(&images.into_dyn()).expect("Operation failed");
+        let patches = mixer
+            .extract_patches(&images.into_dyn())
+            .expect("Operation failed");
 
         // Should have 4 patches (2x2 grid of 4x4 patches)
         assert_eq!(patches.shape(), &[1, 4, 16]);

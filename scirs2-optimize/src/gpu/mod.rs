@@ -692,7 +692,11 @@ pub mod utils {
         expected_evaluations: usize,
     ) -> ScirsResult<GpuOptimizationConfig> {
         let context = GpuContext::new(scirs2_core::gpu::GpuBackend::Cuda)?;
-        let available_memory = 1024 * 1024 * 1024; // Default 1GB, should be queried from device
+
+        #[cfg(target_pointer_width = "32")]
+        let available_memory = 256 * 1024 * 1024; // Default 256MB for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let available_memory = 1024 * 1024 * 1024; // Default 1GB for 64-bit, should be queried from device
 
         let batch_size = estimate_optimal_batch_size(
             problem_dims,

@@ -137,6 +137,7 @@ pub mod gpu_context_manager;
 #[cfg(feature = "gpu")]
 pub mod gpu_ops;
 mod hypergeometric;
+mod hypergeometric_enhanced;
 pub mod incomplete_gamma;
 pub mod information_theory;
 mod kelvin;
@@ -344,6 +345,9 @@ pub use bessel::complex::{i0_complex, j0_complex, j1_complex, jn_complex, jv_com
 // Complex error functions
 pub use erf::complex::{erf_complex, erfc_complex, erfcx_complex, faddeeva_complex};
 pub use hypergeometric::{hyp0f1, hyp1f1, hyp2f1, hyperu, ln_pochhammer, pochhammer};
+pub use hypergeometric_enhanced::{
+    hyp0f1_enhanced, hyp1f1_enhanced, hyp2f1_enhanced, hyp2f1_regularized,
+};
 pub use information_theory::{
     binary_entropy, cross_entropy, entr, entr_array, entropy, huber, huber_loss, kl_div,
     kl_divergence, pseudo_huber, rel_entr,

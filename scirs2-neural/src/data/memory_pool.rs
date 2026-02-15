@@ -41,7 +41,6 @@ impl SizeClass {
 
 /// Memory pool for GPU buffers (GPU feature required)
 #[cfg(feature = "gpu")]
-#[derive(Debug)]
 pub struct GpuMemoryPool<T: GpuDataType> {
     /// GPU context for buffer allocation
     gpu_context: Arc<GpuContext>,
@@ -118,7 +117,10 @@ impl<T: GpuDataType> GpuMemoryPool<T> {
 
         // Update usage statistics
         let buffer_size = actual_size * std::mem::size_of::<T>();
-        let current_usage = self.total_in_use.fetch_add(buffer_size as u64, Ordering::Relaxed) + buffer_size as u64;
+        let current_usage = self
+            .total_in_use
+            .fetch_add(buffer_size as u64, Ordering::Relaxed)
+            + buffer_size as u64;
 
         // Update peak usage
         let mut peak = self.peak_usage.load(Ordering::Relaxed);
@@ -164,7 +166,8 @@ impl<T: GpuDataType> GpuMemoryPool<T> {
         }
 
         let buffer = self.gpu_context.create_buffer::<T>(size);
-        self.total_allocated.fetch_add(buffer_size as u64, Ordering::Relaxed);
+        self.total_allocated
+            .fetch_add(buffer_size as u64, Ordering::Relaxed);
 
         Ok(buffer)
     }
@@ -204,7 +207,8 @@ impl<T: GpuDataType> GpuMemoryPool<T> {
                 while let Some(buffer) = pool.pop() {
                     let buffer_size = (buffer.len() * std::mem::size_of::<T>()) as u64;
                     freed_space += buffer_size;
-                    self.total_allocated.fetch_sub(buffer_size, Ordering::Relaxed);
+                    self.total_allocated
+                        .fetch_sub(buffer_size, Ordering::Relaxed);
 
                     if freed_space >= required_space {
                         break;
@@ -225,7 +229,8 @@ impl<T: GpuDataType> GpuMemoryPool<T> {
         for (size_class, pool) in buffers.drain() {
             let buffer_size = (size_class.size * std::mem::size_of::<T>()) as u64;
             let count = pool.len() as u64;
-            self.total_allocated.fetch_sub(buffer_size * count, Ordering::Relaxed);
+            self.total_allocated
+                .fetch_sub(buffer_size * count, Ordering::Relaxed);
         }
 
         Ok(())
@@ -233,7 +238,10 @@ impl<T: GpuDataType> GpuMemoryPool<T> {
 
     /// Get memory pool statistics
     pub fn get_statistics(&self) -> PoolStatistics {
-        let buffers = self.available_buffers.lock().expect("Failed to lock buffers");
+        let buffers = self
+            .available_buffers
+            .lock()
+            .expect("Failed to lock buffers");
 
         let cached_buffers: usize = buffers.values().map(|pool| pool.len()).sum();
 
@@ -336,10 +344,12 @@ impl<T: GpuDataType> Drop for PooledBuffer<T> {
         // Return buffer to pool if pool still exists
         if let Some(pool) = self.pool.upgrade() {
             if let Ok(mut buffers) = pool.lock() {
+                // Clone the buffer and return it to the pool for reuse
+                let recycled = self.buffer.clone();
                 buffers
                     .entry(self.size_class)
                     .or_insert_with(Vec::new)
-                    .push(self.buffer.clone());
+                    .push(recycled);
             }
         }
     }
@@ -394,7 +404,10 @@ mod tests {
     #[test]
     fn test_buffer_reuse() {
         let context = GpuContext::new(GpuBackend::Cpu).expect("Failed to create context");
-        let pool = Arc::new(GpuMemoryPool::<f32>::new(Arc::new(context), 1024 * 1024 * 1024));
+        let pool = Arc::new(GpuMemoryPool::<f32>::new(
+            Arc::new(context),
+            1024 * 1024 * 1024,
+        ));
 
         // Allocate and drop buffer
         {
@@ -446,7 +459,7 @@ mod tests {
         let buffer = pool.allocate(1000).expect("Failed to allocate");
 
         // Test deref
-        assert!(buffer.len() > 0);
+        assert!(!buffer.is_empty());
         assert!(!buffer.is_empty());
     }
 }

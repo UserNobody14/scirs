@@ -16,19 +16,25 @@ pub mod resnet;
 pub mod seq2seq;
 pub mod vit;
 pub use bert::{BertConfig, BertModel};
-pub use clip::{CLIPConfig, CLIPTextConfig, CLIPTextEncoder, CLIPVisionEncoder, CLIP};
-pub use convnext::{ConvNeXt, ConvNeXtBlock, ConvNeXtConfig, ConvNeXtStage, ConvNeXtVariant};
+// TODO: Re-enable once PatchEmbedding is implemented
+// pub use clip::{CLIPConfig, CLIPTextConfig, CLIPTextEncoder, CLIPVisionEncoder, CLIP};
+pub use clip::{CLIPConfig, CLIPTextConfig, CLIPTextEncoder};
+// TODO: Re-enable once LayerNorm2D is implemented
+// pub use convnext::{ConvNeXt, ConvNeXtBlock, ConvNeXtConfig, ConvNeXtStage, ConvNeXtVariant};
+pub use convnext::{ConvNeXtConfig, ConvNeXtVariant};
 pub use efficientnet::{EfficientNet, EfficientNetConfig, EfficientNetStage, MBConvConfig};
 pub use fusion::{
     BilinearFusion, CrossModalAttention, FeatureAlignment, FeatureFusion, FeatureFusionConfig,
     FiLMModule, FusionMethod,
 };
 pub use gpt::{GPTConfig, GPTModel};
+pub use mamba::{Mamba, MambaBlock, MambaConfig, S4Layer, SelectiveSSM};
 pub use mlp_mixer::{MLPMixer, MLPMixerConfig, MixerBlock, MixerMLP};
 pub use mobilenet::{MobileNet, MobileNetConfig, MobileNetVersion};
 pub use resnet::{ResNet, ResNetBlock, ResNetConfig, ResNetLayer};
 pub use seq2seq::{
     Attention, AttentionType, RNNCellType, Seq2Seq, Seq2SeqConfig, Seq2SeqDecoder, Seq2SeqEncoder,
 };
-pub use mamba::{Mamba, MambaBlock, MambaConfig, S4Layer, SelectiveSSM};
-pub use vit::{ViTConfig, VisionTransformer};
+// TODO: Re-enable once PatchEmbedding is implemented
+// pub use vit::{ViTConfig, VisionTransformer};
+pub use vit::ViTConfig;

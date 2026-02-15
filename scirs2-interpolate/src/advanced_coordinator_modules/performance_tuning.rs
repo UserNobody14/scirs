@@ -733,10 +733,15 @@ pub struct ResourceUsage {
 impl ResourceMonitor {
     /// Create a new resource monitor
     pub fn new() -> InterpolateResult<Self> {
+        #[cfg(target_pointer_width = "32")]
+        let available_memory = 512_000_000; // 512MB default for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let available_memory = 8_000_000_000; // 8GB default for 64-bit
+
         Ok(Self {
             cpu_usage: 0.0,
             memory_usage: 0,
-            available_memory: 8_000_000_000, // 8GB default
+            available_memory,
             load_average: 0.0,
             monitoring_interval: 1000, // 1 second
         })
@@ -814,6 +819,10 @@ mod tests {
     fn test_resource_monitor_creation() {
         let monitor = ResourceMonitor::new().expect("Operation failed");
         assert_eq!(monitor.monitoring_interval, 1000);
+
+        #[cfg(target_pointer_width = "32")]
+        assert_eq!(monitor.available_memory, 512_000_000);
+        #[cfg(target_pointer_width = "64")]
         assert_eq!(monitor.available_memory, 8_000_000_000);
     }
 

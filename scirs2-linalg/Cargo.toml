@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Linear algebra module for SciRS2 (scirs2-linalg)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["linear-algebra", "matrix", "scientific", "scipy", "numerical"]
@@ -65,6 +66,7 @@ opencl = [] # OpenCL support
 cpu-fallback = [] # CPU fallback when no GPU backend available
 rocm = [] # AMD ROCm support
 metal = [] # Apple Metal support
+vulkan = [] # Vulkan compute support (cross-platform)
 gpu = [] # GPU abstraction layer - does NOT auto-enable specific backends
 
 [[bench]]

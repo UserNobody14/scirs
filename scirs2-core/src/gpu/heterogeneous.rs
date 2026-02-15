@@ -202,11 +202,11 @@ impl DeviceCharacteristics {
     pub fn typical_cpu() -> Self {
         Self {
             device: ComputeDevice::Cpu,
-            peak_gflops: 200.0,                         // Modern CPU with AVX
-            memorybandwidth: 50.0,                      // DDR4-3200
-            available_memory: 16 * 1024 * 1024 * 1024,  // 16 GB
-            compute_units: 8,                           // 8 cores
-            power_consumption: 95.0,                    // 95W TDP
+            peak_gflops: 200.0,    // Modern CPU with AVX
+            memorybandwidth: 50.0, // DDR4-3200
+            available_memory: (16u64 * 1024 * 1024 * 1024) as usize, // 16 GB
+            compute_units: 8,      // 8 cores
+            power_consumption: 95.0, // 95W TDP
             transfer_overhead: Duration::from_nanos(0), // No transfer needed
         }
     }
@@ -215,11 +215,11 @@ impl DeviceCharacteristics {
     pub fn typical_gpu() -> Self {
         Self {
             device: ComputeDevice::Gpu(GpuBackend::Cuda),
-            peak_gflops: 10000.0,                         // High-end GPU
-            memorybandwidth: 900.0,                       // GDDR6X
-            available_memory: 12 * 1024 * 1024 * 1024,    // 12 GB VRAM
-            compute_units: 80,                            // Streaming multiprocessors
-            power_consumption: 350.0,                     // 350W TGP
+            peak_gflops: 10000.0,   // High-end GPU
+            memorybandwidth: 900.0, // GDDR6X
+            available_memory: (12u64 * 1024 * 1024 * 1024) as usize, // 12 GB VRAM
+            compute_units: 80,      // Streaming multiprocessors
+            power_consumption: 350.0, // 350W TGP
             transfer_overhead: Duration::from_micros(10), // PCIe transfer
         }
     }

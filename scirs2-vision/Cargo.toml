@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Computer vision module for SciRS2 (scirs2-vision)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["vision", "image-processing", "scientific", "ai", "machine-learning"]
@@ -32,6 +33,7 @@ crossbeam-channel = { workspace = true }
 
 [dev-dependencies]
 approx = { workspace = true }
+criterion = { workspace = true }
 
 [features]
 default = []
@@ -83,3 +85,7 @@ path = "examples/image_registration.rs"
 [[example]]
 name = "simple_registration"
 path = "examples/simple_registration.rs"
+
+[[bench]]
+name = "opencv_comparison"
+harness = false

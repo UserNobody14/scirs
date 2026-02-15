@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Data transformation module for SciRS2 (scirs2-transform)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["transform", "feature-engineering", "scientific", "ai", "machine-learning"]
@@ -32,6 +33,7 @@ num_cpus = { workspace = true }
 regex = { workspace = true }
 ahash = { workspace = true }
 statrs = { workspace = true }
+rayon = { workspace = true }
 
 # Optional dependencies for new features
 tokio = { workspace = true, optional = true, features = ["full"] }

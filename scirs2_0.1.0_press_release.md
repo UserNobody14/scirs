@@ -390,7 +390,7 @@ Complete GPU abstraction layer with:
 
 ### Open Source Commitment
 
-SciRS2 is dual-licensed under MIT and Apache 2.0, ensuring:
+SciRS2 is licensed under the Apache-2.0 License, ensuring:
 - **Permissive licensing**: Use in commercial and open-source projects
 - **Patent protection**: Apache 2.0 provides explicit patent grants
 - **Community ownership**: No vendor lock-in or proprietary features
@@ -516,7 +516,7 @@ Whether you're a researcher pushing the boundaries of science, an engineer build
 
 ---
 
-*SciRS2 is free and open-source software, dual-licensed under MIT and Apache 2.0. Start building today at [https://github.com/cool-japan/scirs](https://github.com/cool-japan/scirs).*
+*SciRS2 is free and open-source software, licensed under the Apache-2.0 License. Start building today at [https://github.com/cool-japan/scirs](https://github.com/cool-japan/scirs).*
 
 *Release Date: December 29, 2025*
 *Version: 0.1.0 (Stable Release)*
@@ -529,7 +529,7 @@ Whether you're a researcher pushing the boundaries of science, an engineer build
 |--------------|-------|
 | **Version** | 0.1.0 (Stable) |
 | **Release Date** | December 29, 2025 |
-| **License** | MIT OR Apache-2.0 |
+| **License** | Apache-2.0 |
 | **Language** | Rust (Edition 2021) |
 | **Total Code Lines** | 1,936,744 |
 | **Rust Code Lines** | 1,678,500 |

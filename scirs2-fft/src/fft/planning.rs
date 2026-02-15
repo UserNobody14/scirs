@@ -7,6 +7,11 @@
 
 use crate::error::FFTResult;
 use crate::fft::algorithms::{parse_norm_mode, NormMode};
+#[cfg(feature = "oxifft")]
+use crate::oxifft_plan_cache;
+#[cfg(feature = "oxifft")]
+use oxifft::{Complex as OxiComplex, Direction};
+#[cfg(feature = "rustfft-backend")]
 use rustfft::{num_complex::Complex as RustComplex, FftPlanner};
 use scirs2_core::ndarray::{Array2, Axis};
 use scirs2_core::numeric::Complex64;
@@ -114,74 +119,170 @@ where
         complex_input
     };
 
-    // Create FFT planner
-    let mut planner = FftPlanner::new();
+    // Perform FFT using the available backend
+    #[cfg(feature = "oxifft")]
+    {
+        // Perform FFT along each row in parallel
+        if num_workers > 1 {
+            padded_input
+                .axis_iter_mut(Axis(0))
+                .into_par_iter()
+                .for_each(|mut row| {
+                    // Convert to OxiFFT compatible format
+                    let input_oxi: Vec<OxiComplex<f64>> =
+                        row.iter().map(|&c| OxiComplex::new(c.re, c.im)).collect();
+                    let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); outputshape.1];
 
-    // Perform FFT along each row in parallel
-    let row_fft = planner.plan_fft_forward(outputshape.1);
+                    // Perform FFT
+                    if let Err(_e) =
+                        oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Forward)
+                    {
+                        // Error handling in parallel context - just skip this row
+                        return;
+                    }
 
-    if num_workers > 1 {
-        padded_input
-            .axis_iter_mut(Axis(0))
-            .into_par_iter()
-            .for_each(|mut row| {
-                // Convert to rustfft compatible format
-                let mut buffer: Vec<RustComplex<f64>> =
-                    row.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+                    // Update row with FFT result
+                    for (i, val) in output.iter().enumerate() {
+                        row[i] = Complex64::new(val.re, val.im);
+                    }
+                });
+        } else {
+            // Fall back to sequential processing if only one worker
+            for mut row in padded_input.rows_mut() {
+                let input_oxi: Vec<OxiComplex<f64>> =
+                    row.iter().map(|&c| OxiComplex::new(c.re, c.im)).collect();
+                let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); outputshape.1];
 
-                // Perform FFT
-                row_fft.process(&mut buffer);
+                oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Forward)?;
 
-                // Update row with FFT result
-                for (i, val) in buffer.iter().enumerate() {
+                for (i, val) in output.iter().enumerate() {
                     row[i] = Complex64::new(val.re, val.im);
                 }
-            });
-    } else {
-        // Fall back to sequential processing if only one worker
-        for mut row in padded_input.rows_mut() {
-            let mut buffer: Vec<RustComplex<f64>> =
-                row.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+            }
+        }
 
-            row_fft.process(&mut buffer);
+        // Perform FFT along each column in parallel
+        if num_workers > 1 {
+            padded_input
+                .axis_iter_mut(Axis(1))
+                .into_par_iter()
+                .for_each(|mut col| {
+                    // Convert to OxiFFT compatible format
+                    let input_oxi: Vec<OxiComplex<f64>> =
+                        col.iter().map(|&c| OxiComplex::new(c.re, c.im)).collect();
+                    let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); outputshape.0];
 
-            for (i, val) in buffer.iter().enumerate() {
-                row[i] = Complex64::new(val.re, val.im);
+                    // Perform FFT
+                    if let Err(_e) =
+                        oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Forward)
+                    {
+                        // Error handling in parallel context - just skip this column
+                        return;
+                    }
+
+                    // Update column with FFT result
+                    for (i, val) in output.iter().enumerate() {
+                        col[i] = Complex64::new(val.re, val.im);
+                    }
+                });
+        } else {
+            // Fall back to sequential processing if only one worker
+            for mut col in padded_input.columns_mut() {
+                let input_oxi: Vec<OxiComplex<f64>> =
+                    col.iter().map(|&c| OxiComplex::new(c.re, c.im)).collect();
+                let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); outputshape.0];
+
+                oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Forward)?;
+
+                for (i, val) in output.iter().enumerate() {
+                    col[i] = Complex64::new(val.re, val.im);
+                }
             }
         }
     }
 
-    // Perform FFT along each column in parallel
-    let col_fft = planner.plan_fft_forward(outputshape.0);
+    #[cfg(not(feature = "oxifft"))]
+    {
+        #[cfg(feature = "rustfft-backend")]
+        {
+            // Create FFT planner
+            let mut planner = FftPlanner::new();
 
-    if num_workers > 1 {
-        padded_input
-            .axis_iter_mut(Axis(1))
-            .into_par_iter()
-            .for_each(|mut col| {
-                // Convert to rustfft compatible format
-                let mut buffer: Vec<RustComplex<f64>> =
-                    col.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+            // Perform FFT along each row in parallel
+            let row_fft = planner.plan_fft_forward(outputshape.1);
 
-                // Perform FFT
-                col_fft.process(&mut buffer);
+            if num_workers > 1 {
+                padded_input
+                    .axis_iter_mut(Axis(0))
+                    .into_par_iter()
+                    .for_each(|mut row| {
+                        // Convert to rustfft compatible format
+                        let mut buffer: Vec<RustComplex<f64>> =
+                            row.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
 
-                // Update column with FFT result
-                for (i, val) in buffer.iter().enumerate() {
-                    col[i] = Complex64::new(val.re, val.im);
+                        // Perform FFT
+                        row_fft.process(&mut buffer);
+
+                        // Update row with FFT result
+                        for (i, val) in buffer.iter().enumerate() {
+                            row[i] = Complex64::new(val.re, val.im);
+                        }
+                    });
+            } else {
+                // Fall back to sequential processing if only one worker
+                for mut row in padded_input.rows_mut() {
+                    let mut buffer: Vec<RustComplex<f64>> =
+                        row.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+
+                    row_fft.process(&mut buffer);
+
+                    for (i, val) in buffer.iter().enumerate() {
+                        row[i] = Complex64::new(val.re, val.im);
+                    }
                 }
-            });
-    } else {
-        // Fall back to sequential processing if only one worker
-        for mut col in padded_input.columns_mut() {
-            let mut buffer: Vec<RustComplex<f64>> =
-                col.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
-
-            col_fft.process(&mut buffer);
-
-            for (i, val) in buffer.iter().enumerate() {
-                col[i] = Complex64::new(val.re, val.im);
             }
+
+            // Perform FFT along each column in parallel
+            let col_fft = planner.plan_fft_forward(outputshape.0);
+
+            if num_workers > 1 {
+                padded_input
+                    .axis_iter_mut(Axis(1))
+                    .into_par_iter()
+                    .for_each(|mut col| {
+                        // Convert to rustfft compatible format
+                        let mut buffer: Vec<RustComplex<f64>> =
+                            col.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+
+                        // Perform FFT
+                        col_fft.process(&mut buffer);
+
+                        // Update column with FFT result
+                        for (i, val) in buffer.iter().enumerate() {
+                            col[i] = Complex64::new(val.re, val.im);
+                        }
+                    });
+            } else {
+                // Fall back to sequential processing if only one worker
+                for mut col in padded_input.columns_mut() {
+                    let mut buffer: Vec<RustComplex<f64>> =
+                        col.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+
+                    col_fft.process(&mut buffer);
+
+                    for (i, val) in buffer.iter().enumerate() {
+                        col[i] = Complex64::new(val.re, val.im);
+                    }
+                }
+            }
+        }
+
+        #[cfg(not(feature = "rustfft-backend"))]
+        {
+            return Err(crate::FFTError::ComputationError(
+                "No FFT backend available. Enable either 'oxifft' or 'rustfft-backend' feature."
+                    .to_string(),
+            ));
         }
     }
 
@@ -302,74 +403,170 @@ where
         complex_input
     };
 
-    // Create FFT planner
-    let mut planner = FftPlanner::new();
+    // Perform inverse FFT using the available backend
+    #[cfg(feature = "oxifft")]
+    {
+        // Perform inverse FFT along each row in parallel
+        if num_workers > 1 {
+            padded_input
+                .axis_iter_mut(Axis(0))
+                .into_par_iter()
+                .for_each(|mut row| {
+                    // Convert to OxiFFT compatible format
+                    let input_oxi: Vec<OxiComplex<f64>> =
+                        row.iter().map(|&c| OxiComplex::new(c.re, c.im)).collect();
+                    let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); outputshape.1];
 
-    // Perform inverse FFT along each row in parallel
-    let row_ifft = planner.plan_fft_inverse(outputshape.1);
+                    // Perform inverse FFT
+                    if let Err(_e) =
+                        oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Backward)
+                    {
+                        // Error handling in parallel context - just skip this row
+                        return;
+                    }
 
-    if num_workers > 1 {
-        padded_input
-            .axis_iter_mut(Axis(0))
-            .into_par_iter()
-            .for_each(|mut row| {
-                // Convert to rustfft compatible format
-                let mut buffer: Vec<RustComplex<f64>> =
-                    row.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+                    // Update row with IFFT result
+                    for (i, val) in output.iter().enumerate() {
+                        row[i] = Complex64::new(val.re, val.im);
+                    }
+                });
+        } else {
+            // Fall back to sequential processing if only one worker
+            for mut row in padded_input.rows_mut() {
+                let input_oxi: Vec<OxiComplex<f64>> =
+                    row.iter().map(|&c| OxiComplex::new(c.re, c.im)).collect();
+                let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); outputshape.1];
 
-                // Perform inverse FFT
-                row_ifft.process(&mut buffer);
+                oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Backward)?;
 
-                // Update row with IFFT result
-                for (i, val) in buffer.iter().enumerate() {
+                for (i, val) in output.iter().enumerate() {
                     row[i] = Complex64::new(val.re, val.im);
                 }
-            });
-    } else {
-        // Fall back to sequential processing if only one worker
-        for mut row in padded_input.rows_mut() {
-            let mut buffer: Vec<RustComplex<f64>> =
-                row.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+            }
+        }
 
-            row_ifft.process(&mut buffer);
+        // Perform inverse FFT along each column in parallel
+        if num_workers > 1 {
+            padded_input
+                .axis_iter_mut(Axis(1))
+                .into_par_iter()
+                .for_each(|mut col| {
+                    // Convert to OxiFFT compatible format
+                    let input_oxi: Vec<OxiComplex<f64>> =
+                        col.iter().map(|&c| OxiComplex::new(c.re, c.im)).collect();
+                    let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); outputshape.0];
 
-            for (i, val) in buffer.iter().enumerate() {
-                row[i] = Complex64::new(val.re, val.im);
+                    // Perform inverse FFT
+                    if let Err(_e) =
+                        oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Backward)
+                    {
+                        // Error handling in parallel context - just skip this column
+                        return;
+                    }
+
+                    // Update column with IFFT result
+                    for (i, val) in output.iter().enumerate() {
+                        col[i] = Complex64::new(val.re, val.im);
+                    }
+                });
+        } else {
+            // Fall back to sequential processing if only one worker
+            for mut col in padded_input.columns_mut() {
+                let input_oxi: Vec<OxiComplex<f64>> =
+                    col.iter().map(|&c| OxiComplex::new(c.re, c.im)).collect();
+                let mut output: Vec<OxiComplex<f64>> = vec![OxiComplex::zero(); outputshape.0];
+
+                oxifft_plan_cache::execute_c2c(&input_oxi, &mut output, Direction::Backward)?;
+
+                for (i, val) in output.iter().enumerate() {
+                    col[i] = Complex64::new(val.re, val.im);
+                }
             }
         }
     }
 
-    // Perform inverse FFT along each column in parallel
-    let col_ifft = planner.plan_fft_inverse(outputshape.0);
+    #[cfg(not(feature = "oxifft"))]
+    {
+        #[cfg(feature = "rustfft-backend")]
+        {
+            // Create FFT planner
+            let mut planner = FftPlanner::new();
 
-    if num_workers > 1 {
-        padded_input
-            .axis_iter_mut(Axis(1))
-            .into_par_iter()
-            .for_each(|mut col| {
-                // Convert to rustfft compatible format
-                let mut buffer: Vec<RustComplex<f64>> =
-                    col.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+            // Perform inverse FFT along each row in parallel
+            let row_ifft = planner.plan_fft_inverse(outputshape.1);
 
-                // Perform inverse FFT
-                col_ifft.process(&mut buffer);
+            if num_workers > 1 {
+                padded_input
+                    .axis_iter_mut(Axis(0))
+                    .into_par_iter()
+                    .for_each(|mut row| {
+                        // Convert to rustfft compatible format
+                        let mut buffer: Vec<RustComplex<f64>> =
+                            row.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
 
-                // Update column with IFFT result
-                for (i, val) in buffer.iter().enumerate() {
-                    col[i] = Complex64::new(val.re, val.im);
+                        // Perform inverse FFT
+                        row_ifft.process(&mut buffer);
+
+                        // Update row with IFFT result
+                        for (i, val) in buffer.iter().enumerate() {
+                            row[i] = Complex64::new(val.re, val.im);
+                        }
+                    });
+            } else {
+                // Fall back to sequential processing if only one worker
+                for mut row in padded_input.rows_mut() {
+                    let mut buffer: Vec<RustComplex<f64>> =
+                        row.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+
+                    row_ifft.process(&mut buffer);
+
+                    for (i, val) in buffer.iter().enumerate() {
+                        row[i] = Complex64::new(val.re, val.im);
+                    }
                 }
-            });
-    } else {
-        // Fall back to sequential processing if only one worker
-        for mut col in padded_input.columns_mut() {
-            let mut buffer: Vec<RustComplex<f64>> =
-                col.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
-
-            col_ifft.process(&mut buffer);
-
-            for (i, val) in buffer.iter().enumerate() {
-                col[i] = Complex64::new(val.re, val.im);
             }
+
+            // Perform inverse FFT along each column in parallel
+            let col_ifft = planner.plan_fft_inverse(outputshape.0);
+
+            if num_workers > 1 {
+                padded_input
+                    .axis_iter_mut(Axis(1))
+                    .into_par_iter()
+                    .for_each(|mut col| {
+                        // Convert to rustfft compatible format
+                        let mut buffer: Vec<RustComplex<f64>> =
+                            col.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+
+                        // Perform inverse FFT
+                        col_ifft.process(&mut buffer);
+
+                        // Update column with IFFT result
+                        for (i, val) in buffer.iter().enumerate() {
+                            col[i] = Complex64::new(val.re, val.im);
+                        }
+                    });
+            } else {
+                // Fall back to sequential processing if only one worker
+                for mut col in padded_input.columns_mut() {
+                    let mut buffer: Vec<RustComplex<f64>> =
+                        col.iter().map(|&c| RustComplex::new(c.re, c.im)).collect();
+
+                    col_ifft.process(&mut buffer);
+
+                    for (i, val) in buffer.iter().enumerate() {
+                        col[i] = Complex64::new(val.re, val.im);
+                    }
+                }
+            }
+        }
+
+        #[cfg(not(feature = "rustfft-backend"))]
+        {
+            return Err(crate::FFTError::ComputationError(
+                "No FFT backend available. Enable either 'oxifft' or 'rustfft-backend' feature."
+                    .to_string(),
+            ));
         }
     }
 

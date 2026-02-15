@@ -213,6 +213,96 @@ unsafe fn pack_b_f32_neon(kc: usize, nr: usize, b: *const f32, ldb: usize, buffe
     }
 }
 
+/// Optimized pack for B matrix with vectorized copy (f64)
+///
+/// Uses SIMD instructions to accelerate the packing operation when possible.
+/// Falls back to scalar implementation on unsupported architectures.
+///
+/// # Safety
+///
+/// Same safety requirements as [`pack_b_f64`]
+#[inline]
+pub unsafe fn pack_b_f64_fast(
+    kc: usize,
+    nr: usize,
+    b: *const f64,
+    ldb: usize,
+    buffer: *mut f64,
+    _config: &MatMulConfig,
+) {
+    #[cfg(target_arch = "x86_64")]
+    {
+        if is_x86_feature_detected!("avx2") && nr >= 4 {
+            pack_b_f64_avx2(kc, nr, b, ldb, buffer);
+            return;
+        }
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    {
+        if std::arch::is_aarch64_feature_detected!("neon") && nr >= 2 {
+            pack_b_f64_neon(kc, nr, b, ldb, buffer);
+            return;
+        }
+    }
+
+    // Fallback to scalar implementation
+    pack_b_f64(kc, nr, b, ldb, buffer);
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline]
+#[target_feature(enable = "avx2")]
+unsafe fn pack_b_f64_avx2(kc: usize, nr: usize, b: *const f64, ldb: usize, buffer: *mut f64) {
+    use std::arch::x86_64::*;
+
+    for p in 0..kc {
+        let src = b.add(p * ldb);
+        let dst = buffer.add(p * nr);
+
+        let mut j = 0;
+
+        // Process 4 elements at a time with AVX2
+        while j + 4 <= nr {
+            let values = _mm256_loadu_pd(src.add(j));
+            _mm256_storeu_pd(dst.add(j), values);
+            j += 4;
+        }
+
+        // Handle remaining elements
+        while j < nr {
+            *dst.add(j) = *src.add(j);
+            j += 1;
+        }
+    }
+}
+
+#[cfg(target_arch = "aarch64")]
+#[inline(always)]
+unsafe fn pack_b_f64_neon(kc: usize, nr: usize, b: *const f64, ldb: usize, buffer: *mut f64) {
+    use std::arch::aarch64::*;
+
+    for p in 0..kc {
+        let src = b.add(p * ldb);
+        let dst = buffer.add(p * nr);
+
+        let mut j = 0;
+
+        // Process 2 elements at a time with NEON
+        while j + 2 <= nr {
+            let values = vld1q_f64(src.add(j));
+            vst1q_f64(dst.add(j), values);
+            j += 2;
+        }
+
+        // Handle remaining elements
+        while j < nr {
+            *dst.add(j) = *src.add(j);
+            j += 1;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

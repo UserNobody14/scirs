@@ -18,11 +18,16 @@ impl Default for CpuFallbackBackend {
 
 impl CpuFallbackBackend {
     pub fn new() -> Self {
+        #[cfg(target_pointer_width = "32")]
+        let total_memory = 512 * 1024 * 1024; // 512MB estimate for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let total_memory = 8usize * 1024 * 1024 * 1024; // 8GB estimate for 64-bit
+
         Self {
             device_info: GpuDeviceInfo {
                 device_type: GpuDeviceType::OpenCl, // Use OpenCL as generic type
                 name: "CPU Fallback".to_string(),
-                total_memory: 8 * 1024 * 1024 * 1024, // 8GB estimate
+                total_memory,
                 compute_units: num_cpus::get() as u32,
                 clock_frequency: 3000, // 3GHz estimate
                 supports_fp64: true,

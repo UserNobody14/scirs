@@ -1144,17 +1144,30 @@ pub struct NumaTopology {
 }
 impl NumaTopology {
     pub fn detect() -> Self {
+        #[cfg(target_pointer_width = "32")]
+        let (memorysize, available_memory, total_memory) = (
+            1024 * 1024 * 1024,                  // 1GB for 32-bit
+            AtomicUsize::new(768 * 1024 * 1024), // 768MB available
+            1024 * 1024 * 1024,                  // 1GB total
+        );
+        #[cfg(target_pointer_width = "64")]
+        let (memorysize, available_memory, total_memory) = (
+            16usize * 1024 * 1024 * 1024,                   // 16GB for 64-bit
+            AtomicUsize::new(12usize * 1024 * 1024 * 1024), // 12GB available
+            16usize * 1024 * 1024 * 1024,                   // 16GB total
+        );
+
         Self {
             nodes: vec![NumaNode {
                 node_id: 0,
                 cpus: (0..num_threads()).collect(),
-                memorysize: 16 * 1024 * 1024 * 1024,
-                available_memory: AtomicUsize::new(12 * 1024 * 1024 * 1024),
+                memorysize,
+                available_memory,
                 local_bandwidth: 50.0,
                 remote_bandwidth: 25.0,
             }],
             distances: Array2::zeros((1, 1)),
-            total_memory: 16 * 1024 * 1024 * 1024,
+            total_memory,
         }
     }
 }

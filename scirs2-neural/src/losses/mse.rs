@@ -3,7 +3,7 @@
 use crate::error::{NeuralError, Result};
 use crate::losses::Loss;
 use scirs2_core::ndarray::{Array, Zip};
-use scirs2_core::numeric::Float;
+use scirs2_core::numeric::{Float, NumAssign};
 use std::fmt::Debug;
 
 /// Mean squared error loss function.
@@ -42,7 +42,7 @@ impl Default for MeanSquaredError {
     }
 }
 
-impl<F: Float + Debug> Loss<F> for MeanSquaredError {
+impl<F: Float + Debug + NumAssign> Loss<F> for MeanSquaredError {
     fn forward(
         &self,
         predictions: &Array<F, scirs2_core::ndarray::IxDyn>,
@@ -65,7 +65,7 @@ impl<F: Float + Debug> Loss<F> for MeanSquaredError {
         let mut sum_squared_diff = F::zero();
         Zip::from(predictions).and(targets).for_each(|&p, &t| {
             let diff = p - t;
-            sum_squared_diff = sum_squared_diff + diff * diff;
+            sum_squared_diff += diff * diff;
         });
         let mse = sum_squared_diff / n;
         Ok(mse)

@@ -1,0 +1,70 @@
+# cargo-deny configuration for SciRS2
+# This file defines policies for dependencies, licenses, and security
+
+[advisories]
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+vulnerability = "deny"
+unmaintained = "warn"
+yanked = "deny"
+notice = "warn"
+ignore = []
+
+[licenses]
+# Licensing policy for COOLJAPAN Pure Rust ecosystem
+unlicensed = "deny"
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+    "Zlib",
+    "MPL-2.0",
+]
+deny = [
+    "GPL-2.0",
+    "GPL-3.0",
+    "AGPL-3.0",
+]
+copyleft = "warn"
+allow-osi-fsf-free = "both"
+default = "deny"
+confidence-threshold = 0.8
+
+[bans]
+# Multiple versions of the same crate
+multiple-versions = "warn"
+wildcards = "warn"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+
+# Deny specific crates per COOLJAPAN Pure Rust Policy
+deny = [
+    # OpenBLAS/BLAS dependencies (use OxiBLAS instead)
+    { name = "openblas-src" },
+    { name = "blas-src" },
+    { name = "cblas-sys" },
+    { name = "lapack-src" },
+    { name = "lapacke-sys" },
+
+    # bincode (use oxicode instead)
+    { name = "bincode" },
+]
+
+# Skip version checking for certain crates
+skip = []
+skip-tree = []
+
+[sources]
+# Only allow crates from official registries and COOLJAPAN org
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[sources.allow-org]
+github = ["cool-japan", "rust-lang"]

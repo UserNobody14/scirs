@@ -308,16 +308,23 @@
 //!
 //! Current version: **0.1.5** (Released January 15, 2026)
 
+pub mod activations;
 pub mod activations_minimal;
 pub mod autograd;
+pub mod callbacks;
+pub mod data;
 pub mod error;
 // pub mod gpu; // Disabled in minimal version - has syntax errors
 pub mod layers;
 pub mod linalg; // Re-enabled - fixing errors
 pub mod losses;
+pub mod models;
+pub mod optimizers;
 pub mod tensor_ops;
 pub mod training;
+pub mod transformer;
 pub mod utils;
+pub mod visualization;
 
 pub use activations_minimal::{Activation, ReLU, Sigmoid, Softmax, Tanh, GELU};
 pub use error::{Error, NeuralError, Result};
@@ -326,6 +333,13 @@ pub use losses::{
     ContrastiveLoss, CrossEntropyLoss, FocalLoss, Loss, MeanSquaredError, TripletLoss,
 };
 pub use training::{TrainingConfig, TrainingSession};
+
+// Re-export enhanced training (v0.2.0)
+pub use training::{
+    EarlyStoppingConfig, EnhancedTrainer, EnhancedTrainingConfig, GradientAccumulationSettings,
+    LRWarmupConfig, OptimizedDataLoader, OptimizedLoaderConfig, ProfilingConfig, ProfilingResults,
+    ProgressConfig, TrainingState, ValidationConfig, WarmupSchedule,
+};
 
 /// Prelude module with core functionality
 ///
@@ -337,11 +351,16 @@ pub use training::{TrainingConfig, TrainingSession};
 pub mod prelude {
     pub use crate::{
         activations_minimal::{Activation, ReLU, Sigmoid, Softmax, Tanh, GELU},
+        callbacks::{Callback, CallbackManager, CallbackTiming, EarlyStopping},
+        data::{DataLoader, Dataset, InMemoryDataset},
         error::{Error, NeuralError, Result},
         layers::{BatchNorm, Conv2D, Dense, Dropout, Layer, LayerNorm, Sequential, LSTM},
         losses::{
             ContrastiveLoss, CrossEntropyLoss, FocalLoss, Loss, MeanSquaredError, TripletLoss,
         },
-        training::{TrainingConfig, TrainingSession},
+        training::{
+            EnhancedTrainer, EnhancedTrainingConfig, TrainingConfig, TrainingSession,
+            ValidationConfig,
+        },
     };
 }

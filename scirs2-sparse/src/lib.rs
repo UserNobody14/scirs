@@ -39,7 +39,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! scirs2-sparse = "0.1.5"
+//! scirs2-sparse = "0.2.0"
 //! ```
 //!
 //! ```rust
@@ -52,7 +52,7 @@
 //! let sparse = CsrArray::from_triplets(&rows, &cols, &data, (3, 3), false).expect("Operation failed");
 //! ```
 //!
-//! ## 🔒 Version: 0.1.5 (January 15, 2026)
+//! ## 🔒 Version: 0.2.0 (February 8, 2026)
 //!
 //! ## Matrix vs. Array API
 //!
@@ -219,6 +219,12 @@ pub use linalg::{
     // Eigenvalue functions
     power_iteration,
     qr_decomposition,
+    // Specialized solvers (v0.2.0)
+    solve_arrow_matrix,
+    solve_banded_system,
+    solve_block_2x2,
+    solve_kronecker_system,
+    solve_saddle_point,
     sparse_direct_solve,
     sparse_lstsq,
     spsolve,
@@ -295,9 +301,15 @@ pub use index_dtype::{can_cast_safely, get_index_dtype, safely_cast_index_arrays
 
 // Optimized operations for symmetric sparse formats
 pub mod sym_ops;
+
+// Tensor-based sparse operations (v0.2.0)
+pub mod tensor_sparse;
 pub use sym_ops::{
     sym_coo_matvec, sym_csr_matvec, sym_csr_quadratic_form, sym_csr_rank1_update, sym_csr_trace,
 };
+
+// Tensor operations (v0.2.0)
+pub use tensor_sparse::{khatri_rao_product, CPDecomposition, SparseTensor, TuckerDecomposition};
 
 // GPU-accelerated operations
 pub mod gpu;
@@ -373,27 +385,42 @@ pub mod csgraph;
 pub use csgraph::{
     all_pairs_shortest_path,
     bellman_ford_single_source,
+    // Centrality measures (v0.2.0)
+    betweenness_centrality,
     bfs_distances,
     // Traversal algorithms
     breadth_first_search,
+    closeness_centrality,
+    // Community detection (v0.2.0)
+    community_detection,
     compute_laplacianmatrix,
     connected_components,
     degree_matrix,
     depth_first_search,
     dijkstra_single_source,
+    // Max flow algorithms (v0.2.0)
+    dinic,
+    edmonds_karp,
+    eigenvector_centrality,
     floyd_warshall,
+    ford_fulkerson,
     has_path,
     is_connected,
     is_laplacian,
     is_spanning_tree,
     // Minimum spanning trees
     kruskal_mst,
+    label_propagation,
     // Laplacian matrices
     laplacian,
     largest_component,
+    louvain_communities,
+    min_cut,
     minimum_spanning_tree,
+    modularity,
     num_edges,
     num_vertices,
+    pagerank,
     prim_mst,
     reachable_vertices,
     reconstruct_path,
@@ -413,6 +440,8 @@ pub use csgraph::{
     weakly_connected_components,
     LaplacianType,
     MSTAlgorithm,
+    // Max flow types (v0.2.0)
+    MaxFlowResult,
     // Enums and types
     ShortestPathMethod,
     TraversalOrder,

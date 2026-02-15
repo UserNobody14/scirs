@@ -23,7 +23,10 @@ members = [
     "scirs2-autograd",
     # Benchmarking suite
     "benches",
-    
+
+    # Integration tests
+    "scirs2-integration-tests",
+
     # Other
     "scirs2-interpolate", # Needs debugging - enabling to fix
     "scirs2-optimize", # 518+ compilation errors
@@ -32,6 +35,7 @@ members = [
     # "scirs2-optim", # Moved to independent OptiRS project
     "scirs2-special", # Compilation errors - enabling to fix
     # "scirs2-python", # Unified Python bindings for PyPI (v0.2.0+) - Not ready for v0.1.0
+    "scirs2-wasm", # WebAssembly bindings for browser/Node.js (v0.2.0+)
 ]
 resolver = "2"
 
@@ -53,26 +57,33 @@ unwrap_used = "warn"
 # Allow expect() with descriptive messages
 expect_used = "allow"
 
+# Mobile platform features
+[workspace.metadata.mobile]
+ios_min_version = "13.0"
+android_min_api = 21
+supported_architectures = ["aarch64", "armv7"]
+
 [workspace.package]
-version = "0.1.5"
+version = "0.2.0"  # scirs2-core at 0.2.0-dev with WASM fixes
 edition = "2021"
 authors = ["COOLJAPAN OU (Team KitaSan)"]
 description = "A Rust port of SciPy with AI/ML extensions - Scientific Computing and AI Library"
 license = "Apache-2.0"
 repository = "https://github.com/cool-japan/scirs"
-keywords = ["scientific", "mathematics", "science", "scipy", "ai", "machine-learning"]
+keywords = ["scientific", "mathematics", "scipy", "ai", "machine-learning"]
 categories = ["science", "mathematics", "algorithms", "ai"]
 
 [workspace.dependencies]
-# Core array computing
+# Core array computing (no_std support via default-features = false)
+# For embedded: use features = [] for pure no_std, or features = ["alloc"] for heap support
 ndarray = { version = "0.17.2", default-features = false, features = ["std", "serde", "rayon", "approx"] }
 ndarray-stats = "0.7.0"
 ndarray-rand = "0.16.0"
 ndarray-npy = "0.10.0"
-# Numerical libraries
-num-traits = "0.2.19"
-num-complex = "0.4.6"
-num-integer = "0.1.46"
+# Numerical libraries (no_std compatible)
+num-traits = { version = "0.2.19", default-features = false, features = ["libm"] }  # libm for no_std math
+num-complex = { version = "0.4.6", default-features = false, features = ["libm"] }  # no_std support
+num-integer = { version = "0.1.46", default-features = false }  # no_std support
 
 # Parallelization and performance
 rayon = "1.11.0"
@@ -95,9 +106,9 @@ thiserror = "2.0.18"
 approx = "0.5.1"
 criterion = "0.8.2"
 once_cell = "1.21.3"
-tempfile = "3.24.0"
+tempfile = "3.25.0"
 tokio-test = "0.4.5"
-cc = "1.2.55"  # Build-time C/C++/Objective-C compiler
+cc = "1.2.56"  # Build-time C/C++/Objective-C compiler
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -111,16 +122,16 @@ chrono = "0.4.43"
 # extension-module should be enabled only in actual Python extension module crates
 pyo3 = { version = "0.27.2", default-features = false, features = ["macros"] }
 numpy = { version = "0.27.1" }  # Keep for non-SciRS2 compatibility
-scirs2-numpy = { version = "0.1.5", path = "./scirs2-numpy" }  # SciRS2 fork with ndarray 0.17
+scirs2-numpy = { version = "0.2.0", path = "./scirs2-numpy" }  # SciRS2 fork with ndarray 0.17
 
 # Linear algebra and math (heavy dependencies - minimize features)
-nalgebra = { version = "0.34.2", default-features = false }
+nalgebra = { version = "0.34.1", default-features = false }
 rustfft = { version = "6.4.1", default-features = false }
 argmin = { version = "0.11.0", default-features = false }
 sprs = { version = "0.11.4", default-features = false }
 
 # OxiFFT - Pure Rust high-performance FFT (FFTW-compatible algorithms)
-oxifft = { version = "0.1.2" }
+oxifft = { version = "0.1.3" }
 
 # OxiBLAS - Pure Rust BLAS/LAPACK implementation (replaces OpenBLAS)
 # Using crates.io 0.1 series for stable releases
@@ -148,7 +159,7 @@ image-025 = { package = "image", version = "0.25.9", features = ["jpeg", "png", 
 flate2 = "1.1"
 blake3 = "1.8.3"
 regex = "1.12.3"
-libc = "0.2.180"
+libc = "0.2.182"
 cached = "0.56.0"
 byteorder = "1.5"
 rmp-serde = "1.3"
@@ -161,7 +172,12 @@ hex = "0.4"
 digest = "0.10"
 data-encoding = "2.10"
 glob = "0.3"
-zip = { version = "6", default-features = false, features = ["deflate", "bzip2", "time", "zstd"] }
+# zip = { version = "6", default-features = false, features = ["deflate", "bzip2", "time", "zstd"] }  # REMOVED: Replaced with oxiarc-archive (COOLJAPAN Pure Rust Policy)
+oxiarc-archive = "0.2.1"  # Pure Rust archive support (COOLJAPAN Policy)
+oxiarc-lz4 = "0.2.1"  # Pure Rust LZ4 compression (COOLJAPAN Policy)
+oxiarc-bzip2 = "0.2.1"  # Pure Rust BZIP2 compression (COOLJAPAN Policy)
+oxiarc-zstd = "0.2.1"  # Pure Rust Zstandard compression (COOLJAPAN Policy)
+oxiarc-core = "0.2.1"  # Pure Rust compression core (COOLJAPAN Policy)
 dirs = "6.0.0"
 urlencoding = "2.1"
 url = "2.5.8"
@@ -171,7 +187,7 @@ cron = "0.15"
 tokenizers = "0.22.2"
 autograd = "1.1.1"
 smallvec = "1.15.1"
-uuid = { version = "1.20.0", features = ["v4"] }
+uuid = { version = "1.21.0", features = ["v4"] }
 rustc-hash = "2.1.1"
 matrixmultiply = "0.3.10"
 num = "0.4.3"
@@ -190,7 +206,7 @@ crossbeam = { version = "0.8.4" }
 crossbeam-utils = { version = "0.8.21" }
 crossbeam-deque = { version = "0.8.6" }
 crossbeam-channel = { version = "0.5.15" }
-memmap2 = { version = "0.9.9" }
+memmap2 = { version = "0.9.10" }
 bytemuck = { version = "1.25", features = ["derive"] }
 snap = { version = "1.1.1" }
 brotli = { version = "8.0.2" }
@@ -204,6 +220,26 @@ reqwest = { version = "0.12", features = ["blocking", "json"] }
 # Math libraries
 libm = "0.2"
 array-init = "2.1.0"
+
+# Embedded systems support (v0.2.0)
+# Fixed-point arithmetic for no_std environments
+fixed = { version = "1.30.0", default-features = false }
+fixed-sqrt = { version = "0.3.0", default-features = false }
+cordic = { version = "0.1.5", default-features = false }  # CORDIC algorithms for embedded
+# Embedded hardware abstraction
+embedded-hal = { version = "1.1.0" }
+critical-section = { version = "1.2.0", default-features = false }
+# Platform-specific embedded support
+cortex-m = { version = "0.7.7", default-features = false }
+cortex-m-rt = { version = "0.7.5" }
+riscv = { version = "0.11.1", default-features = false }
+riscv-rt = { version = "0.17.1" }
+# Atomic operations for embedded
+atomic-polyfill = { version = "1.0.3", default-features = false }
+portable-atomic = { version = "1.13.1", default-features = false }
+# Memory allocation for alloc feature
+embedded-alloc = { version = "0.6.0" }
+linked_list_allocator = { version = "0.10.5" }
 netcdf3 = "0.6.0"
 sobol = "1.0.2"
 halton = "0.2.1"
@@ -235,8 +271,8 @@ parquet = "57.3.0"
 
 # Async dependencies
 tokio = { version = "1.49.0", features = ["full"] }
-futures = "0.3.31"
-futures-util = "0.3.31"
+futures = "0.3.32"
+futures-util = "0.3.32"
 async-trait = "0.1.89"
 
 # Logging
@@ -260,8 +296,8 @@ cudarc = { version = "0.18", features = ["cuda-12000"] }
 
 # Development and testing additions
 ctor = { version = "0.6" }
-quickcheck = { version = "1.0" }
-quickcheck_macros = { version = "1.1" }
+quickcheck = { version = "1.1" }
+quickcheck_macros = { version = "1.2" }
 proptest = { version = "1.10.0" }
 
 # Data structures
@@ -292,17 +328,42 @@ x509-parser = { version = "0.18" }
 # WASM support
 wasm-bindgen = { version = "0.2" }
 wasm-bindgen-futures = { version = "0.4" }
+wasm-bindgen-test = { version = "0.3" }
 js-sys = { version = "0.3" }
 web-sys = { version = "0.3", features = ["console"] }
 serde-wasm-bindgen = { version = "0.6" }
-console_error_panic_hook = { version = "0.1" }
+console_error_panic_hook = { version = "0.1.7" }  # Optional marking should be in individual crate Cargo.toml
+getrandom = { version = "0.4", features = ["wasm_js"] }  # WASM-compatible RNG (v0.3+ uses wasm_js instead of js)
 
 # Machine learning
 # Enable automatic download of libtorch to avoid manual installation hassles.
 tch = { version = "0.20", features = ["download-libtorch"] } # Auto-download libtorch
 
-# Monitoring
+# Monitoring and Observability
 prometheus = { version = "0.14" }
+
+# Tracing and instrumentation
+tracing = { version = "0.1.44" }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json", "registry", "std"] }
+tracing-appender = { version = "0.2" }
+tracing-flame = { version = "0.2" }
+tracing-chrome = { version = "0.7.2" }
+tracing-opentelemetry = { version = "0.29" }
+
+# OpenTelemetry
+opentelemetry = { version = "0.30.0" }
+opentelemetry_sdk = { version = "0.30.0", features = ["rt-tokio", "metrics", "trace"] }
+opentelemetry-otlp = { version = "0.30.0", features = ["grpc-tonic", "metrics", "trace"] }
+opentelemetry-prometheus = { version = "0.31.0" }
+opentelemetry-semantic-conventions = { version = "0.30.0" }
+
+# Memory profiling
+tikv-jemallocator = { version = "0.6.1", features = ["stats", "profiling"] }  # Updated to latest
+tikv-jemalloc-ctl = { version = "0.6.1", features = ["stats"] }  # jemalloc control and introspection APIs
+
+# Platform-specific profiling (feature-gated)
+# perf-event for Linux performance counters
+perf-event = { version = "0.4.9" }
 
 # GUI libraries
 egui = { version = "0.33" }
@@ -311,41 +372,42 @@ eframe = { version = "0.33" }
 # Python integration (optional)
 
 # Base scirs2 crates
-scirs2-core = { version = "0.1.5", path = "./scirs2-core" }
-scirs2 = { version = "0.1.5", path = "./scirs2", default-features = false }
-scirs2-linalg = { version = "0.1.5", path = "./scirs2-linalg" }
-scirs2-integrate = { version = "0.1.5", path = "./scirs2-integrate" }
-scirs2-interpolate = { version = "0.1.5", path = "./scirs2-interpolate" }
-scirs2-optimize = { version = "0.1.5", path = "./scirs2-optimize" }
-scirs2-fft = { version = "0.1.5", path = "./scirs2-fft" }
-scirs2-stats = { version = "0.1.5", path = "./scirs2-stats" }
-scirs2-special = { version = "0.1.5", path = "./scirs2-special" }
-scirs2-signal = { version = "0.1.5", path = "./scirs2-signal" }
-scirs2-sparse = { version = "0.1.5", path = "./scirs2-sparse" }
-scirs2-spatial = { version = "0.1.5", path = "./scirs2-spatial" }
+scirs2-core = { version = "0.2.0", path = "./scirs2-core", default-features = false }
+scirs2 = { version = "0.2.0", path = "./scirs2", default-features = false }
+scirs2-linalg = { version = "0.2.0", path = "./scirs2-linalg", default-features = false }
+scirs2-integrate = { version = "0.2.0", path = "./scirs2-integrate", default-features = false }
+scirs2-interpolate = { version = "0.2.0", path = "./scirs2-interpolate", default-features = false }
+scirs2-optimize = { version = "0.2.0", path = "./scirs2-optimize", default-features = false }
+scirs2-fft = { version = "0.2.0", path = "./scirs2-fft", default-features = false }
+scirs2-stats = { version = "0.2.0", path = "./scirs2-stats", default-features = false }
+scirs2-special = { version = "0.2.0", path = "./scirs2-special", default-features = false }
+scirs2-signal = { version = "0.2.0", path = "./scirs2-signal", default-features = false }
+scirs2-sparse = { version = "0.2.0", path = "./scirs2-sparse" }
+scirs2-spatial = { version = "0.2.0", path = "./scirs2-spatial" }
 
 # Advanced modules
-scirs2-cluster = { version = "0.1.5", path = "./scirs2-cluster" }
-scirs2-ndimage = { version = "0.1.5", path = "./scirs2-ndimage" }
-scirs2-io = { version = "0.1.5", path = "./scirs2-io" }
-scirs2-datasets = { version = "0.1.5", path = "./scirs2-datasets" }
+scirs2-cluster = { version = "0.2.0", path = "./scirs2-cluster" }
+scirs2-ndimage = { version = "0.2.0", path = "./scirs2-ndimage" }
+scirs2-io = { version = "0.2.0", path = "./scirs2-io" }
+scirs2-datasets = { version = "0.2.0", path = "./scirs2-datasets" }
 
 # AI/ML modules
-scirs2-neural = { version = "0.1.5", path = "./scirs2-neural" }
+scirs2-neural = { version = "0.2.0", path = "./scirs2-neural" }
 # scirs2-optim moved to independent OptiRS project
-scirs2-graph = { version = "0.1.5", path = "./scirs2-graph" }
-scirs2-transform = { version = "0.1.5", path = "./scirs2-transform" }
-scirs2-metrics = { version = "0.1.5", path = "./scirs2-metrics", default-features = false }
-scirs2-text = { version = "0.1.5", path = "./scirs2-text" }
-scirs2-vision = { version = "0.1.5", path = "./scirs2-vision" }
-scirs2-series = { version = "0.1.5", path = "./scirs2-series" }
-scirs2-autograd = { version = "0.1.5", path = "./scirs2-autograd" }
+scirs2-graph = { version = "0.2.0", path = "./scirs2-graph" }
+scirs2-transform = { version = "0.2.0", path = "./scirs2-transform" }
+scirs2-metrics = { version = "0.2.0", path = "./scirs2-metrics", default-features = false }
+scirs2-text = { version = "0.2.0", path = "./scirs2-text" }
+scirs2-vision = { version = "0.2.0", path = "./scirs2-vision" }
+scirs2-series = { version = "0.2.0", path = "./scirs2-series" }
+scirs2-autograd = { version = "0.2.0", path = "./scirs2-autograd" }
+scirs2-wasm = { version = "0.2.0", path = "./scirs2-wasm" }  # WebAssembly bindings
 
 
 [profile.release]
-opt-level = 3
+opt-level = 2  # Use level 2 instead of 3 for WASM compatibility
 lto = false
-codegen-units = 1
+codegen-units = 16  # More codegen units for faster compilation and WASM safety
 
 [profile.dev]
 opt-level = 0  # Reduced to prevent memory exhaustion
@@ -370,6 +432,7 @@ strip = "debuginfo"
 
 [profile.bench]
 opt-level = 3
+
 
 # Patches to override unmaintained transitive dependencies
 [patch.crates-io]

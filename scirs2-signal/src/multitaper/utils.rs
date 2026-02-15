@@ -7,6 +7,7 @@ use scirs2_core::ndarray::Array2;
 use scirs2_core::numeric::Complex64;
 use scirs2_core::numeric::{Float, NumCast};
 use scirs2_core::random::Rng;
+use std::f64::consts::PI;
 use std::fmt::Debug;
 
 #[allow(unused_imports)]

@@ -5,6 +5,8 @@ Cargo.lock
 
 # Backup files
 **/*.rs.bak
+**/*.bak
+**/*.bak[1-9]
 **/*_old.rs
 **/*_backup.rs
 **/*.rs.old

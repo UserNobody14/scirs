@@ -59,9 +59,14 @@ pub struct AccelerationConfig {
 
 impl Default for AccelerationConfig {
     fn default() -> Self {
+        #[cfg(target_pointer_width = "32")]
+        let max_memory_per_op = 512 * 1024 * 1024; // 512MB for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let max_memory_per_op = 2usize * 1024 * 1024 * 1024; // 2GB for 64-bit
+
         Self {
             min_gpusize: 50_000,
-            max_memory_per_op: 2 * 1024 * 1024 * 1024, // 2GB
+            max_memory_per_op,
             auto_kernel_selection: true,
             enable_profiling: true,
             adaptive_batching: true,
@@ -1158,10 +1163,15 @@ impl<T> TileManager<T> {
 
 impl<T> PrefetchCache<T> {
     fn new() -> Self {
+        #[cfg(target_pointer_width = "32")]
+        let max_cachesize = 256 * 1024 * 1024; // 256MB default for 32-bit
+        #[cfg(target_pointer_width = "64")]
+        let max_cachesize = 1024 * 1024 * 1024; // 1GB default for 64-bit
+
         Self {
             cache_entries: HashMap::new(),
             prediction_model: PredictionModel::new(),
-            max_cachesize: 1024 * 1024 * 1024, // 1GB default
+            max_cachesize,
             current_cachesize: 0,
         }
     }

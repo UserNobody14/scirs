@@ -7,10 +7,11 @@
 //! - Gradient checkpointing overhead: 10 benchmarks
 //! - Memory usage comparison: 10 benchmarks
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use scirs2_autograd as ag;
 use scirs2_autograd::tensor_ops as T;
 use scirs2_core::ndarray::Array2;
+use std::hint::black_box;
 
 /// Gradient checkpointing overhead benchmarks (10 benchmarks)
 fn gradient_checkpointing_benchmark(c: &mut Criterion) {

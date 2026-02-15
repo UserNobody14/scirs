@@ -60,11 +60,52 @@ Following the [SciRS2 POLICY](../SCIRS2_POLICY.md), this module features ecosyst
 - [x] **Benchmarking Suite**: Performance comparison with scikit-learn
 - [x] **Memory Optimization**: Out-of-core processing for large datasets
 
-### Version 0.2.0 - Advanced Algorithms
+### Version 0.2.0 - Advanced Algorithms & Signal Transforms ✅
 - [x] **Advanced Dimensionality Reduction**: UMAP, Isomap, Locally Linear Embedding
 - [x] **Matrix Decomposition**: Non-negative Matrix Factorization (NMF), Dictionary Learning
 - [x] **Time Series Features**: Fourier features, wavelet features, lag features
 - [x] **Advanced Feature Selection**: Recursive Feature Elimination, mutual information
+
+### Version 0.2.0 - Signal Transforms (NEW) ✅
+- [x] **Discrete Wavelet Transform (DWT)**:
+  - 1D DWT with Haar, Daubechies, Symlet, Coiflet wavelets
+  - Multi-level decomposition (wavedec) and reconstruction (waverec)
+  - Multiple boundary modes (zero, constant, symmetric, periodic, reflect)
+- [x] **2D Discrete Wavelet Transform (DWT2D)**:
+  - Image decomposition (LL, LH, HL, HH coefficients)
+  - Multi-level 2D decomposition
+- [x] **Continuous Wavelet Transform (CWT)**:
+  - Morlet, Mexican Hat, Complex Morlet, Gaussian wavelets
+  - Direct convolution and FFT-based methods
+  - Scalogram computation
+- [x] **Wavelet Packet Transform (WPT)**:
+  - Full binary tree decomposition
+  - Best basis selection using Shannon entropy
+  - Multiple cost functions (Shannon, LogEnergy, Threshold, SURE)
+- [x] **Short-Time Fourier Transform (STFT)**:
+  - Multiple window functions (Hann, Hamming, Blackman, Kaiser, Tukey, Bartlett)
+  - Forward and inverse STFT with perfect reconstruction
+  - Configurable windowing and hop size
+- [x] **Spectrograms**:
+  - Power, magnitude, and decibel scaling
+  - Frequency and time bin calculation
+- [x] **Mel-Frequency Cepstral Coefficients (MFCC)**:
+  - Mel-scale filterbank
+  - DCT-II transformation
+  - Liftering and mean normalization
+  - Delta and delta-delta features
+- [x] **Constant-Q Transform (CQT)**:
+  - Logarithmically-spaced frequency bins
+  - Musical frequency analysis
+  - Customizable bins per octave
+- [x] **Chromagram**:
+  - 12-bin pitch class profiles
+  - L1 and L2 normalization
+  - Standard note labels
+- [x] **Integration with scirs2-fft**: Uses OxiFFT for all FFT operations
+- [x] **Comprehensive Tests**: Unit and integration tests for all transforms
+- [x] **Benchmarks**: Performance comparison with SciPy signal transforms
+- [x] **Documentation**: Complete API documentation and usage examples
 
 ### Version 0.3.0 - Specialized Domains
 - [x] **Text Processing**: CountVectorizer, TfidfVectorizer, HashingVectorizer

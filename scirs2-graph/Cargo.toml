@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 authors.workspace = true
 description = "Graph processing module for SciRS2 (scirs2-graph)"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 keywords = ["graph", "network", "scientific", "ai", "machine-learning"]
