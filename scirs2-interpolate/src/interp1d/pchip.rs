@@ -519,6 +519,75 @@ mod tests {
     }
 
     #[test]
+    fn test_pchip_extrapolation_far_beyond_range() {
+        // Regression test for issue #96
+        // PCHIP extrapolation should use linear extension, not cubic polynomial
+        let x = array![0.0, 1.0, 2.0, 3.0];
+        let y = array![0.0, 1.0, 4.0, 9.0];
+
+        let interp = PchipInterpolator::new(&x.view(), &y.view(), true).expect("Operation failed");
+
+        // Test far extrapolation (the bug case)
+        let y_50 = interp.evaluate(50.0).expect("Operation failed");
+
+        // THE KEY FIX: Before the fix, this returned -24008 (wrong!)
+        // After the fix with linear extrapolation, it should:
+        // 1. Be positive (not -24008 as in the bug)
+        // 2. Be greater than the last data point (9.0)
+        // 3. Be reasonable (linear extension, not explosive)
+        assert!(
+            y_50 > 9.0,
+            "Extrapolation at x=50 should be > 9.0, got {}",
+            y_50
+        );
+        assert!(
+            y_50 < 1000.0,
+            "Extrapolation should be reasonable (linear), got {}",
+            y_50
+        );
+        assert!(
+            y_50.is_finite(),
+            "Extrapolation should produce finite values"
+        );
+
+        // Test far extrapolation in the negative direction
+        // Should be finite and reasonable (not explosive)
+        let y_minus_50 = interp.evaluate(-50.0).expect("Operation failed");
+        assert!(
+            y_minus_50.is_finite(),
+            "Extrapolation should produce finite values"
+        );
+        assert!(
+            y_minus_50.abs() < 1000.0,
+            "Extrapolation should be reasonable (linear), got {}",
+            y_minus_50
+        );
+    }
+
+    #[test]
+    fn test_pchip_extrapolation_linear_behavior() {
+        // Verify that extrapolation uses linear extension (not cubic)
+        let x = array![0.0, 1.0, 2.0, 3.0];
+        let y = array![0.0, 1.0, 4.0, 9.0];
+
+        let interp = PchipInterpolator::new(&x.view(), &y.view(), true).expect("Operation failed");
+
+        // Get extrapolated values at two points beyond the range
+        let y_4 = interp.evaluate(4.0).expect("Operation failed");
+        let y_5 = interp.evaluate(5.0).expect("Operation failed");
+
+        // If using linear extrapolation, the slope should be constant
+        // slope = (y_5 - y_4) / (5.0 - 4.0) = y_5 - y_4
+        let extrap_slope = y_5 - y_4;
+
+        // The slope should be equal to the derivative at the last point
+        let last_derivative = interp.derivatives[interp.derivatives.len() - 1];
+
+        // Allow small numerical differences
+        assert_relative_eq!(extrap_slope, last_derivative, epsilon = 1e-10);
+    }
+
+    #[test]
     fn test_pchip_extrapolation_linear_default() {
         let x = array![0.0, 1.0, 2.0, 3.0];
         let y = array![0.0, 1.0, 4.0, 9.0];
