@@ -155,6 +155,7 @@ impl<F: Float + FromPrimitive + Debug> PchipInterpolator<F> {
     pub fn evaluate(&self, xnew: F) -> InterpolateResult<F> {
         let n = self.x.len();
 
+        // Check if we're extrapolating
         let is_extrapolating = xnew < self.x[0] || xnew > self.x[n - 1];
         if is_extrapolating && !self.extrapolate {
             return Err(InterpolateError::OutOfBounds(
@@ -162,11 +163,14 @@ impl<F: Float + FromPrimitive + Debug> PchipInterpolator<F> {
             ));
         }
 
+        // Handle extrapolation with linear extension using endpoint derivatives
         if is_extrapolating && self.extrapolate_mode == PchipExtrapolateMode::Linear {
             return if xnew < self.x[0] {
+                // Linear extrapolation below the data range
                 let dx = xnew - self.x[0];
                 Ok(self.y[0] + self.derivatives[0] * dx)
             } else {
+                // Linear extrapolation above the data range
                 let dx = xnew - self.x[n - 1];
                 Ok(self.y[n - 1] + self.derivatives[n - 1] * dx)
             };
@@ -176,7 +180,11 @@ impl<F: Float + FromPrimitive + Debug> PchipInterpolator<F> {
         // Under Polynomial mode, t goes outside [0, 1] which naturally continues
         // the boundary segment's cubic.
         let idx = if is_extrapolating {
-            if xnew < self.x[0] { 0 } else { n - 2 }
+            if xnew < self.x[0] {
+                0
+            } else {
+                n - 2
+            }
         } else if xnew == self.x[n - 1] {
             return Ok(self.y[n - 1]);
         } else {
@@ -476,8 +484,7 @@ mod tests {
         let x = array![0.0, 1.0, 2.0, 3.0];
         let y = array![0.0, 1.0, 4.0, 9.0];
 
-        let interp =
-            PchipInterpolator::new(&x.view(), &y.view(), true).expect("Operation failed");
+        let interp = PchipInterpolator::new(&x.view(), &y.view(), true).expect("Operation failed");
 
         // Default extrapolation is linear: y = y_end + d_end * dx
         let y_4 = interp.evaluate(4.0).expect("Operation failed");
@@ -494,11 +501,19 @@ mod tests {
         // Far extrapolation stays bounded (linear, not cubic)
         let y_50 = interp.evaluate(50.0).expect("Operation failed");
         assert!(y_50.is_finite());
-        assert!(y_50 < 1000.0, "Linear extrapolation should be bounded, got {}", y_50);
+        assert!(
+            y_50 < 1000.0,
+            "Linear extrapolation should be bounded, got {}",
+            y_50
+        );
 
         let y_m50 = interp.evaluate(-50.0).expect("Operation failed");
         assert!(y_m50.is_finite());
-        assert!(y_m50.abs() < 1000.0, "Linear extrapolation should be bounded, got {}", y_m50);
+        assert!(
+            y_m50.abs() < 1000.0,
+            "Linear extrapolation should be bounded, got {}",
+            y_m50
+        );
 
         // Disabled extrapolation returns error
         let no_extrap =
@@ -519,7 +534,11 @@ mod tests {
         // Near extrapolation should be finite and reasonable
         let y_4 = interp.evaluate(4.0).expect("Operation failed");
         assert!(y_4.is_finite());
-        assert!(y_4 > 9.0, "Extrapolation at x=4 should be > 9.0, got {}", y_4);
+        assert!(
+            y_4 > 9.0,
+            "Extrapolation at x=4 should be > 9.0, got {}",
+            y_4
+        );
 
         // Boundary should be exact
         let y_3 = interp.evaluate(3.0).expect("Operation failed");
