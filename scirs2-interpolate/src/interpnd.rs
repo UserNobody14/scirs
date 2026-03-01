@@ -77,7 +77,7 @@ impl<F: crate::traits::InterpolationFloat> RegularGridInterpolator<F> {
     /// # Errors
     ///
     /// * If points dimensions don't match values dimensions
-    /// * If any dimension has less than 2 points
+    /// * If any dimension has no points
     ///
     /// # Examples
     ///
@@ -126,16 +126,15 @@ impl<F: crate::traits::InterpolationFloat> RegularGridInterpolator<F> {
             )));
         }
 
-        // Check that each dimension has at least 2 points
         for (i, p) in points.iter().enumerate() {
-            if p.len() < 2 {
+            if p.is_empty() {
                 return Err(InterpolateError::invalid_input(format!(
-                    "Dimension {} has less than 2 points",
+                    "Dimension {} has no points",
                     i
                 )));
             }
 
-            // Check that points are sorted
+            // Check that points are sorted (only meaningful for len >= 2)
             for j in 1..p.len() {
                 if p[j] <= p[j - 1] {
                     return Err(InterpolateError::invalid_input(format!(
@@ -153,6 +152,36 @@ impl<F: crate::traits::InterpolationFloat> RegularGridInterpolator<F> {
                     values.shape()[i],
                     p.len()
                 )));
+            }
+        }
+
+        // Pad single-point dimensions to length 2 so that idx+1 is always valid
+        // in the interpolation logic. The duplicated value means t=0 naturally
+        // returns the correct (only) value.
+        let mut points = points;
+        let mut values = values;
+        for i in 0..points.len() {
+            if points[i].len() == 1 {
+                let v = points[i][0];
+                points[i] = Array1::from_vec(vec![v, v]);
+                let mut new_shape: Vec<usize> = values.shape().to_vec();
+                new_shape[i] = 2;
+                let mut new_values = Array::zeros(IxDyn(&new_shape));
+                let old_shape = values.shape().to_vec();
+                let total: usize = old_shape.iter().product();
+                for flat in 0..total {
+                    let mut rem = flat;
+                    let mut multi: Vec<usize> = vec![0; old_shape.len()];
+                    for d in (0..old_shape.len()).rev() {
+                        multi[d] = rem % old_shape[d];
+                        rem /= old_shape[d];
+                    }
+                    let val = values[multi.as_slice()];
+                    new_values[multi.as_slice()] = val;
+                    multi[i] = 1;
+                    new_values[multi.as_slice()] = val;
+                }
+                values = new_values;
             }
         }
 
@@ -886,7 +915,7 @@ impl<
 /// # Errors
 ///
 /// * If points dimensions don't match values dimensions
-/// * If any dimension has less than 2 points
+/// * If any dimension has no points
 ///
 /// # Examples
 ///
@@ -979,7 +1008,7 @@ pub fn make_interp_scattered<F: crate::traits::InterpolationFloat>(
 /// # Errors
 ///
 /// * If dimensions don't match
-/// * If any dimension has less than 2 points
+/// * If any dimension has no points
 #[allow(dead_code)]
 pub fn map_coordinates<F: crate::traits::InterpolationFloat>(
     old_grid: Vec<Array1<F>>,
