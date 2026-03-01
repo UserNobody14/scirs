@@ -298,6 +298,10 @@ impl<T: Float + std::fmt::Display + FromPrimitive> TensionSpline<T> {
                     // Return NaN for points outside the interpolation domain
                     return Ok(T::nan());
                 }
+                ExtrapolateMode::Nearest => {
+                    let clamped = xval.max(self.x[0]).min(self.x[n - 1]);
+                    return self.evaluate_single(clamped);
+                }
             }
         }
 
@@ -398,6 +402,10 @@ impl<T: Float + std::fmt::Display + FromPrimitive> TensionSpline<T> {
                 ExtrapolateMode::Nan => {
                     // Return NaN for points outside the interpolation domain
                     return Ok(T::nan());
+                }
+                ExtrapolateMode::Nearest => {
+                    let clamped = xval.max(self.x[0]).min(self.x[n - 1]);
+                    return self.derivative_single(deriv_order, clamped);
                 }
             }
         }

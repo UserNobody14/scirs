@@ -147,6 +147,7 @@ impl<
             ExtrapolateMode::Error => BSplineExtrapolateMode::Error,
             ExtrapolateMode::Extrapolate => BSplineExtrapolateMode::Extrapolate,
             ExtrapolateMode::Nan => BSplineExtrapolateMode::Nan,
+            ExtrapolateMode::Nearest => BSplineExtrapolateMode::Extrapolate,
         };
 
         let initial_spline = make_lsq_bspline(
@@ -250,6 +251,7 @@ impl<
             ExtrapolateMode::Error => BSplineExtrapolateMode::Error,
             ExtrapolateMode::Extrapolate => BSplineExtrapolateMode::Extrapolate,
             ExtrapolateMode::Nan => BSplineExtrapolateMode::Nan,
+            ExtrapolateMode::Nearest => BSplineExtrapolateMode::Extrapolate,
         };
 
         // Instead of using the same coefficients with more knots (which breaks the constraint),
