@@ -216,8 +216,9 @@ impl<F: Float + FromPrimitive + Debug> PchipInterpolator<F> {
         let h01 = Self::h01(t);
         let h11 = Self::h11(t);
 
-        // Evaluate cubic Hermite polynomial
-        Ok(h00 * y1 + h10 * h * d1 + h01 * y2 + h11 * h * d2)
+        let result = h00 * y1 + h10 * h * d1 + h01 * y2 + h11 * h * d2;
+
+        Ok(result)
     }
 
     /// Evaluate the interpolation at multiple points
