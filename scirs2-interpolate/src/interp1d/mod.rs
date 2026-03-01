@@ -192,7 +192,12 @@ impl<F: Float + FromPrimitive + Debug + std::fmt::Display> Interp1d<F> {
                     }
                 }
                 ExtrapolateMode::Extrapolate => {
-                    // For extrapolation, we'll use linear extrapolation based on the edge segments
+                    // PCHIP uses polynomial continuation via its own evaluator
+                    if self.method == InterpolationMethod::Pchip {
+                        let pchip = PchipInterpolator::new(&self.x.view(), &self.y.view(), true)?;
+                        return pchip.evaluate(xnew);
+                    }
+                    // For other methods, use linear extrapolation based on edge segments
                     if xnew < self.x[0] {
                         // Use the first segment for extrapolation below the range
                         let x0 = self.x[0];
