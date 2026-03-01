@@ -502,8 +502,8 @@ mod tests {
 
     #[test]
     fn test_cubic_interpolation() {
-        let x = array![0.0, 1.0, 2.0, 3.0];
-        let y = array![0.0, 1.0, 4.0, 9.0];
+        let x = array![0.0, 1.0, 2.0, 3.0, 4.0];
+        let y = array![0.0, 1.0, 4.0, 9.0, 16.0];
 
         let interp = Interp1d::new(
             &x.view(),
@@ -514,29 +514,17 @@ mod tests {
         .expect("Operation failed");
 
         // Test points exactly at data points
-        assert_relative_eq!(interp.evaluate(0.0).expect("Operation failed"), 0.0);
-        assert_relative_eq!(interp.evaluate(1.0).expect("Operation failed"), 1.0);
-        assert_relative_eq!(interp.evaluate(2.0).expect("Operation failed"), 4.0);
-        assert_relative_eq!(interp.evaluate(3.0).expect("Operation failed"), 9.0);
+        assert_relative_eq!(interp.evaluate(0.0).unwrap(), 0.0, epsilon = 1e-12);
+        assert_relative_eq!(interp.evaluate(1.0).unwrap(), 1.0, epsilon = 1e-12);
+        assert_relative_eq!(interp.evaluate(2.0).unwrap(), 4.0, epsilon = 1e-12);
+        assert_relative_eq!(interp.evaluate(3.0).unwrap(), 9.0, epsilon = 1e-12);
+        assert_relative_eq!(interp.evaluate(4.0).unwrap(), 16.0, epsilon = 1e-12);
 
-        // For this particular dataset (a quadratic y = x²),
-        // cubic interpolation might not reproduce it exactly due to the specific spline algorithm
-        // so we use wider tolerances
-        assert_relative_eq!(
-            interp.evaluate(0.5).expect("Operation failed"),
-            0.25,
-            epsilon = 0.1
-        );
-        assert_relative_eq!(
-            interp.evaluate(1.5).expect("Operation failed"),
-            2.25,
-            epsilon = 0.1
-        );
-        assert_relative_eq!(
-            interp.evaluate(2.5).expect("Operation failed"),
-            6.25,
-            epsilon = 1.0
-        );
+        // Not-a-knot cubic spline reproduces quadratic y=x^2 exactly
+        assert_relative_eq!(interp.evaluate(0.5).unwrap(), 0.25, epsilon = 1e-10);
+        assert_relative_eq!(interp.evaluate(1.5).unwrap(), 2.25, epsilon = 1e-10);
+        assert_relative_eq!(interp.evaluate(2.5).unwrap(), 6.25, epsilon = 1e-10);
+        assert_relative_eq!(interp.evaluate(3.5).unwrap(), 12.25, epsilon = 1e-10);
     }
 
     #[test]

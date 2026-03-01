@@ -467,11 +467,14 @@ fn test_cubic_interpolation_performance() {
     let _result = cubic_interpolate(&x.view(), &y.view(), &x_new.view()).expect("failed");
     let duration = start.elapsed();
 
-    // Should complete in reasonable time (< 200ms for 10k points)
+    // Not-a-knot cubic spline is O(n) construction + O(m*log(n)) evaluation.
+    // Debug builds are significantly slower than release.
+    let threshold_ms: u128 = if cfg!(debug_assertions) { 2_000 } else { 200 };
     assert!(
-        duration.as_millis() < 200,
-        "Cubic interpolation too slow: {}ms",
-        duration.as_millis()
+        duration.as_millis() < threshold_ms,
+        "Cubic interpolation too slow: {}ms (threshold: {}ms)",
+        duration.as_millis(),
+        threshold_ms
     );
 }
 

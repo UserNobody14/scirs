@@ -15,6 +15,8 @@ pub use monotonic::{
 pub use pchip::{pchip_interpolate, PchipInterpolator};
 
 use crate::error::{InterpolateError, InterpolateResult};
+use crate::spline::CubicSpline;
+use crate::traits::InterpolationFloat;
 use scirs2_core::ndarray::{Array1, ArrayView1};
 use scirs2_core::numeric::{Float, FromPrimitive};
 use std::fmt::Debug;
@@ -61,7 +63,7 @@ pub struct Interp1d<F: Float> {
     extrapolate: ExtrapolateMode,
 }
 
-impl<F: Float + FromPrimitive + Debug + std::fmt::Display> Interp1d<F> {
+impl<F: InterpolationFloat + ToString> Interp1d<F> {
     /// Create a new interpolation object
     ///
     /// # Arguments
@@ -142,10 +144,10 @@ impl<F: Float + FromPrimitive + Debug + std::fmt::Display> Interp1d<F> {
             }
         }
 
-        // For cubic interpolation, need at least 4 points
-        if method == InterpolationMethod::Cubic && x.len() < 4 {
+        // For cubic interpolation, need at least 2 points (quadratic fallback for 3, linear for 2)
+        if method == InterpolationMethod::Cubic && x.len() < 2 {
             return Err(InterpolateError::insufficient_points(
-                4,
+                2,
                 x.len(),
                 "cubic interpolation",
             ));
@@ -192,31 +194,38 @@ impl<F: Float + FromPrimitive + Debug + std::fmt::Display> Interp1d<F> {
                     }
                 }
                 ExtrapolateMode::Extrapolate => {
-                    // PCHIP uses polynomial continuation via its own evaluator
+                    // PCHIP and Cubic use polynomial continuation via their own evaluators
                     if self.method == InterpolationMethod::Pchip {
                         let pchip = PchipInterpolator::new(&self.x.view(), &self.y.view(), true)?;
                         return pchip.evaluate(xnew);
                     }
+                    if self.method == InterpolationMethod::Cubic {
+                        let spline =
+                            CubicSpline::new_not_a_knot(&self.x.view(), &self.y.view())?;
+                        let n = self.x.len();
+                        let seg = if xnew < self.x[0] { 0 } else { n - 2 };
+                        let dx = xnew - self.x[seg];
+                        let c = spline.coeffs();
+                        let result = c[[seg, 0]]
+                            + c[[seg, 1]] * dx
+                            + c[[seg, 2]] * dx * dx
+                            + c[[seg, 3]] * dx * dx * dx;
+                        return Ok(result);
+                    }
                     // For other methods, use linear extrapolation based on edge segments
                     if xnew < self.x[0] {
-                        // Use the first segment for extrapolation below the range
                         let x0 = self.x[0];
                         let x1 = self.x[1];
                         let y0 = self.y[0];
                         let y1 = self.y[1];
-
-                        // Linear extrapolation formula: y = y0 + (x - x0) * (y1 - y0) / (x1 - x0)
                         let slope = (y1 - y0) / (x1 - x0);
                         return Ok(y0 + (xnew - x0) * slope);
                     } else {
-                        // Use the last segment for extrapolation above the range
                         let n = self.x.len();
                         let x0 = self.x[n - 2];
                         let x1 = self.x[n - 1];
                         let y0 = self.y[n - 2];
                         let y1 = self.y[n - 1];
-
-                        // Linear extrapolation formula: y = y1 + (x - x1) * (y1 - y0) / (x1 - x0)
                         let slope = (y1 - y0) / (x1 - x0);
                         return Ok(y1 + (xnew - x1) * slope);
                     }
@@ -238,7 +247,11 @@ impl<F: Float + FromPrimitive + Debug + std::fmt::Display> Interp1d<F> {
                 nearest_interp(&self.x.view(), &self.y.view(), idx, xnew)
             }
             InterpolationMethod::Linear => linear_interp(&self.x.view(), &self.y.view(), idx, xnew),
-            InterpolationMethod::Cubic => cubic_interp(&self.x.view(), &self.y.view(), idx, xnew),
+            InterpolationMethod::Cubic => {
+                let spline =
+                    CubicSpline::new_not_a_knot(&self.x.view(), &self.y.view())?;
+                spline.evaluate(xnew)
+            }
             InterpolationMethod::Pchip => {
                 // For PCHIP, we'll create a PCHIP interpolator and use it
                 // This is not the most efficient approach, but it keeps the interface consistent
@@ -294,6 +307,51 @@ impl<F: Float + FromPrimitive + Debug + std::fmt::Display> Interp1d<F> {
     ///
     /// The interpolated y values at `xnew`
     pub fn evaluate_array(&self, xnew: &ArrayView1<F>) -> InterpolateResult<Array1<F>> {
+        // For spline-based methods, build once and evaluate many times
+        if self.method == InterpolationMethod::Cubic {
+            let spline = CubicSpline::new_not_a_knot(&self.x.view(), &self.y.view())?;
+            let mut result = Array1::zeros(xnew.len());
+            for (i, &xv) in xnew.iter().enumerate() {
+                let is_extrap = xv < self.x[0] || xv > self.x[self.x.len() - 1];
+                if is_extrap {
+                    match self.extrapolate {
+                        ExtrapolateMode::Error => {
+                            return Err(InterpolateError::out_of_domain_with_suggestion(
+                                xv,
+                                self.x[0],
+                                self.x[self.x.len() - 1],
+                                "1D interpolation evaluation",
+                                format!("Use ExtrapolateMode::Extrapolate or ensure query points are within [{:?}, {:?}]",
+                                    self.x[0], self.x[self.x.len() - 1])
+                            ));
+                        }
+                        ExtrapolateMode::Nearest => {
+                            result[i] = if xv < self.x[0] {
+                                self.y[0]
+                            } else {
+                                self.y[self.y.len() - 1]
+                            };
+                        }
+                        ExtrapolateMode::Extrapolate => {
+                            let n = self.x.len();
+                            let seg = if xv < self.x[0] { 0 } else { n - 2 };
+                            let dx = xv - self.x[seg];
+                            let c = spline.coeffs();
+                            result[i] = c[[seg, 0]]
+                                + c[[seg, 1]] * dx
+                                + c[[seg, 2]] * dx * dx
+                                + c[[seg, 3]] * dx * dx * dx;
+                        }
+                    }
+                } else if xv == self.x[self.x.len() - 1] {
+                    result[i] = self.y[self.y.len() - 1];
+                } else {
+                    result[i] = spline.evaluate(xv)?;
+                }
+            }
+            return Ok(result);
+        }
+
         let mut result = Array1::zeros(xnew.len());
         for (i, &x) in xnew.iter().enumerate() {
             result[i] = self.evaluate(x)?;
@@ -496,8 +554,8 @@ mod tests {
 
     #[test]
     fn test_cubic_interpolation() {
-        let x = array![0.0, 1.0, 2.0, 3.0];
-        let y = array![0.0, 1.0, 4.0, 9.0];
+        let x = array![0.0, 1.0, 2.0, 3.0, 4.0];
+        let y = array![0.0, 1.0, 4.0, 9.0, 16.0];
 
         let interp = Interp1d::new(
             &x.view(),
@@ -508,29 +566,89 @@ mod tests {
         .expect("Operation failed");
 
         // Test points exactly at data points
-        assert_relative_eq!(interp.evaluate(0.0).expect("Operation failed"), 0.0);
-        assert_relative_eq!(interp.evaluate(1.0).expect("Operation failed"), 1.0);
-        assert_relative_eq!(interp.evaluate(2.0).expect("Operation failed"), 4.0);
-        assert_relative_eq!(interp.evaluate(3.0).expect("Operation failed"), 9.0);
+        assert_relative_eq!(interp.evaluate(0.0).unwrap(), 0.0, epsilon = 1e-12);
+        assert_relative_eq!(interp.evaluate(1.0).unwrap(), 1.0, epsilon = 1e-12);
+        assert_relative_eq!(interp.evaluate(2.0).unwrap(), 4.0, epsilon = 1e-12);
+        assert_relative_eq!(interp.evaluate(3.0).unwrap(), 9.0, epsilon = 1e-12);
+        assert_relative_eq!(interp.evaluate(4.0).unwrap(), 16.0, epsilon = 1e-12);
 
-        // For this particular dataset (a quadratic y = x²),
-        // cubic interpolation might not reproduce it exactly due to the specific spline algorithm
-        // so we use wider tolerances
-        assert_relative_eq!(
-            interp.evaluate(0.5).expect("Operation failed"),
-            0.25,
-            epsilon = 0.1
-        );
-        assert_relative_eq!(
-            interp.evaluate(1.5).expect("Operation failed"),
-            2.25,
-            epsilon = 0.1
-        );
-        assert_relative_eq!(
-            interp.evaluate(2.5).expect("Operation failed"),
-            6.25,
-            epsilon = 1.0
-        );
+        // Not-a-knot cubic spline reproduces quadratic y=x^2 exactly
+        // (scipy reference: interp1d(x, y, kind='cubic'))
+        assert_relative_eq!(interp.evaluate(0.5).unwrap(), 0.25, epsilon = 1e-10);
+        assert_relative_eq!(interp.evaluate(1.5).unwrap(), 2.25, epsilon = 1e-10);
+        assert_relative_eq!(interp.evaluate(2.5).unwrap(), 6.25, epsilon = 1e-10);
+        assert_relative_eq!(interp.evaluate(3.5).unwrap(), 12.25, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_cubic_reproduces_linear() {
+        // Not-a-knot cubic spline must reproduce linear data exactly
+        let x = array![0.0, 1.0, 2.0, 3.0, 4.0];
+        let y = array![1.0, 3.0, 5.0, 7.0, 9.0]; // y = 2x + 1
+
+        let interp = Interp1d::new(
+            &x.view(),
+            &y.view(),
+            InterpolationMethod::Cubic,
+            ExtrapolateMode::Error,
+        )
+        .unwrap();
+
+        assert_relative_eq!(interp.evaluate(0.5).unwrap(), 2.0, epsilon = 1e-10);
+        assert_relative_eq!(interp.evaluate(1.5).unwrap(), 4.0, epsilon = 1e-10);
+        assert_relative_eq!(interp.evaluate(2.5).unwrap(), 6.0, epsilon = 1e-10);
+        assert_relative_eq!(interp.evaluate(3.5).unwrap(), 8.0, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_cubic_nonuniform_grid() {
+        // Validated against scipy CubicSpline(x, y, bc_type='not-a-knot')
+        let x = array![0.0, 0.3, 0.8, 1.5, 2.0, 3.0, 3.7, 4.0];
+        let y = array![
+            0.0_f64.sin(),
+            0.3_f64.sin(),
+            0.8_f64.sin(),
+            1.5_f64.sin(),
+            2.0_f64.sin(),
+            3.0_f64.sin(),
+            3.7_f64.sin(),
+            4.0_f64.sin()
+        ];
+
+        let interp = Interp1d::new(
+            &x.view(),
+            &y.view(),
+            InterpolationMethod::Cubic,
+            ExtrapolateMode::Error,
+        )
+        .unwrap();
+
+        // scipy reference values
+        assert_relative_eq!(interp.evaluate(0.1).unwrap(), 0.099910627848514, epsilon = 1e-10);
+        assert_relative_eq!(interp.evaluate(0.5).unwrap(), 0.479425652347223, epsilon = 1e-10);
+        assert_relative_eq!(interp.evaluate(1.0).unwrap(), 0.840731841607741, epsilon = 1e-10);
+        assert_relative_eq!(interp.evaluate(2.5).unwrap(), 0.595388243453342, epsilon = 1e-10);
+        assert_relative_eq!(interp.evaluate(3.5).unwrap(), -0.349966440965012, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_cubic_3_points() {
+        // n=3: falls back to quadratic fit, matching scipy
+        let x = array![0.0, 1.0, 3.0];
+        let y = array![1.0, 2.0, 0.0];
+
+        let interp = Interp1d::new(
+            &x.view(),
+            &y.view(),
+            InterpolationMethod::Cubic,
+            ExtrapolateMode::Error,
+        )
+        .unwrap();
+
+        // scipy CubicSpline([0,1,3],[1,2,0], bc_type='not-a-knot')
+        assert_relative_eq!(interp.evaluate(0.5).unwrap(), 1.666666666666667, epsilon = 1e-10);
+        assert_relative_eq!(interp.evaluate(1.5).unwrap(), 2.0, epsilon = 1e-10);
+        assert_relative_eq!(interp.evaluate(2.0).unwrap(), 1.666666666666667, epsilon = 1e-10);
     }
 
     #[test]
@@ -642,14 +760,14 @@ mod tests {
         assert_relative_eq!(y_linear[1], 2.5);
         assert_relative_eq!(y_linear[2], 6.5);
 
-        // Test cubic interpolation
+        // Test cubic interpolation (not-a-knot spline reproduces quadratics exactly)
+        let x5 = array![0.0, 1.0, 2.0, 3.0, 4.0];
+        let y5 = array![0.0, 1.0, 4.0, 9.0, 16.0];
         let y_cubic =
-            cubic_interpolate(&x.view(), &y.view(), &xnew.view()).expect("Operation failed");
-        // Allow a wider tolerance for cubic interpolation since it depends on the specific spline implementation
-        assert!((y_cubic[0] - 0.25).abs() < 0.15);
-        assert!((y_cubic[1] - 2.25).abs() < 0.15);
-        // For point 2.5, allow an even wider tolerance
-        assert!((y_cubic[2] - 6.25).abs() < 1.0);
+            cubic_interpolate(&x5.view(), &y5.view(), &xnew.view()).expect("Operation failed");
+        assert_relative_eq!(y_cubic[0], 0.25, epsilon = 1e-10);
+        assert_relative_eq!(y_cubic[1], 2.25, epsilon = 1e-10);
+        assert_relative_eq!(y_cubic[2], 6.25, epsilon = 1e-10);
 
         // Test PCHIP interpolation
         let y_pchip =
@@ -686,16 +804,29 @@ mod tests {
         );
         assert!(result.is_err());
 
-        // Test too few points for cubic
+        // Test too few points for cubic (1 point should fail, 2 points should succeed with linear fallback)
+        let x_one = array![0.0];
+        let y_one = array![0.0];
+
+        let result = Interp1d::new(
+            &x_one.view(),
+            &y_one.view(),
+            InterpolationMethod::Cubic,
+            ExtrapolateMode::Error,
+        );
+        assert!(result.is_err());
+
+        // 2 points should succeed (linear fallback)
         let x_short = array![0.0, 1.0];
         let y_short = array![0.0, 1.0];
-
         let result = Interp1d::new(
             &x_short.view(),
             &y_short.view(),
             InterpolationMethod::Cubic,
             ExtrapolateMode::Error,
         );
-        assert!(result.is_err());
+        assert!(result.is_ok());
+        let interp = result.unwrap();
+        assert_relative_eq!(interp.evaluate(0.5).unwrap(), 0.5, epsilon = 1e-12);
     }
 }

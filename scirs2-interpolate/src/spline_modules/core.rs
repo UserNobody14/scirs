@@ -304,22 +304,20 @@ impl<F: InterpolationFloat + ToString> CubicSpline<F> {
     /// - x coordinates are not sorted
     /// - Numerical issues during construction
     pub fn new_not_a_knot(x: &ArrayView1<F>, y: &ArrayView1<F>) -> InterpolateResult<Self> {
-        // Check inputs
         if x.len() != y.len() {
             return Err(InterpolateError::invalid_input(
                 "x and y arrays must have the same length".to_string(),
             ));
         }
 
-        if x.len() < 4 {
+        if x.len() < 2 {
             return Err(InterpolateError::insufficient_points(
-                4,
+                2,
                 x.len(),
                 "not-a-knot cubic spline",
             ));
         }
 
-        // Check that x is sorted
         for i in 1..x.len() {
             if x[i] <= x[i - 1] {
                 return Err(InterpolateError::invalid_input(
@@ -328,7 +326,62 @@ impl<F: InterpolationFloat + ToString> CubicSpline<F> {
             }
         }
 
-        // Get coefficients for not-a-knot cubic spline
+        let n = x.len();
+
+        if n == 2 {
+            // Linear fallback: y = y0 + slope*(x - x0), stored as cubic with c=d=0
+            let h = x[1] - x[0];
+            let slope = (y[1] - y[0]) / h;
+            let mut coeffs = Array2::<F>::zeros((1, 4));
+            coeffs[[0, 0]] = y[0];
+            coeffs[[0, 1]] = slope;
+            return Ok(CubicSpline {
+                x: x.to_owned(),
+                y: y.to_owned(),
+                coeffs,
+            });
+        }
+
+        if n == 3 {
+            // Quadratic (parabolic) fit through 3 points, matching scipy's behavior.
+            // Fit y = a + b*(x-x0) + c*(x-x0)^2 using Lagrange interpolation,
+            // then express each segment as a cubic with d=0.
+            let h0 = x[1] - x[0];
+            let h1 = x[2] - x[1];
+            let d0 = (y[1] - y[0]) / h0;
+            let d1 = (y[2] - y[1]) / h1;
+            let c_val = (d1 - d0) / (x[2] - x[0]);
+
+            let mut coeffs = Array2::<F>::zeros((2, 4));
+            // Segment 0: [x0, x1]
+            coeffs[[0, 0]] = y[0];
+            coeffs[[0, 1]] = d0 - c_val * h0; // first derivative at x0
+            // Actually for the quadratic a + b*(x-x0) + c*(x-x0)^2:
+            // y(x0) = a = y[0], y(x1) = a + b*h0 + c*h0^2 = y[1], y(x2) = a + b*(x2-x0) + c*(x2-x0)^2 = y[2]
+            // b = d0 - c*h0
+            // But we need segment-local coefficients.
+            let b0 = d0 - c_val * h0;
+            coeffs[[0, 0]] = y[0];
+            coeffs[[0, 1]] = b0;
+            coeffs[[0, 2]] = c_val;
+            coeffs[[0, 3]] = F::zero();
+
+            // Segment 1: [x1, x2], re-expand about x1
+            // y(x) = y0 + b0*(x-x0) + c*(x-x0)^2
+            // At x1: y'(x1) = b0 + 2*c*h0
+            let b1 = b0 + F::from_f64(2.0).unwrap() * c_val * h0;
+            coeffs[[1, 0]] = y[1];
+            coeffs[[1, 1]] = b1;
+            coeffs[[1, 2]] = c_val;
+            coeffs[[1, 3]] = F::zero();
+
+            return Ok(CubicSpline {
+                x: x.to_owned(),
+                y: y.to_owned(),
+                coeffs,
+            });
+        }
+
         let coeffs = compute_not_a_knot_cubic_spline(x, y)?;
 
         Ok(CubicSpline {

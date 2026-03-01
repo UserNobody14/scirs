@@ -212,150 +212,137 @@ pub fn compute_not_a_knot_cubic_spline<F: InterpolationFloat>(
     let n = x.len();
     let n_segments = n - 1;
 
-    // Create array to hold the coefficients (n-1 segments x 4 coefficients)
+    let two = F::from_f64(2.0).ok_or_else(|| {
+        InterpolateError::ComputationError(
+            "Failed to convert constant 2.0 to float type".to_string(),
+        )
+    })?;
+    let six = F::from_f64(6.0).ok_or_else(|| {
+        InterpolateError::ComputationError(
+            "Failed to convert constant 6.0 to float type".to_string(),
+        )
+    })?;
+
     let mut coeffs = Array2::<F>::zeros((n_segments, 4));
 
-    // Step 1: Calculate the second derivatives at each point
-
-    // Set up the tridiagonal system
-    let mut a = Array1::<F>::zeros(n);
-    let mut b = Array1::<F>::zeros(n);
-    let mut c = Array1::<F>::zeros(n);
-    let mut d = Array1::<F>::zeros(n);
-
-    // Not-a-knot condition at first interior point
-    let h0 = x[1] - x[0];
-    let h1 = x[2] - x[1];
-
-    // Check for zero intervals
-    if h0.is_zero() || h1.is_zero() || (h0 + h1).is_zero() {
-        return Err(InterpolateError::ComputationError(
-            "Zero interval length in not-a-knot spline boundary conditions".to_string(),
-        ));
-    }
-
-    b[0] = h1;
-    c[0] = h0 + h1;
-    d[0] = ((h0 + h1) * h1 * (y[1] - y[0]) / h0 + h0 * h0 * (y[2] - y[1]) / h1) / (h0 + h1);
-
-    // Not-a-knot condition at last interior point
-    let hn_2 = x[n - 2] - x[n - 3];
-    let hn_1 = x[n - 1] - x[n - 2];
-
-    // Check for zero intervals
-    if hn_1.is_zero() || hn_2.is_zero() || (hn_1 + hn_2).is_zero() {
-        return Err(InterpolateError::ComputationError(
-            "Zero interval length in not-a-knot spline boundary conditions".to_string(),
-        ));
-    }
-
-    a[n - 1] = hn_1 + hn_2;
-    b[n - 1] = hn_2;
-    d[n - 1] = ((hn_1 + hn_2) * hn_2 * (y[n - 1] - y[n - 2]) / hn_1
-        + hn_1 * hn_1 * (y[n - 2] - y[n - 3]) / hn_2)
-        / (hn_1 + hn_2);
-
-    // Fill in the tridiagonal system for interior points
-    for i in 1..n - 1 {
-        let h_i_minus_1 = x[i] - x[i - 1];
-        let h_i = x[i + 1] - x[i];
-
-        // Check for zero intervals
-        if h_i.is_zero() || h_i_minus_1.is_zero() {
+    // Compute interval lengths and divided differences
+    let mut h = Vec::with_capacity(n_segments);
+    let mut delta = Vec::with_capacity(n_segments);
+    for i in 0..n_segments {
+        let hi = x[i + 1] - x[i];
+        if hi.is_zero() || hi < F::zero() {
             return Err(InterpolateError::ComputationError(
-                "Zero interval length in not-a-knot spline computation".to_string(),
+                "Zero or negative interval length in not-a-knot spline".to_string(),
             ));
         }
-
-        a[i] = h_i_minus_1;
-        let two = F::from_f64(2.0).ok_or_else(|| {
-            InterpolateError::ComputationError(
-                "Failed to convert constant 2.0 to float type".to_string(),
-            )
-        })?;
-        b[i] = two * (h_i_minus_1 + h_i);
-        c[i] = h_i;
-
-        let dy_i_minus_1 = y[i] - y[i - 1];
-        let dy_i = y[i + 1] - y[i];
-
-        let six = F::from_f64(6.0).ok_or_else(|| {
-            InterpolateError::ComputationError(
-                "Failed to convert constant 6.0 to float type".to_string(),
-            )
-        })?;
-        d[i] = six * (dy_i / h_i - dy_i_minus_1 / h_i_minus_1);
+        h.push(hi);
+        delta.push((y[i + 1] - y[i]) / hi);
     }
 
-    // Solve the tridiagonal system using the Thomas algorithm
-    let mut sigma = Array1::<F>::zeros(n);
+    // Solve for second derivatives (sigma) at interior points 1..n-2 using a
+    // tridiagonal system of size (n-2), then recover sigma[0] and sigma[n-1]
+    // from the not-a-knot relations:
+    //   sigma[0]   = ((h[0]+h[1])/h[1]) * sigma[1] - (h[0]/h[1]) * sigma[2]
+    //   sigma[n-1] = ((h[n-2]+h[n-3])/h[n-3]) * sigma[n-2] - (h[n-2]/h[n-3]) * sigma[n-3]
+    let m = n - 2; // number of interior unknowns sigma[1..n-2]
 
+    // Build the interior tridiagonal system: for interior point i (1-indexed in
+    // the original, 0-indexed here as j = i-1 with 0 <= j < m):
+    //   h[i-1]*sigma[i-1] + 2*(h[i-1]+h[i])*sigma[i] + h[i]*sigma[i+1] = 6*(delta[i]-delta[i-1])
+    //
+    // At j=0 (i=1), substitute sigma[0] using the left not-a-knot relation.
+    // At j=m-1 (i=n-2), substitute sigma[n-1] using the right not-a-knot relation.
+    let mut al = vec![F::zero(); m]; // lower diagonal
+    let mut bl = vec![F::zero(); m]; // main diagonal
+    let mut cl = vec![F::zero(); m]; // upper diagonal
+    let mut dl = vec![F::zero(); m]; // rhs
+
+    for j in 0..m {
+        let i = j + 1; // original index
+        let rhs = six * (delta[i] - delta[i - 1]);
+
+        if j == 0 && j == m - 1 {
+            // n=4: both boundary substitutions apply to the same rows
+            // Left not-a-knot: sigma[0] = ((h[0]+h[1])/h[1])*sigma[1] - (h[0]/h[1])*sigma[2]
+            // Right not-a-knot: sigma[3] = ((h[2]+h[1])/h[1])*sigma[2] - (h[2]/h[1])*sigma[1]
+            // But m=2 here, so this case is n=4 with m=2.
+            // Actually if j==0 && j==m-1 then m=1, meaning n=3. But n>=4 is
+            // required. For n=4, m=2 so this branch won't be hit.
+            // For safety, use the standard interior equation.
+            al[j] = h[i - 1];
+            bl[j] = two * (h[i - 1] + h[i]);
+            cl[j] = h[i];
+            dl[j] = rhs;
+        } else if j == 0 {
+            // Substitute sigma[0] = ((h0+h1)/h1)*sigma[1] - (h0/h1)*sigma[2]
+            // Original row: h[0]*sigma[0] + 2*(h[0]+h[1])*sigma[1] + h[1]*sigma[2] = rhs
+            // After substitution:
+            //   h[0]*((h0+h1)/h1)*sigma[1] - h[0]*(h0/h1)*sigma[2] + 2*(h0+h1)*sigma[1] + h[1]*sigma[2]
+            //   = [h[0]*(h0+h1)/h1 + 2*(h0+h1)] * sigma[1] + [h[1] - h[0]*h[0]/h[1]] * sigma[2]
+            let h0 = h[0];
+            let h1 = h[1];
+            bl[j] = h0 * (h0 + h1) / h1 + two * (h0 + h1);
+            cl[j] = h1 - h0 * h0 / h1;
+            dl[j] = rhs;
+        } else if j == m - 1 {
+            // Substitute sigma[n-1] = ((h[n-2]+h[n-3])/h[n-3])*sigma[n-2] - (h[n-2]/h[n-3])*sigma[n-3]
+            // Original row: h[i-1]*sigma[i-1] + 2*(h[i-1]+h[i])*sigma[i] + h[i]*sigma[i+1] = rhs
+            // where sigma[i+1] = sigma[n-1], h[i] = h[n-2], h[i-1] = h[n-3]
+            let hlast = h[n_segments - 1]; // h[n-2]
+            let hprev = h[n_segments - 2]; // h[n-3]
+            al[j] = hprev - hlast * hlast / hprev;
+            bl[j] = hlast * (hlast + hprev) / hprev + two * (hprev + hlast);
+            dl[j] = rhs;
+        } else {
+            al[j] = h[i - 1];
+            bl[j] = two * (h[i - 1] + h[i]);
+            cl[j] = h[i];
+            dl[j] = rhs;
+        }
+    }
+
+    // Solve the tridiagonal system with Thomas algorithm
     // Forward sweep
-    let mut c_prime = Array1::<F>::zeros(n);
-
-    // Check for division by zero in first step
-    if b[0].is_zero() {
-        return Err(InterpolateError::ComputationError(
-            "Zero diagonal element in not-a-knot Thomas algorithm".to_string(),
-        ));
-    }
-    c_prime[0] = c[0] / b[0];
-
-    for i in 1..n {
-        let m = b[i] - a[i] * c_prime[i - 1];
-
-        // Check for division by zero
-        if m.is_zero() {
+    for j in 1..m {
+        if bl[j - 1].is_zero() {
             return Err(InterpolateError::ComputationError(
-                "Zero diagonal element in not-a-knot Thomas algorithm".to_string(),
+                "Zero pivot in not-a-knot Thomas algorithm".to_string(),
             ));
         }
-
-        if i < n - 1 {
-            c_prime[i] = c[i] / m;
-        }
-        d[i] = (d[i] - a[i] * d[i - 1]) / m;
+        let w = al[j] / bl[j - 1];
+        bl[j] = bl[j] - w * cl[j - 1];
+        dl[j] = dl[j] - w * dl[j - 1];
     }
 
     // Back substitution
-    sigma[n - 1] = d[n - 1];
-    for i in (0..n - 1).rev() {
-        sigma[i] = d[i] - c_prime[i] * sigma[i + 1];
+    let mut sigma = Array1::<F>::zeros(n);
+    if bl[m - 1].is_zero() {
+        return Err(InterpolateError::ComputationError(
+            "Zero pivot in not-a-knot Thomas algorithm".to_string(),
+        ));
     }
-
-    // Step 2: Calculate the polynomial coefficients
-    for i in 0..n_segments {
-        let h_i = x[i + 1] - x[i];
-
-        // Check for division by zero in coefficient calculation
-        if h_i.is_zero() {
+    sigma[m] = dl[m - 1] / bl[m - 1]; // sigma[n-2]
+    for j in (0..m - 1).rev() {
+        if bl[j].is_zero() {
             return Err(InterpolateError::ComputationError(
-                "Zero interval length in not-a-knot spline coefficient calculation".to_string(),
+                "Zero pivot in not-a-knot Thomas algorithm".to_string(),
             ));
         }
+        sigma[j + 1] = (dl[j] - cl[j] * sigma[j + 2]) / bl[j];
+    }
 
-        let two = F::from_f64(2.0).ok_or_else(|| {
-            InterpolateError::ComputationError(
-                "Failed to convert constant 2.0 to float type".to_string(),
-            )
-        })?;
-        let six = F::from_f64(6.0).ok_or_else(|| {
-            InterpolateError::ComputationError(
-                "Failed to convert constant 6.0 to float type".to_string(),
-            )
-        })?;
+    // Recover boundary second derivatives from not-a-knot relations
+    sigma[0] = ((h[0] + h[1]) / h[1]) * sigma[1] - (h[0] / h[1]) * sigma[2];
+    sigma[n - 1] = ((h[n_segments - 1] + h[n_segments - 2]) / h[n_segments - 2]) * sigma[n - 2]
+        - (h[n_segments - 1] / h[n_segments - 2]) * sigma[n - 3];
 
-        // a is just the y value at the left endpoint
+    // Calculate polynomial coefficients for each segment
+    for i in 0..n_segments {
+        let hi = h[i];
         coeffs[[i, 0]] = y[i];
-
-        // b is the first derivative at the left endpoint
-        coeffs[[i, 1]] = (y[i + 1] - y[i]) / h_i - h_i * (two * sigma[i] + sigma[i + 1]) / six;
-
-        // c is half the second derivative at the left endpoint
+        coeffs[[i, 1]] = (y[i + 1] - y[i]) / hi - hi * (two * sigma[i] + sigma[i + 1]) / six;
         coeffs[[i, 2]] = sigma[i] / two;
-
-        // d is the rate of change of the second derivative / 6
-        coeffs[[i, 3]] = (sigma[i + 1] - sigma[i]) / (six * h_i);
+        coeffs[[i, 3]] = (sigma[i + 1] - sigma[i]) / (six * hi);
     }
 
     Ok(coeffs)
