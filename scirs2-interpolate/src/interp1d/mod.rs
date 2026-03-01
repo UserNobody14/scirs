@@ -14,6 +14,7 @@ pub use monotonic::{
 };
 pub use pchip::{pchip_interpolate, PchipInterpolator};
 
+use crate::advanced::akima::AkimaSpline;
 use crate::error::{InterpolateError, InterpolateResult};
 use crate::spline::CubicSpline;
 use crate::traits::InterpolationFloat;
@@ -29,10 +30,13 @@ pub enum InterpolationMethod {
     /// Linear interpolation
     #[default]
     Linear,
-    /// Cubic interpolation
+    /// Cubic interpolation (not-a-knot cubic spline, matching scipy `kind='cubic'`)
     Cubic,
     /// PCHIP interpolation (monotonic)
     Pchip,
+    /// Modified Akima (Makima) interpolation, matching scipy's
+    /// `Akima1DInterpolator(method='makima')`
+    Makima,
 }
 
 /// Options for extrapolation behavior
@@ -200,8 +204,7 @@ impl<F: InterpolationFloat + ToString> Interp1d<F> {
                         return pchip.evaluate(xnew);
                     }
                     if self.method == InterpolationMethod::Cubic {
-                        let spline =
-                            CubicSpline::new_not_a_knot(&self.x.view(), &self.y.view())?;
+                        let spline = CubicSpline::new_not_a_knot(&self.x.view(), &self.y.view())?;
                         let n = self.x.len();
                         let seg = if xnew < self.x[0] { 0 } else { n - 2 };
                         let dx = xnew - self.x[seg];
@@ -211,6 +214,11 @@ impl<F: InterpolationFloat + ToString> Interp1d<F> {
                             + c[[seg, 2]] * dx * dx
                             + c[[seg, 3]] * dx * dx * dx;
                         return Ok(result);
+                    }
+                    if self.method == InterpolationMethod::Makima {
+                        let spline = AkimaSpline::new_makima(&self.x.view(), &self.y.view())?
+                            .with_extrapolation(ExtrapolateMode::Extrapolate);
+                        return spline.evaluate(xnew);
                     }
                     // For other methods, use linear extrapolation based on edge segments
                     if xnew < self.x[0] {
@@ -248,17 +256,18 @@ impl<F: InterpolationFloat + ToString> Interp1d<F> {
             }
             InterpolationMethod::Linear => linear_interp(&self.x.view(), &self.y.view(), idx, xnew),
             InterpolationMethod::Cubic => {
-                let spline =
-                    CubicSpline::new_not_a_knot(&self.x.view(), &self.y.view())?;
+                let spline = CubicSpline::new_not_a_knot(&self.x.view(), &self.y.view())?;
                 spline.evaluate(xnew)
             }
             InterpolationMethod::Pchip => {
-                // For PCHIP, we'll create a PCHIP interpolator and use it
-                // This is not the most efficient approach, but it keeps the interface consistent
                 let extrapolate = self.extrapolate == ExtrapolateMode::Extrapolate
                     || self.extrapolate == ExtrapolateMode::Nearest;
                 let pchip = PchipInterpolator::new(&self.x.view(), &self.y.view(), extrapolate)?;
                 pchip.evaluate(xnew)
+            }
+            InterpolationMethod::Makima => {
+                let spline = AkimaSpline::new_makima(&self.x.view(), &self.y.view())?;
+                spline.evaluate(xnew)
             }
         }
     }
@@ -624,11 +633,31 @@ mod tests {
         .unwrap();
 
         // scipy reference values
-        assert_relative_eq!(interp.evaluate(0.1).unwrap(), 0.099910627848514, epsilon = 1e-10);
-        assert_relative_eq!(interp.evaluate(0.5).unwrap(), 0.479425652347223, epsilon = 1e-10);
-        assert_relative_eq!(interp.evaluate(1.0).unwrap(), 0.840731841607741, epsilon = 1e-10);
-        assert_relative_eq!(interp.evaluate(2.5).unwrap(), 0.595388243453342, epsilon = 1e-10);
-        assert_relative_eq!(interp.evaluate(3.5).unwrap(), -0.349966440965012, epsilon = 1e-10);
+        assert_relative_eq!(
+            interp.evaluate(0.1).unwrap(),
+            0.099910627848514,
+            epsilon = 1e-10
+        );
+        assert_relative_eq!(
+            interp.evaluate(0.5).unwrap(),
+            0.479425652347223,
+            epsilon = 1e-10
+        );
+        assert_relative_eq!(
+            interp.evaluate(1.0).unwrap(),
+            0.840731841607741,
+            epsilon = 1e-10
+        );
+        assert_relative_eq!(
+            interp.evaluate(2.5).unwrap(),
+            0.595388243453342,
+            epsilon = 1e-10
+        );
+        assert_relative_eq!(
+            interp.evaluate(3.5).unwrap(),
+            -0.349966440965012,
+            epsilon = 1e-10
+        );
     }
 
     #[test]
@@ -646,9 +675,17 @@ mod tests {
         .unwrap();
 
         // scipy CubicSpline([0,1,3],[1,2,0], bc_type='not-a-knot')
-        assert_relative_eq!(interp.evaluate(0.5).unwrap(), 1.666666666666667, epsilon = 1e-10);
+        assert_relative_eq!(
+            interp.evaluate(0.5).unwrap(),
+            1.666666666666667,
+            epsilon = 1e-10
+        );
         assert_relative_eq!(interp.evaluate(1.5).unwrap(), 2.0, epsilon = 1e-10);
-        assert_relative_eq!(interp.evaluate(2.0).unwrap(), 1.666666666666667, epsilon = 1e-10);
+        assert_relative_eq!(
+            interp.evaluate(2.0).unwrap(),
+            1.666666666666667,
+            epsilon = 1e-10
+        );
     }
 
     #[test]

@@ -454,7 +454,7 @@ pub use adaptive_singularity::{
     apply_singularity_handling, SingularityDetector, SingularityDetectorConfig, SingularityInfo,
     SingularityType, TreatmentStrategy,
 };
-pub use advanced::akima::{make_akima_spline, AkimaSpline};
+pub use advanced::akima::{make_akima_spline, make_makima_spline, AkimaMethod, AkimaSpline};
 pub use advanced::barycentric::{
     make_barycentric_interpolator, BarycentricInterpolator, BarycentricTriangulation,
 };

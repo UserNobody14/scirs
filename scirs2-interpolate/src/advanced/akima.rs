@@ -1,13 +1,29 @@
 //! Akima spline interpolation
 //!
-//! This module provides Akima spline interpolation, which is designed
-//! to be more robust to outliers than cubic splines.
+//! This module provides Akima and Modified Akima (Makima) spline interpolation.
+//! Both are designed to be more robust to outliers than cubic splines.
+//!
+//! - **Original Akima (1970)**: Uses weights based on differences between
+//!   successive slopes to avoid overshooting.
+//! - **Makima** (scipy-compatible): Adds a bias term `½|δ_a + δ_b|` to the
+//!   weights, providing better resistance to outliers and flat regions without
+//!   enforcing strict monotonicity.
 
 use crate::error::{InterpolateError, InterpolateResult};
 use crate::interp1d::ExtrapolateMode;
 use scirs2_core::ndarray::{Array1, Array2, ArrayView1};
 use scirs2_core::numeric::{Float, FromPrimitive};
 use std::fmt::Debug;
+
+/// Selects between the original Akima and the Modified Akima (Makima) algorithm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AkimaMethod {
+    /// Original Akima (1970) — weights based on slope differences.
+    Original,
+    /// Modified Akima (Makima) — adds a bias toward segments with larger
+    /// absolute slopes, matching scipy's `Akima1DInterpolator(method='makima')`.
+    Makima,
+}
 
 /// Akima spline interpolation object
 ///
@@ -28,7 +44,7 @@ pub struct AkimaSpline<F: Float + FromPrimitive> {
 }
 
 impl<F: Float + FromPrimitive + Debug> AkimaSpline<F> {
-    /// Create a new Akima spline
+    /// Create a new Akima spline (original 1970 algorithm).
     ///
     /// # Arguments
     ///
@@ -55,7 +71,37 @@ impl<F: Float + FromPrimitive + Debug> AkimaSpline<F> {
     /// println!("Interpolated value at x=2.5: {}", y_interp);
     /// ```
     pub fn new(x: &ArrayView1<F>, y: &ArrayView1<F>) -> InterpolateResult<Self> {
-        // Check inputs
+        Self::with_method(x, y, AkimaMethod::Original)
+    }
+
+    /// Create a new Modified Akima (Makima) spline.
+    ///
+    /// Makima adds a `½|δ_a + δ_b|` bias term to the Akima weights, which
+    /// provides better resistance to outliers and flat regions. This matches
+    /// scipy's `Akima1DInterpolator(x, y, method='makima')`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use scirs2_core::ndarray::array;
+    /// use scirs2_interpolate::advanced::akima::AkimaSpline;
+    ///
+    /// let x = array![0.0f64, 1.0, 2.0, 3.0, 4.0, 5.0];
+    /// let y = array![0.0f64, 1.0, 4.0, 20.0, 16.0, 25.0];
+    ///
+    /// let spline = AkimaSpline::new_makima(&x.view(), &y.view()).expect("Operation failed");
+    /// let y_interp = spline.evaluate(2.5).expect("Operation failed");
+    /// ```
+    pub fn new_makima(x: &ArrayView1<F>, y: &ArrayView1<F>) -> InterpolateResult<Self> {
+        Self::with_method(x, y, AkimaMethod::Makima)
+    }
+
+    /// Shared constructor for both Akima and Makima.
+    pub fn with_method(
+        x: &ArrayView1<F>,
+        y: &ArrayView1<F>,
+        method: AkimaMethod,
+    ) -> InterpolateResult<Self> {
         if x.len() != y.len() {
             return Err(InterpolateError::invalid_input(
                 "x and y arrays must have the same length".to_string(),
@@ -68,7 +114,6 @@ impl<F: Float + FromPrimitive + Debug> AkimaSpline<F> {
             ));
         }
 
-        // Check that x is strictly increasing
         for i in 1..x.len() {
             if x[i] <= x[i - 1] {
                 return Err(InterpolateError::invalid_input(
@@ -77,10 +122,11 @@ impl<F: Float + FromPrimitive + Debug> AkimaSpline<F> {
             }
         }
 
-        // Create Akima spline
         let n = x.len();
+        let two = F::from_f64(2.0).expect("float conversion");
+        let three = F::from_f64(3.0).expect("float conversion");
+        let half = F::from_f64(0.5).expect("float conversion");
 
-        // n == 2: degenerate to linear interpolation (single segment)
         if n == 2 {
             let dx = x[1] - x[0];
             let dy = y[1] - y[0];
@@ -96,32 +142,34 @@ impl<F: Float + FromPrimitive + Debug> AkimaSpline<F> {
             });
         }
 
-        // n >= 3: full Akima algorithm
+        // Compute segment slopes and extend with boundary slopes
         let mut slopes = Array1::zeros(n + 3);
-
-        // Calculate the slopes
         for i in 0..n - 1 {
-            let m_i = (y[i + 1] - y[i]) / (x[i + 1] - x[i]);
-            slopes[i + 2] = m_i;
+            slopes[i + 2] = (y[i + 1] - y[i]) / (x[i + 1] - x[i]);
         }
+        slopes[1] = two * slopes[2] - slopes[3];
+        slopes[0] = three * slopes[2] - two * slopes[3];
+        slopes[n + 1] = two * slopes[n] - slopes[n - 1];
+        slopes[n + 2] = three * slopes[n] - two * slopes[n - 1];
 
-        // Artificial end slopes (Akima's formula)
-        slopes[0] = F::from_f64(3.0).expect("Operation failed") * slopes[2]
-            - F::from_f64(2.0).expect("Operation failed") * slopes[3];
-        slopes[1] = F::from_f64(2.0).expect("Operation failed") * slopes[2] - slopes[3];
-        slopes[n + 1] = F::from_f64(2.0).expect("Operation failed") * slopes[n] - slopes[n - 1];
-        slopes[n + 2] = F::from_f64(3.0).expect("Operation failed") * slopes[n]
-            - F::from_f64(2.0).expect("Operation failed") * slopes[n - 1];
-
-        // Derivatives at each point using Akima's weighted formula
+        // Compute derivatives with method-specific weights
         let mut derivatives = Array1::zeros(n);
         for i in 0..n {
-            let w1 = (slopes[i + 3] - slopes[i + 2]).abs();
-            let w2 = (slopes[i + 1] - slopes[i]).abs();
+            let (w1, w2) = match method {
+                AkimaMethod::Original => (
+                    (slopes[i + 3] - slopes[i + 2]).abs(),
+                    (slopes[i + 1] - slopes[i]).abs(),
+                ),
+                AkimaMethod::Makima => (
+                    (slopes[i + 3] - slopes[i + 2]).abs()
+                        + half * (slopes[i + 3] + slopes[i + 2]).abs(),
+                    (slopes[i + 1] - slopes[i]).abs()
+                        + half * (slopes[i + 1] + slopes[i]).abs(),
+                ),
+            };
 
             if w1 + w2 == F::zero() {
-                derivatives[i] =
-                    (slopes[i + 1] + slopes[i + 2]) / F::from_f64(2.0).expect("Operation failed");
+                derivatives[i] = (slopes[i + 1] + slopes[i + 2]) / two;
             } else {
                 derivatives[i] = (w1 * slopes[i + 1] + w2 * slopes[i + 2]) / (w1 + w2);
             }
@@ -132,21 +180,12 @@ impl<F: Float + FromPrimitive + Debug> AkimaSpline<F> {
         for i in 0..n - 1 {
             let dx = x[i + 1] - x[i];
             let dy = y[i + 1] - y[i];
-
-            let a = y[i];
-            let b = derivatives[i];
-            let c = (F::from_f64(3.0).expect("Operation failed") * dy / dx
-                - F::from_f64(2.0).expect("Operation failed") * derivatives[i]
-                - derivatives[i + 1])
-                / dx;
-            let d = (derivatives[i] + derivatives[i + 1]
-                - F::from_f64(2.0).expect("Operation failed") * dy / dx)
-                / (dx * dx);
-
-            coeffs[[i, 0]] = a;
-            coeffs[[i, 1]] = b;
-            coeffs[[i, 2]] = c;
-            coeffs[[i, 3]] = d;
+            coeffs[[i, 0]] = y[i];
+            coeffs[[i, 1]] = derivatives[i];
+            coeffs[[i, 2]] =
+                (three * dy / dx - two * derivatives[i] - derivatives[i + 1]) / dx;
+            coeffs[[i, 3]] =
+                (derivatives[i] + derivatives[i + 1] - two * dy / dx) / (dx * dx);
         }
 
         Ok(Self {
@@ -339,6 +378,30 @@ pub fn akima_interpolate<F: crate::traits::InterpolationFloat>(
     spline.evaluate_array(xnew)
 }
 
+/// Create a Makima (Modified Akima) spline interpolator.
+///
+/// Makima uses a modified weight formula that provides better resistance to
+/// outliers and flat regions compared to standard Akima, matching scipy's
+/// `Akima1DInterpolator(method='makima')`.
+#[allow(dead_code)]
+pub fn make_makima_spline<F: crate::traits::InterpolationFloat>(
+    x: &ArrayView1<F>,
+    y: &ArrayView1<F>,
+) -> InterpolateResult<AkimaSpline<F>> {
+    AkimaSpline::new_makima(x, y)
+}
+
+/// Convenience function for Makima interpolation
+#[allow(dead_code)]
+pub fn makima_interpolate<F: crate::traits::InterpolationFloat>(
+    x: &ArrayView1<F>,
+    y: &ArrayView1<F>,
+    xnew: &ArrayView1<F>,
+) -> InterpolateResult<Array1<F>> {
+    let spline = AkimaSpline::new_makima(x, y)?;
+    spline.evaluate_array(xnew)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -432,5 +495,82 @@ mod tests {
             6.25,
             epsilon = 0.5
         );
+    }
+
+    #[test]
+    fn test_makima_quadratic() {
+        // Validated against scipy Akima1DInterpolator(x, y, method='makima')
+        let x = array![0.0, 1.0, 2.0, 3.0, 4.0];
+        let y = array![0.0, 1.0, 4.0, 9.0, 16.0];
+
+        let spline = AkimaSpline::new_makima(&x.view(), &y.view()).unwrap();
+
+        assert_abs_diff_eq!(spline.evaluate(0.0).unwrap(), 0.0, epsilon = 1e-10);
+        assert_abs_diff_eq!(spline.evaluate(4.0).unwrap(), 16.0, epsilon = 1e-10);
+        assert_abs_diff_eq!(spline.evaluate(0.5).unwrap(), 0.3125, epsilon = 1e-10);
+        assert_abs_diff_eq!(spline.evaluate(1.5).unwrap(), 2.229166666666667, epsilon = 1e-10);
+        assert_abs_diff_eq!(spline.evaluate(2.5).unwrap(), 6.239583333333333, epsilon = 1e-10);
+        assert_abs_diff_eq!(spline.evaluate(3.5).unwrap(), 12.24375, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_makima_outlier() {
+        // Data with outlier — Makima should handle gracefully
+        let x = array![0.0, 1.0, 2.0, 3.0, 4.0, 5.0];
+        let y = array![0.0, 1.0, 4.0, 20.0, 16.0, 25.0];
+
+        let spline = AkimaSpline::new_makima(&x.view(), &y.view()).unwrap();
+
+        // scipy reference values
+        assert_abs_diff_eq!(spline.evaluate(0.5).unwrap(), 0.354591836734694, epsilon = 1e-10);
+        assert_abs_diff_eq!(spline.evaluate(1.5).unwrap(), 2.053741496598640, epsilon = 1e-10);
+        assert_abs_diff_eq!(spline.evaluate(2.5).unwrap(), 12.071929824561403, epsilon = 1e-10);
+        assert_abs_diff_eq!(spline.evaluate(3.5).unwrap(), 18.244507484307100, epsilon = 1e-10);
+        assert_abs_diff_eq!(spline.evaluate(4.5).unwrap(), 19.208343392885883, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_makima_flat_region() {
+        // Flat region: Makima's bias term should preserve flatness
+        let x = array![0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0];
+        let y = array![0.0, 1.0, 2.0, 2.0, 2.0, 3.0, 4.0];
+
+        let spline = AkimaSpline::new_makima(&x.view(), &y.view()).unwrap();
+
+        // scipy reference values
+        assert_abs_diff_eq!(spline.evaluate(2.5).unwrap(), 2.0, epsilon = 1e-10);
+        assert_abs_diff_eq!(spline.evaluate(3.5).unwrap(), 2.0, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_makima_nonuniform() {
+        // Non-uniform spacing
+        let x = array![0.0, 0.5, 1.5, 2.5, 4.0, 6.0];
+        let y = array![
+            0.0_f64.sin(),
+            0.5_f64.sin(),
+            1.5_f64.sin(),
+            2.5_f64.sin(),
+            4.0_f64.sin(),
+            6.0_f64.sin()
+        ];
+
+        let spline = AkimaSpline::new_makima(&x.view(), &y.view()).unwrap();
+
+        // scipy reference values
+        assert_abs_diff_eq!(spline.evaluate(0.25).unwrap(), 0.266926922017993, epsilon = 1e-10);
+        assert_abs_diff_eq!(spline.evaluate(1.0).unwrap(), 0.817077533496555, epsilon = 1e-10);
+        assert_abs_diff_eq!(spline.evaluate(2.0).unwrap(), 0.879850374523116, epsilon = 1e-10);
+        assert_abs_diff_eq!(spline.evaluate(3.0).unwrap(), 0.166959204644971, epsilon = 1e-10);
+        assert_abs_diff_eq!(spline.evaluate(5.0).unwrap(), -0.789629912809276, epsilon = 1e-10);
+    }
+
+    #[test]
+    fn test_make_makima_spline() {
+        let x = array![0.0, 1.0, 2.0, 3.0, 4.0, 5.0];
+        let y = array![0.0, 1.0, 4.0, 20.0, 16.0, 25.0];
+
+        let spline = make_makima_spline(&x.view(), &y.view()).unwrap();
+        assert_abs_diff_eq!(spline.evaluate(2.5).unwrap(), 12.071929824561403, epsilon = 1e-10);
     }
 }
