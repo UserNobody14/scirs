@@ -198,6 +198,7 @@ impl<F: Float + FromPrimitive + Debug> PchipInterpolator<F> {
             found
         };
 
+        // Get coordinates and derivatives for the segment
         let x1 = self.x[idx];
         let x2 = self.x[idx + 1];
         let y1 = self.y[idx];
@@ -205,14 +206,17 @@ impl<F: Float + FromPrimitive + Debug> PchipInterpolator<F> {
         let d1 = self.derivatives[idx];
         let d2 = self.derivatives[idx + 1];
 
+        // Normalized position within the interval [x1, x2]
         let h = x2 - x1;
         let t = (xnew - x1) / h;
 
+        // Compute Hermite basis functions
         let h00 = Self::h00(t);
         let h10 = Self::h10(t);
         let h01 = Self::h01(t);
         let h11 = Self::h11(t);
 
+        // Evaluate cubic Hermite polynomial
         Ok(h00 * y1 + h10 * h * d1 + h01 * y2 + h11 * h * d2)
     }
 
@@ -477,6 +481,41 @@ mod tests {
         let y_4_50 = interp.evaluate(4.50).expect("Operation failed");
         let y_4_75 = interp.evaluate(4.75).expect("Operation failed");
         assert!(y_4_25 <= y_4_50 && y_4_50 <= y_4_75);
+    }
+
+    fn test_pchip_extrapolation() {
+        let x = array![0.0, 1.0, 2.0, 3.0];
+        let y = array![0.0, 1.0, 4.0, 9.0];
+
+        // Test with extrapolation enabled
+        let interp_extrap =
+            PchipInterpolator::new(&x.view(), &y.view(), true).expect("Operation failed");
+        let y_minus_1 = interp_extrap.evaluate(-1.0).expect("Operation failed");
+        let y_plus_4 = interp_extrap.evaluate(4.0).expect("Operation failed");
+
+        // For this data, PCHIP computes derivatives that preserve shape
+        // The extrapolation uses linear extension based on endpoint derivatives
+        // Verify that extrapolation above the range increases beyond the last point
+        assert!(
+            y_plus_4 > 9.0,
+            "Extrapolation above should be greater than last point"
+        );
+
+        // Verify that extrapolation is finite (not NaN or infinite)
+        assert!(
+            y_minus_1.is_finite(),
+            "Extrapolation should produce finite values"
+        );
+        assert!(
+            y_plus_4.is_finite(),
+            "Extrapolation should produce finite values"
+        );
+
+        // Test with extrapolation disabled
+        let interp_no_extrap =
+            PchipInterpolator::new(&x.view(), &y.view(), false).expect("Operation failed");
+        assert!(interp_no_extrap.evaluate(-1.0).is_err());
+        assert!(interp_no_extrap.evaluate(4.0).is_err());
     }
 
     #[test]
