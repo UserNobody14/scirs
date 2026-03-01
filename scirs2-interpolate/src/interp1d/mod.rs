@@ -12,7 +12,7 @@ pub use monotonic::{
     hyman_interpolate, modified_akima_interpolate, monotonic_interpolate, steffen_interpolate,
     MonotonicInterpolator, MonotonicMethod,
 };
-pub use pchip::{pchip_interpolate, PchipInterpolator};
+pub use pchip::{pchip_interpolate, PchipExtrapolateMode, PchipInterpolator};
 
 use crate::error::{InterpolateError, InterpolateResult};
 use scirs2_core::ndarray::{Array1, ArrayView1};
@@ -192,9 +192,11 @@ impl<F: Float + FromPrimitive + Debug + std::fmt::Display> Interp1d<F> {
                     }
                 }
                 ExtrapolateMode::Extrapolate => {
-                    // PCHIP uses polynomial continuation via its own evaluator
+                    // PCHIP delegates to its own evaluator with polynomial
+                    // continuation (scipy-compatible behavior for Interp1d).
                     if self.method == InterpolationMethod::Pchip {
-                        let pchip = PchipInterpolator::new(&self.x.view(), &self.y.view(), true)?;
+                        let pchip = PchipInterpolator::new(&self.x.view(), &self.y.view(), true)?
+                            .with_extrapolate_mode(PchipExtrapolateMode::Polynomial);
                         return pchip.evaluate(xnew);
                     }
                     // For other methods, use linear extrapolation based on edge segments

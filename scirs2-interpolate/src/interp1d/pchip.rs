@@ -8,6 +8,19 @@ use scirs2_core::ndarray::{Array1, ArrayView1};
 use scirs2_core::numeric::{Float, FromPrimitive};
 use std::fmt::Debug;
 
+/// Strategy for PCHIP extrapolation outside the data range.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum PchipExtrapolateMode {
+    /// Linear extension using the endpoint derivative (bounded growth, stable
+    /// for far extrapolation). This is the default.
+    #[default]
+    Linear,
+    /// Hermite polynomial continuation of the boundary segment. Matches
+    /// `scipy.interpolate.PchipInterpolator(extrapolate=True)` but can grow
+    /// cubically for points far from the data range.
+    Polynomial,
+}
+
 /// PCHIP (Piecewise Cubic Hermite Interpolating Polynomial) interpolator
 ///
 /// This interpolator preserves monotonicity in the interpolation data and does
@@ -30,8 +43,10 @@ pub struct PchipInterpolator<F: Float> {
     y: Array1<F>,
     /// Derivatives at points
     derivatives: Array1<F>,
-    /// Extrapolation mode
+    /// Whether extrapolation is enabled
     extrapolate: bool,
+    /// Which strategy to use for extrapolation
+    extrapolate_mode: PchipExtrapolateMode,
 }
 
 impl<F: Float + FromPrimitive + Debug> PchipInterpolator<F> {
@@ -107,7 +122,20 @@ impl<F: Float + FromPrimitive + Debug> PchipInterpolator<F> {
             y: y_arr,
             derivatives,
             extrapolate,
+            extrapolate_mode: PchipExtrapolateMode::Linear,
         })
+    }
+
+    /// Switch to polynomial continuation for extrapolation.
+    ///
+    /// By default, PCHIP uses linear extension (derivative at the endpoint)
+    /// which is stable for far extrapolation. Polynomial continuation evaluates
+    /// the boundary segment's Hermite cubic beyond [0, 1], matching
+    /// `scipy.interpolate.PchipInterpolator(extrapolate=True)`, but can grow
+    /// cubically for points far from the data range.
+    pub fn with_extrapolate_mode(mut self, mode: PchipExtrapolateMode) -> Self {
+        self.extrapolate_mode = mode;
+        self
     }
 
     /// Evaluate the interpolation at the given point
@@ -127,7 +155,6 @@ impl<F: Float + FromPrimitive + Debug> PchipInterpolator<F> {
     pub fn evaluate(&self, xnew: F) -> InterpolateResult<F> {
         let n = self.x.len();
 
-        // Check if we're extrapolating
         let is_extrapolating = xnew < self.x[0] || xnew > self.x[n - 1];
         if is_extrapolating && !self.extrapolate {
             return Err(InterpolateError::OutOfBounds(
@@ -135,7 +162,19 @@ impl<F: Float + FromPrimitive + Debug> PchipInterpolator<F> {
             ));
         }
 
-        // Determine segment index: boundary segment for extrapolation, else search
+        if is_extrapolating && self.extrapolate_mode == PchipExtrapolateMode::Linear {
+            return if xnew < self.x[0] {
+                let dx = xnew - self.x[0];
+                Ok(self.y[0] + self.derivatives[0] * dx)
+            } else {
+                let dx = xnew - self.x[n - 1];
+                Ok(self.y[n - 1] + self.derivatives[n - 1] * dx)
+            };
+        }
+
+        // For in-bounds or Polynomial extrapolation, evaluate the Hermite cubic.
+        // Under Polynomial mode, t goes outside [0, 1] which naturally continues
+        // the boundary segment's cubic.
         let idx = if is_extrapolating {
             if xnew < self.x[0] { 0 } else { n - 2 }
         } else if xnew == self.x[n - 1] {
@@ -151,9 +190,6 @@ impl<F: Float + FromPrimitive + Debug> PchipInterpolator<F> {
             found
         };
 
-        // Evaluate the Hermite polynomial for segment `idx`.
-        // For extrapolation, t will be outside [0, 1] which naturally
-        // continues the polynomial (matching scipy PchipInterpolator).
         let x1 = self.x[idx];
         let x2 = self.x[idx + 1];
         let y1 = self.y[idx];
@@ -169,9 +205,7 @@ impl<F: Float + FromPrimitive + Debug> PchipInterpolator<F> {
         let h01 = Self::h01(t);
         let h11 = Self::h11(t);
 
-        let result = h00 * y1 + h10 * h * d1 + h01 * y2 + h11 * h * d2;
-
-        Ok(result)
+        Ok(h00 * y1 + h10 * h * d1 + h01 * y2 + h11 * h * d2)
     }
 
     /// Evaluate the interpolation at multiple points
@@ -438,62 +472,62 @@ mod tests {
     }
 
     #[test]
-    fn test_pchip_extrapolation() {
+    fn test_pchip_extrapolation_linear_default() {
         let x = array![0.0, 1.0, 2.0, 3.0];
         let y = array![0.0, 1.0, 4.0, 9.0];
 
-        // Test with extrapolation enabled
-        let interp_extrap =
+        let interp =
             PchipInterpolator::new(&x.view(), &y.view(), true).expect("Operation failed");
-        let y_minus_1 = interp_extrap.evaluate(-1.0).expect("Operation failed");
-        let y_plus_4 = interp_extrap.evaluate(4.0).expect("Operation failed");
 
-        // For this data, PCHIP computes derivatives that preserve shape
-        // The extrapolation uses linear extension based on endpoint derivatives
-        // Verify that extrapolation above the range increases beyond the last point
-        assert!(
-            y_plus_4 > 9.0,
-            "Extrapolation above should be greater than last point"
-        );
+        // Default extrapolation is linear: y = y_end + d_end * dx
+        let y_4 = interp.evaluate(4.0).expect("Operation failed");
+        let y_5 = interp.evaluate(5.0).expect("Operation failed");
 
-        // Verify that extrapolation is finite (not NaN or infinite)
-        assert!(
-            y_minus_1.is_finite(),
-            "Extrapolation should produce finite values"
-        );
-        assert!(
-            y_plus_4.is_finite(),
-            "Extrapolation should produce finite values"
-        );
+        // Slope should be constant (linear extension)
+        let slope_above = y_5 - y_4;
+        let last_deriv = interp.derivatives[interp.derivatives.len() - 1];
+        assert_relative_eq!(slope_above, last_deriv, epsilon = 1e-10);
 
-        // Test with extrapolation disabled
-        let interp_no_extrap =
+        assert!(y_4 > 9.0, "Extrapolation above should exceed last point");
+        assert!(y_4.is_finite());
+
+        // Far extrapolation stays bounded (linear, not cubic)
+        let y_50 = interp.evaluate(50.0).expect("Operation failed");
+        assert!(y_50.is_finite());
+        assert!(y_50 < 1000.0, "Linear extrapolation should be bounded, got {}", y_50);
+
+        let y_m50 = interp.evaluate(-50.0).expect("Operation failed");
+        assert!(y_m50.is_finite());
+        assert!(y_m50.abs() < 1000.0, "Linear extrapolation should be bounded, got {}", y_m50);
+
+        // Disabled extrapolation returns error
+        let no_extrap =
             PchipInterpolator::new(&x.view(), &y.view(), false).expect("Operation failed");
-        assert!(interp_no_extrap.evaluate(-1.0).is_err());
-        assert!(interp_no_extrap.evaluate(4.0).is_err());
+        assert!(no_extrap.evaluate(-1.0).is_err());
+        assert!(no_extrap.evaluate(4.0).is_err());
     }
 
     #[test]
-    fn test_pchip_extrapolation_polynomial_continuation() {
-        // PCHIP extrapolation now uses Hermite polynomial continuation
-        // (matching scipy PchipInterpolator(extrapolate=True))
+    fn test_pchip_extrapolation_polynomial_mode() {
         let x = array![0.0, 1.0, 2.0, 3.0];
         let y = array![0.0, 1.0, 4.0, 9.0];
 
-        let interp = PchipInterpolator::new(&x.view(), &y.view(), true).expect("Operation failed");
+        let interp = PchipInterpolator::new(&x.view(), &y.view(), true)
+            .expect("Operation failed")
+            .with_extrapolate_mode(PchipExtrapolateMode::Polynomial);
 
         // Near extrapolation should be finite and reasonable
         let y_4 = interp.evaluate(4.0).expect("Operation failed");
         assert!(y_4.is_finite());
         assert!(y_4 > 9.0, "Extrapolation at x=4 should be > 9.0, got {}", y_4);
 
-        // Polynomial continuation at the boundary segment endpoint
+        // Boundary should be exact
         let y_3 = interp.evaluate(3.0).expect("Operation failed");
         assert_relative_eq!(y_3, 9.0, epsilon = 1e-10);
 
-        // Far extrapolation may grow cubically (this is correct polynomial behavior)
-        let y_minus_1 = interp.evaluate(-1.0).expect("Operation failed");
-        assert!(y_minus_1.is_finite());
+        // Far extrapolation grows cubically (correct polynomial behavior)
+        let y_m1 = interp.evaluate(-1.0).expect("Operation failed");
+        assert!(y_m1.is_finite());
     }
 
     #[test]
