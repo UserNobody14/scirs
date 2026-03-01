@@ -483,6 +483,7 @@ mod tests {
         assert!(y_4_25 <= y_4_50 && y_4_50 <= y_4_75);
     }
 
+    #[test]
     fn test_pchip_extrapolation() {
         let x = array![0.0, 1.0, 2.0, 3.0];
         let y = array![0.0, 1.0, 4.0, 9.0];
