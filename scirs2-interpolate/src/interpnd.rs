@@ -350,10 +350,13 @@ impl<F: crate::traits::InterpolationFloat> RegularGridInterpolator<F> {
                     (x - x0) / (x1 - x0)
                 };
 
-                // Ensure t is between 0 and 1 (this handles any numerical precision issues)
-                let t = t
-                    .max(F::from_f64(0.0).expect("Operation failed"))
-                    .min(F::from_f64(1.0).expect("Operation failed"));
+                // Clamp t to [0, 1] unless we are extrapolating
+                let t = if self.extrapolate == ExtrapolateMode::Extrapolate {
+                    t
+                } else {
+                    t.max(F::from_f64(0.0).expect("Operation failed"))
+                        .min(F::from_f64(1.0).expect("Operation failed"))
+                };
 
                 indices.push(idx);
                 weights.push(t);
