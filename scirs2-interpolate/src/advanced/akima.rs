@@ -4,6 +4,7 @@
 //! to be more robust to outliers than cubic splines.
 
 use crate::error::{InterpolateError, InterpolateResult};
+use crate::interp1d::ExtrapolateMode;
 use scirs2_core::ndarray::{Array1, Array2, ArrayView1};
 use scirs2_core::numeric::{Float, FromPrimitive};
 use std::fmt::Debug;
@@ -22,6 +23,8 @@ pub struct AkimaSpline<F: Float + FromPrimitive> {
     /// Each row represents [a, b, c, d] for a segment
     /// y(x) = a + b*(x-x_i) + c*(x-x_i)^2 + d*(x-x_i)^3
     coeffs: Array2<F>,
+    /// How to handle out-of-bounds evaluation
+    extrapolate: ExtrapolateMode,
 }
 
 impl<F: Float + FromPrimitive + Debug> AkimaSpline<F> {
@@ -59,9 +62,9 @@ impl<F: Float + FromPrimitive + Debug> AkimaSpline<F> {
             ));
         }
 
-        if x.len() < 5 {
+        if x.len() < 2 {
             return Err(InterpolateError::invalid_input(
-                "at least 5 points are required for Akima spline".to_string(),
+                "at least 2 points are required for Akima spline".to_string(),
             ));
         }
 
@@ -76,6 +79,24 @@ impl<F: Float + FromPrimitive + Debug> AkimaSpline<F> {
 
         // Create Akima spline
         let n = x.len();
+
+        // n == 2: degenerate to linear interpolation (single segment)
+        if n == 2 {
+            let dx = x[1] - x[0];
+            let dy = y[1] - y[0];
+            let slope = dy / dx;
+            let mut coeffs = Array2::zeros((1, 4));
+            coeffs[[0, 0]] = y[0];
+            coeffs[[0, 1]] = slope;
+            return Ok(Self {
+                x: x.to_owned(),
+                y: y.to_owned(),
+                coeffs,
+                extrapolate: ExtrapolateMode::Error,
+            });
+        }
+
+        // n >= 3: full Akima algorithm
         let mut slopes = Array1::zeros(n + 3);
 
         // Calculate the slopes
@@ -84,8 +105,7 @@ impl<F: Float + FromPrimitive + Debug> AkimaSpline<F> {
             slopes[i + 2] = m_i;
         }
 
-        // Set up the artificial end slopes
-        // Akima's original method uses a special formula for the endpoints
+        // Artificial end slopes (Akima's formula)
         slopes[0] = F::from_f64(3.0).expect("Operation failed") * slopes[2]
             - F::from_f64(2.0).expect("Operation failed") * slopes[3];
         slopes[1] = F::from_f64(2.0).expect("Operation failed") * slopes[2] - slopes[3];
@@ -93,23 +113,21 @@ impl<F: Float + FromPrimitive + Debug> AkimaSpline<F> {
         slopes[n + 2] = F::from_f64(3.0).expect("Operation failed") * slopes[n]
             - F::from_f64(2.0).expect("Operation failed") * slopes[n - 1];
 
-        // Calculate the derivatives at each point using Akima's formula
+        // Derivatives at each point using Akima's weighted formula
         let mut derivatives = Array1::zeros(n);
         for i in 0..n {
             let w1 = (slopes[i + 3] - slopes[i + 2]).abs();
             let w2 = (slopes[i + 1] - slopes[i]).abs();
 
             if w1 + w2 == F::zero() {
-                // If both weights are zero, use the average of the slopes
                 derivatives[i] =
                     (slopes[i + 1] + slopes[i + 2]) / F::from_f64(2.0).expect("Operation failed");
             } else {
-                // Otherwise, use weighted average
                 derivatives[i] = (w1 * slopes[i + 1] + w2 * slopes[i + 2]) / (w1 + w2);
             }
         }
 
-        // Calculate the polynomial coefficients for each segment
+        // Polynomial coefficients for each segment
         let mut coeffs = Array2::zeros((n - 1, 4));
         for i in 0..n - 1 {
             let dx = x[i + 1] - x[i];
@@ -135,7 +153,14 @@ impl<F: Float + FromPrimitive + Debug> AkimaSpline<F> {
             x: x.to_owned(),
             y: y.to_owned(),
             coeffs,
+            extrapolate: ExtrapolateMode::Error,
         })
+    }
+
+    /// Set the extrapolation mode, returning a modified spline.
+    pub fn with_extrapolation(mut self, mode: ExtrapolateMode) -> Self {
+        self.extrapolate = mode;
+        self
     }
 
     /// Evaluate the spline at a given point
@@ -148,36 +173,51 @@ impl<F: Float + FromPrimitive + Debug> AkimaSpline<F> {
     ///
     /// The interpolated value at `xnew`
     pub fn evaluate(&self, xnew: F) -> InterpolateResult<F> {
-        // Check if xnew is within the interpolation range
-        if xnew < self.x[0] || xnew > self.x[self.x.len() - 1] {
-            return Err(InterpolateError::OutOfBounds(
-                "xnew is outside the interpolation range".to_string(),
-            ));
+        let n = self.x.len();
+
+        if xnew < self.x[0] || xnew > self.x[n - 1] {
+            match self.extrapolate {
+                ExtrapolateMode::Error => {
+                    return Err(InterpolateError::OutOfBounds(
+                        "xnew is outside the interpolation range".to_string(),
+                    ));
+                }
+                ExtrapolateMode::Nearest => {
+                    let clamped = xnew.max(self.x[0]).min(self.x[n - 1]);
+                    return self.evaluate(clamped);
+                }
+                ExtrapolateMode::Extrapolate => {
+                    let idx = if xnew < self.x[0] { 0 } else { n - 2 };
+                    return Ok(self.eval_polynomial(idx, xnew));
+                }
+            }
         }
 
-        // Find the index of the segment containing xnew
+        // Special case: xnew is exactly the last point
+        if xnew == self.x[n - 1] {
+            return Ok(self.y[n - 1]);
+        }
+
+        // Find the segment containing xnew
         let mut idx = 0;
-        for i in 0..self.x.len() - 1 {
+        for i in 0..n - 1 {
             if xnew >= self.x[i] && xnew <= self.x[i + 1] {
                 idx = i;
                 break;
             }
         }
 
-        // Special case: xnew is exactly the last point
-        if xnew == self.x[self.x.len() - 1] {
-            return Ok(self.y[self.y.len() - 1]);
-        }
+        Ok(self.eval_polynomial(idx, xnew))
+    }
 
-        // Evaluate the polynomial at xnew
+    /// Evaluate the polynomial for segment `idx` at `xnew`.
+    fn eval_polynomial(&self, idx: usize, xnew: F) -> F {
         let dx = xnew - self.x[idx];
         let a = self.coeffs[[idx, 0]];
         let b = self.coeffs[[idx, 1]];
         let c = self.coeffs[[idx, 2]];
         let d = self.coeffs[[idx, 3]];
-
-        let result = a + b * dx + c * dx * dx + d * dx * dx * dx;
-        Ok(result)
+        a + b * dx + c * dx * dx + d * dx * dx * dx
     }
 
     /// Evaluate the spline at multiple points
@@ -207,45 +247,50 @@ impl<F: Float + FromPrimitive + Debug> AkimaSpline<F> {
     ///
     /// The derivative of the spline at `xnew`
     pub fn derivative(&self, xnew: F) -> InterpolateResult<F> {
-        // Check if xnew is within the interpolation range
-        if xnew < self.x[0] || xnew > self.x[self.x.len() - 1] {
-            return Err(InterpolateError::OutOfBounds(
-                "xnew is outside the interpolation range".to_string(),
-            ));
+        let n = self.x.len();
+
+        if xnew < self.x[0] || xnew > self.x[n - 1] {
+            match self.extrapolate {
+                ExtrapolateMode::Error => {
+                    return Err(InterpolateError::OutOfBounds(
+                        "xnew is outside the interpolation range".to_string(),
+                    ));
+                }
+                ExtrapolateMode::Nearest => {
+                    let clamped = xnew.max(self.x[0]).min(self.x[n - 1]);
+                    return self.derivative(clamped);
+                }
+                ExtrapolateMode::Extrapolate => {
+                    let idx = if xnew < self.x[0] { 0 } else { n - 2 };
+                    return Ok(self.eval_derivative(idx, xnew));
+                }
+            }
         }
 
-        // Find the index of the segment containing xnew
+        // Special case: xnew is exactly the last point
+        if xnew == self.x[n - 1] {
+            return Ok(self.eval_derivative(n - 2, xnew));
+        }
+
         let mut idx = 0;
-        for i in 0..self.x.len() - 1 {
+        for i in 0..n - 1 {
             if xnew >= self.x[i] && xnew <= self.x[i + 1] {
                 idx = i;
                 break;
             }
         }
 
-        // Special case: xnew is exactly the last point
-        if xnew == self.x[self.x.len() - 1] {
-            // Use the derivative at the last internal point
-            idx = self.x.len() - 2;
-            let dx = self.x[idx + 1] - self.x[idx];
-            let b = self.coeffs[[idx, 1]];
-            let c = self.coeffs[[idx, 2]];
-            let d = self.coeffs[[idx, 3]];
-            return Ok(b
-                + F::from_f64(2.0).expect("Operation failed") * c * dx
-                + F::from_f64(3.0).expect("Operation failed") * d * dx * dx);
-        }
+        Ok(self.eval_derivative(idx, xnew))
+    }
 
-        // Evaluate the derivative at xnew
+    /// Evaluate the polynomial derivative for segment `idx` at `xnew`.
+    fn eval_derivative(&self, idx: usize, xnew: F) -> F {
         let dx = xnew - self.x[idx];
         let b = self.coeffs[[idx, 1]];
         let c = self.coeffs[[idx, 2]];
         let d = self.coeffs[[idx, 3]];
-
-        let result = b
-            + F::from_f64(2.0).expect("Operation failed") * c * dx
-            + F::from_f64(3.0).expect("Operation failed") * d * dx * dx;
-        Ok(result)
+        b + F::from_f64(2.0).expect("Operation failed") * c * dx
+            + F::from_f64(3.0).expect("Operation failed") * d * dx * dx
     }
 }
 
